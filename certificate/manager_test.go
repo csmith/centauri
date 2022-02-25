@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,10 +52,35 @@ func (f *fakeStapler) UpdateStaple(cert *Details) error {
 	return f.err
 }
 
+const (
+	certPem = `-----BEGIN CERTIFICATE-----
+MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
+DgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow
+EjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABD0d
+7VNhbWvZLWPuj/RtHFjvtJBEwOkhbN/BnnE8rnZR8+sbwnc/KhCk3FhnpHZnQz7B
+5aETbbIgmuvewdjvSBSjYzBhMA4GA1UdDwEB/wQEAwICpDATBgNVHSUEDDAKBggr
+BgEFBQcDATAPBgNVHRMBAf8EBTADAQH/MCkGA1UdEQQiMCCCDmxvY2FsaG9zdDo1
+NDUzgg4xMjcuMC4wLjE6NTQ1MzAKBggqhkjOPQQDAgNIADBFAiEA2zpJEPQyz6/l
+Wf86aX6PepsntZv2GYlA5UpabfT2EZICICpJ5h/iI+i341gBmLiAFQOyTDT+/wQc
+6MF9+Yw1Yy0t
+-----END CERTIFICATE-----
+`
+	keyPem = `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIIrYSSNQFaA2Hwf1duRSxKtLYX5CB04fSeQ6tF1aY/PuoAoGCCqGSM49
+AwEHoUQDQgAEPR3tU2Fta9ktY+6P9G0cWO+0kETA6SFs38GecTyudlHz6xvCdz8q
+EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
+-----END EC PRIVATE KEY-----
+`
+	ocspResponse = "Yay it worked. This is not really OCSP."
+)
+
 func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -67,7 +93,9 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 
 	c, err := manager.GetCertificate("example.com", []string{"example.net"})
 	require.NoError(t, err)
-	assert.Equal(t, cert, c)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, "example.com", store.subject)
 	assert.Equal(t, []string{"example.net"}, store.altNames)
 }
@@ -76,6 +104,9 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now(),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -90,7 +121,9 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 
 	c, err := manager.GetCertificate("example.com", []string{"example.net"})
 	require.NoError(t, err)
-	assert.Equal(t, cert, c)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, stapler.certificate, "should pass certificate to stapler")
 	assert.Equal(t, cert, store.savedCert, "should save updated cert")
 	assert.Equal(t, "example.com", store.subject)
@@ -101,6 +134,9 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now(),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -121,6 +157,9 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now(),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{certificate: cert, err: fmt.Errorf("oops")}
@@ -141,6 +180,9 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{}
@@ -155,7 +197,9 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 
 	c, err := manager.GetCertificate("example.com", []string{"example.net"})
 	require.NoError(t, err)
-	assert.Equal(t, cert, c)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
@@ -165,6 +209,9 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 	cert := &Details{
 		NotAfter:       time.Now(),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -179,7 +226,9 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 
 	c, err := manager.GetCertificate("example.com", []string{"example.net"})
 	require.NoError(t, err)
-	assert.Equal(t, cert, c)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
@@ -204,6 +253,9 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 2),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
 	store := &fakeStore{err: fmt.Errorf("oops")}

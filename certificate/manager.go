@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"time"
@@ -35,7 +36,7 @@ type Manager struct {
 
 // GetCertificate returns a certificate for the given subject and alternate names. This may take some time if a new
 // certificate needs to be obtained, or the OCSP staple needs to be updated.
-func (m *Manager) GetCertificate(subject string, altNames []string) (*Details, error) {
+func (m *Manager) GetCertificate(subject string, altNames []string) (*tls.Certificate, error) {
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
 		log.Printf("Obtaining new certificate for '%s'", subject)
 		return m.obtain(subject, altNames)
@@ -46,12 +47,12 @@ func (m *Manager) GetCertificate(subject string, altNames []string) (*Details, e
 		log.Printf("Obtaining new OCSP staple for '%s'", subject)
 		return m.staple(cert)
 	} else {
-		return cert, nil
+		return cert.keyPair()
 	}
 }
 
 // obtain gets a new certificate and saves it to the store.
-func (m *Manager) obtain(subject string, altNames []string) (*Details, error) {
+func (m *Manager) obtain(subject string, altNames []string) (*tls.Certificate, error) {
 	cert, err := m.supplier.GetCertificate(subject, altNames)
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain certificate for %s: %w", subject, err)
@@ -61,11 +62,11 @@ func (m *Manager) obtain(subject string, altNames []string) (*Details, error) {
 		return nil, fmt.Errorf("failed to save certificate for %s: %s", subject, err)
 	}
 
-	return cert, nil
+	return cert.keyPair()
 }
 
 // staple updates the OCSP staple for the cert and saves it in the store.
-func (m *Manager) staple(cert *Details) (*Details, error) {
+func (m *Manager) staple(cert *Details) (*tls.Certificate, error) {
 	if err := m.stapler.UpdateStaple(cert); err != nil {
 		return nil, fmt.Errorf("failed to obtain OCSP staple for %s: %w", cert.Subject, err)
 	}
@@ -74,5 +75,5 @@ func (m *Manager) staple(cert *Details) (*Details, error) {
 		return nil, fmt.Errorf("failed to save certificate for %s: %s", cert.Subject, err)
 	}
 
-	return cert, nil
+	return cert.keyPair()
 }

@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"crypto/tls"
 	"sort"
 	"time"
 )
@@ -48,4 +49,14 @@ func (s *Details) IsFor(subject string, altNames []string) bool {
 	}
 
 	return true
+}
+
+// keyPair returns this certificate's public and private key and OCSP staple as a tls.Certificate.
+func (s *Details) keyPair() (*tls.Certificate, error) {
+	cert, err := tls.X509KeyPair([]byte(s.Certificate), []byte(s.PrivateKey))
+	if err != nil {
+		return nil, err
+	}
+	cert.OCSPStaple = s.OcspResponse
+	return &cert, nil
 }
