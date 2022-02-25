@@ -87,7 +87,7 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 
 	manager := &Manager{
 		store:             store,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -115,7 +115,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	manager := &Manager{
 		store:             store,
 		stapler:           stapler,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -145,7 +145,7 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 	manager := &Manager{
 		store:             store,
 		stapler:           stapler,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -168,7 +168,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 	manager := &Manager{
 		store:             store,
 		stapler:           stapler,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -191,7 +191,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 	manager := &Manager{
 		store:             store,
 		supplier:          supplier,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -220,7 +220,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 	manager := &Manager{
 		store:             store,
 		supplier:          supplier,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -241,7 +241,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSupplierFails(t *testing.T) {
 	manager := &Manager{
 		store:             store,
 		supplier:          supplier,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 
@@ -264,7 +264,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 	manager := &Manager{
 		store:             store,
 		supplier:          supplier,
-		minValidity:       time.Hour,
+		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
 

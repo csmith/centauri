@@ -30,8 +30,19 @@ type Manager struct {
 	supplier Supplier
 	stapler  Stapler
 
-	minValidity       time.Duration
+	minCertValidity   time.Duration
 	minStapleValidity time.Duration
+}
+
+// NewManager returns a new certificate manager backed by the given store and supplier.
+func NewManager(store Store, supplier Supplier, stapler Stapler, minCertValidity time.Duration, minStapleValidity time.Duration) *Manager {
+	return &Manager{
+		store:             store,
+		supplier:          supplier,
+		stapler:           stapler,
+		minCertValidity:   minCertValidity,
+		minStapleValidity: minStapleValidity,
+	}
 }
 
 // GetCertificate returns a certificate for the given subject and alternate names. This may take some time if a new
@@ -40,7 +51,7 @@ func (m *Manager) GetCertificate(subject string, altNames []string) (*tls.Certif
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
 		log.Printf("Obtaining new certificate for '%s'", subject)
 		return m.obtain(subject, altNames)
-	} else if !cert.ValidFor(m.minValidity) {
+	} else if !cert.ValidFor(m.minCertValidity) {
 		log.Printf("Renewing certificate for '%s'", subject)
 		return m.obtain(subject, altNames)
 	} else if !cert.HasStapleFor(m.minStapleValidity) {

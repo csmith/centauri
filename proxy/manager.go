@@ -21,7 +21,7 @@ type Manager struct {
 	domains map[string]*Route
 }
 
-// NewManager creates a new route manager. Routes should be set using the SetRoutes method after creation.
+// NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
 // Wildcard domains, if provided, MUST each have a leading dot (e.g. ".example.com").
 func NewManager(wildcardDomains []string, certManager CertificateManager) *Manager {
 	return &Manager{
@@ -57,6 +57,17 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 // nil is returned.
 func (m *Manager) RouteForDomain(domain string) *Route {
 	return m.domains[domain]
+}
+
+// CertificateForClient returns a certificate (if one exists) for the domain specified in the provided
+// client hello. If no certificate is available, nil is returned. The error return value is unused, but
+// is kept to maintain compatibility with the tls.Config.GetCertificate func signature.
+func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	route := m.domains[hello.ServerName]
+	if route == nil {
+		return nil, nil
+	}
+	return route.certificate, nil
 }
 
 // CheckCertificates checks and updates the certificates required for registered routes.

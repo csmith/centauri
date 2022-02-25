@@ -90,6 +90,41 @@ func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
 	assert.Equal(t, route, manager.RouteForDomain("test.deep.example.com"))
 }
 
+func Test_Manager_CertificateForClient_returnsNullIfNoRouteFound(t *testing.T) {
+	certManager := &fakeCertManager{
+		err: fmt.Errorf("ruh roh"),
+	}
+
+	manager := NewManager(nil, certManager)
+	res, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.com"})
+	assert.Nil(t, res)
+	assert.Nil(t, err)
+}
+
+func Test_Manager_CertificateForClient_returnsCertificateForDomain(t *testing.T) {
+	certManager := &fakeCertManager{
+		certificate: dummyCert,
+	}
+
+	manager := NewManager(nil, certManager)
+	route := &Route{
+		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+	}
+	_ = manager.SetRoutes([]*Route{route})
+
+	res, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.com"})
+	assert.Equal(t, dummyCert, res)
+	assert.Nil(t, err)
+
+	res, err = manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "test.example.com"})
+	assert.Equal(t, dummyCert, res)
+	assert.Nil(t, err)
+
+	res, err = manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "test.deep.example.com"})
+	assert.Equal(t, dummyCert, res)
+	assert.Nil(t, err)
+}
+
 func Test_Manager_setsCertificateOnRoutes(t *testing.T) {
 	certManager := &fakeCertManager{
 		certificate: dummyCert,
