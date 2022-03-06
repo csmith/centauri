@@ -1,0 +1,41 @@
+name: build image
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Generate tags
+        id: tags
+        uses: greboid/docker-tags-action@v5.0.2
+        with:
+          separator: ' '
+          fullname: 'false'
+
+      - name: Build image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2.9
+        with:
+          dockerfiles: Dockerfile
+          image: ${{ github.repository }}
+          tags: ${{ steps.tags.outputs.tags }}
+          extra-args: >
+            --timestamp
+            0
+
+      - name: Push to GHCR
+        uses: redhat-actions/push-to-registry@v2.5
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          tags: ${{ steps.tags.outputs.tags }}
