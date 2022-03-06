@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,9 +31,10 @@ var (
 	userDataPath         = flag.String("user-data", "user.pem", "Path to user data")
 	certificateStorePath = flag.String("certificate-store", "certs.json", "Path to certificate store")
 
-	dnsProvider   = flag.String("dns-provider", "", "DNS provider to use")
-	acmeEmail     = flag.String("acme-email", "", "Email address for ACME account")
-	acmeDirectory = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
+	dnsProvider     = flag.String("dns-provider", "", "DNS provider to use")
+	acmeEmail       = flag.String("acme-email", "", "Email address for ACME account")
+	acmeDirectory   = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
+	wildcardDomains = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 )
 
 func main() {
@@ -69,8 +71,19 @@ func main() {
 		log.Fatalf("Certificate store error: %v", err)
 	}
 
+	// Ensure any wildcard domains passed have a "." prefix.
+	var wildcards []string
+	var wildcardConfig = strings.Split(*wildcardDomains, " ")
+	for i := range wildcardConfig {
+		if strings.HasPrefix(wildcardConfig[i], ".") {
+			wildcards = append(wildcards, wildcardConfig[i])
+		} else if len(wildcardConfig[i]) > 0 {
+			wildcards = append(wildcards, fmt.Sprintf(".%s", wildcardConfig[i]))
+		}
+	}
+
 	certManager := certificate.NewManager(store, supplier, supplier, time.Hour*24*30, time.Hour*24)
-	routeManager := proxy.NewManager(nil, certManager)
+	routeManager := proxy.NewManager(wildcards, certManager)
 	rewriter := proxy.NewRewriter(routeManager)
 
 	if err := routeManager.SetRoutes(routes); err != nil {
