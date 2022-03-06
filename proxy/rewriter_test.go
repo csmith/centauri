@@ -49,6 +49,7 @@ func Test_Rewriter_SetsForwardedForHeader(t *testing.T) {
 	rewriter.RewriteRequest(request)
 
 	assert.Equal(t, "127.0.0.1", request.Header.Get("X-Forwarded-For"))
+	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-For")))
 }
 
 func Test_Rewriter_SetsForwardedProtoHeader(t *testing.T) {
@@ -65,6 +66,65 @@ func Test_Rewriter_SetsForwardedProtoHeader(t *testing.T) {
 	rewriter.RewriteRequest(request)
 
 	assert.Equal(t, "https", request.Header.Get("X-Forwarded-Proto"))
+	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-Proto")))
+}
+
+func Test_Rewriter_ReplacesForwardedForHeader(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		TLS:        &tls.ConnectionState{ServerName: "example.com"},
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	request.Header.Set("X-Forwarded-For", "127.0.0.2")
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "127.0.0.1", request.Header.Get("X-Forwarded-For"))
+	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-For")))
+}
+
+func Test_Rewriter_ReplacesForwardedProtoHeader(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		TLS:        &tls.ConnectionState{ServerName: "example.com"},
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	request.Header.Set("x-forwarded-proto", "ftp")
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "https", request.Header.Get("X-Forwarded-Proto"))
+	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-Proto")))
+}
+
+func Test_Rewriter_RemovesBannedHeaders(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	rewriter := &Rewriter{provider: provider, bannedHeaders: []string{"x-test1", "x-test2"}}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		TLS:        &tls.ConnectionState{ServerName: "example.com"},
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	request.Header.Add("x-test1", "value")
+	request.Header.Add("x-test1", "value")
+	request.Header.Add("X-Test2", "value")
+	request.Header.Add("X-Test2-other", "value")
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, 0, len(request.Header.Values("x-test1")))
+	assert.Equal(t, 0, len(request.Header.Values("X-Test2")))
+	assert.Equal(t, 1, len(request.Header.Values("X-Test2-other")))
 }
 
 func Test_Rewriter_BlanksUserAgentIfUnset(t *testing.T) {

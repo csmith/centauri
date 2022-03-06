@@ -12,12 +12,24 @@ type routeProvider interface {
 
 // Rewriter facilitates rewriting HTTP requests and responses according to the routes provided by a Manager.
 type Rewriter struct {
-	provider routeProvider
+	provider      routeProvider
+	bannedHeaders []string
 }
 
 // NewRewriter creates a new Rewriter backed by the given route manager.
 func NewRewriter(manager *Manager) *Rewriter {
-	return &Rewriter{provider: manager}
+	return &Rewriter{
+		provider: manager,
+		bannedHeaders: []string{
+			// Variety of headers used for passing on the client IP. We don't want to pass on any rubbish clients
+			// may send in these headers. Note that we explicitly set (i.e. replace) X-Forwarded-For and
+			// X-Forwarded-Proto, so they don't need to be included here.
+			"X-Real-IP",
+			"True-Client-IP",
+			"X-Forwarded-Host",
+			"Forwarded",
+		},
+	}
 }
 
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
@@ -30,6 +42,10 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 	ip, _, _ := net.SplitHostPort(req.RemoteAddr)
 	req.Header.Set("X-Forwarded-For", ip)
 	req.Header.Set("X-Forwarded-Proto", "https")
+
+	for i := range r.bannedHeaders {
+		req.Header.Del(r.bannedHeaders[i])
+	}
 
 	if _, ok := req.Header["User-Agent"]; !ok {
 		// explicitly disable User-Agent so it's not set to default value
