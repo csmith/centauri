@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,7 +32,7 @@ var (
 	userDataPath         = flag.String("user-data", "user.pem", "Path to user data")
 	certificateStorePath = flag.String("certificate-store", "certs.json", "Path to certificate store")
 
-	dnsProvider     = flag.String("dns-provider", "", "DNS provider to use")
+	dnsProviderName = flag.String("dns-provider", "", "DNS provider to use")
 	acmeEmail       = flag.String("acme-email", "", "Email address for ACME account")
 	acmeDirectory   = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
 	wildcardDomains = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
@@ -50,7 +51,7 @@ func main() {
 	}
 	_ = configFile.Close()
 
-	dnsProvider, err := legotapas.CreateProvider(*dnsProvider)
+	dnsProvider, err := legotapas.CreateProvider(*dnsProviderName)
 	if err != nil {
 		log.Fatalf("DNS provider error: %v", err)
 	}
@@ -114,6 +115,13 @@ func main() {
 		err := http.Serve(l, &httputil.ReverseProxy{
 			Director:       rewriter.RewriteRequest,
 			ModifyResponse: rewriter.RewriteResponse,
+			BufferPool:     NewBufferPool(),
+			Transport: &http.Transport{
+				ForceAttemptHTTP2:   false,
+				DisableCompression:  true,
+				MaxIdleConnsPerHost: 100,
+				IdleConnTimeout:     90 * time.Second,
+			},
 		})
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
@@ -133,4 +141,26 @@ func main() {
 
 	// Wait for a signal
 	<-c
+}
+
+func NewBufferPool() *bufferPool {
+	return &bufferPool{
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, 32*1024)
+			},
+		},
+	}
+}
+
+type bufferPool struct {
+	pool sync.Pool
+}
+
+func (b *bufferPool) Get() []byte {
+	return b.pool.Get().([]byte)
+}
+
+func (b *bufferPool) Put(bytes []byte) {
+	b.pool.Put(bytes)
 }
