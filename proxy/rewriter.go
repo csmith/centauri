@@ -56,5 +56,22 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 // RewriteResponse modifies the given response according to the routes provided by the Manager.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteResponse(response *http.Response) error {
+	route := r.provider.RouteForDomain(response.Request.TLS.ServerName)
+
+	for i := range route.Headers {
+		switch route.Headers[i].Operation {
+		case HeaderOpDelete:
+			response.Header.Del(route.Headers[i].Name)
+		case HeaderOpAdd:
+			response.Header.Add(route.Headers[i].Name, route.Headers[i].Value)
+		case HeaderOpReplace:
+			response.Header.Set(route.Headers[i].Name, route.Headers[i].Value)
+		case HeaderOpDefault:
+			if response.Header.Get(route.Headers[i].Name) == "" {
+				response.Header.Set(route.Headers[i].Name, route.Headers[i].Value)
+			}
+		}
+	}
+
 	return nil
 }
