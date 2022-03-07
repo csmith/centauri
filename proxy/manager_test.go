@@ -38,6 +38,14 @@ func Test_Manager_SetRoutes_returnsErrorIfGetCertificateFails(t *testing.T) {
 	assert.Equal(t, []string(nil), certManager.altNames)
 }
 
+func Test_Manager_SetRoutes_returnsErrorIfDomainisInvalid(t *testing.T) {
+	manager := NewManager(nil, nil)
+	err := manager.SetRoutes([]*Route{{
+		Domains: []string{"example..com"},
+	}})
+	assert.Error(t, err)
+}
+
 func Test_Manager_SetRoutes_requestsWildcardCertificateIfMatching(t *testing.T) {
 	certManager := &fakeCertManager{
 		err: fmt.Errorf("ruh roh"),

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strings"
 )
 
@@ -39,12 +40,16 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 	for i := range newRoutes {
 		route := newRoutes[i]
 
-		if err := m.updateCert(route); err != nil {
-			return err
+		for j := range route.Domains {
+			if !isDomainName(route.Domains[j]) {
+				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
+			}
+
+			newDomains[route.Domains[j]] = route
 		}
 
-		for i := range route.Domains {
-			newDomains[route.Domains[i]] = route
+		if err := m.updateCert(route); err != nil {
+			return err
 		}
 	}
 
