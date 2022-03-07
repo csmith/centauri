@@ -38,18 +38,10 @@ var (
 	wildcardDomains = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 )
 
+var proxyManager *proxy.Manager
+
 func main() {
 	envflag.Parse()
-
-	configFile, err := os.Open(*configPath)
-	if err != nil {
-		log.Fatalf("Failed to open config file: %v", err)
-	}
-	routes, err := config.Parse(configFile)
-	if err != nil {
-		log.Fatalf("Failed to parse config file: %v", err)
-	}
-	_ = configFile.Close()
 
 	dnsProvider, err := legotapas.CreateProvider(*dnsProviderName)
 	if err != nil {
@@ -84,14 +76,12 @@ func main() {
 	}
 
 	certManager := certificate.NewManager(store, supplier, supplier, time.Hour*24*30, time.Hour*24)
-	routeManager := proxy.NewManager(wildcards, certManager)
-	rewriter := proxy.NewRewriter(routeManager)
+	proxyManager = proxy.NewManager(wildcards, certManager)
+	rewriter := proxy.NewRewriter(proxyManager)
+	updateRoutes()
+	listenForHup()
 
-	if err := routeManager.SetRoutes(routes); err != nil {
-		log.Fatalf("Route manager error: %v", err)
-	}
-
-	log.Printf("Successfully installed %d routes. Starting server on port %d (https) and %d (http)", len(routes), *httpsPort, *httpPort)
+	log.Printf("Starting server on port %d (https) and %d (http)", *httpsPort, *httpPort)
 
 	l, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -104,7 +94,7 @@ func main() {
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
-		GetCertificate: routeManager.CertificateForClient,
+		GetCertificate: proxyManager.CertificateForClient,
 		NextProtos:     []string{"h2", "http/1.1"},
 	})
 	if err != nil {
@@ -142,7 +132,44 @@ func main() {
 	signal.Notify(c, syscall.SIGTERM)
 
 	// Wait for a signal
-	<-c
+	log.Printf("Received signal %s, stopping...", <-c)
+
+	// TODO: Stop servers properly
+}
+
+func listenForHup() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP)
+
+	go func() {
+		for {
+			<-c
+			log.Printf("Received SIGHUP, updating routes")
+			updateRoutes()
+		}
+	}()
+}
+
+func updateRoutes() {
+	log.Printf("Reading config file %s", *configPath)
+
+	configFile, err := os.Open(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to open config file: %v", err)
+	}
+	defer configFile.Close()
+
+	routes, err := config.Parse(configFile)
+	if err != nil {
+		log.Fatalf("Failed to parse config file: %v", err)
+	}
+
+	log.Printf("Installing %d routes", len(routes))
+	if err := proxyManager.SetRoutes(routes); err != nil {
+		log.Fatalf("Route manager error: %v", err)
+	}
+
+	log.Printf("Finished installing %d routes", len(routes))
 }
 
 func NewBufferPool() *bufferPool {
