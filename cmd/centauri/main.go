@@ -91,6 +91,8 @@ func main() {
 		log.Fatalf("Route manager error: %v", err)
 	}
 
+	log.Printf("Successfully installed %d routes. Starting server on port %d (https) and %d (http)", len(routes), *httpsPort, *httpPort)
+
 	l, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// Generated 2022-02-20, Mozilla Guideline v5.6, Go 1.14.4, intermediate configuration
