@@ -102,6 +102,7 @@ func main() {
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
 		GetCertificate: routeManager.CertificateForClient,
+		NextProtos:     []string{"h2", "http/1.1"},
 	})
 	if err != nil {
 		log.Fatal(err)
