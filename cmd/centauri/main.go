@@ -80,6 +80,7 @@ func main() {
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()
+	monitorCerts()
 
 	log.Printf("Starting server on port %d (https) and %d (http)", *httpsPort, *httpPort)
 
@@ -135,6 +136,18 @@ func main() {
 	log.Printf("Received signal %s, stopping...", <-c)
 
 	// TODO: Stop servers properly
+}
+
+func monitorCerts() {
+	go func() {
+		for {
+			time.Sleep(12 * time.Hour)
+			log.Printf("Checking for certificate validity...")
+			if err := proxyManager.CheckCertificates(); err != nil {
+				log.Fatalf("Error performing periodic check of certificates: %v", err)
+			}
+		}
+	}()
 }
 
 func listenForHup() {
