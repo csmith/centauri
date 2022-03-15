@@ -17,24 +17,24 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		parts := strings.SplitN(line, " ", 2)
+		directive, args, _ := strings.Cut(line, " ")
 
-		switch parts[0] {
+		switch directive {
 		case "route":
 			route = &proxy.Route{
-				Domains: strings.Split(strings.TrimPrefix(line, "route "), " "),
+				Domains: strings.Split(args, " "),
 			}
 			routes = append(routes, route)
 		case "upstream":
 			if route == nil {
 				return nil, fmt.Errorf("upstream without route: %s", line)
 			}
-			route.Upstream = strings.TrimPrefix(line, "upstream ")
+			route.Upstream = args
 		case "header":
 			if route == nil {
 				return nil, fmt.Errorf("upstream without route: %s", line)
 			}
-			if err := parseHeader(line, route); err != nil {
+			if err := parseHeader(args, route); err != nil {
 				return nil, err
 			}
 		case "#":
@@ -53,50 +53,51 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 	return routes, nil
 }
 
-func parseHeader(line string, route *proxy.Route) error {
-	parts := strings.SplitN(line, " ", 4)
-	if len(parts) < 3 {
-		return fmt.Errorf("invalid header line: %s", line)
-	}
+func parseHeader(args string, route *proxy.Route) error {
+	parts := strings.SplitN(args, " ", 3)
 
-	switch strings.ToLower(parts[1]) {
+	switch strings.ToLower(parts[0]) {
 	case "delete":
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid header delete line: %s", args)
+		}
+
 		route.Headers = append(route.Headers, proxy.Header{
 			Operation: proxy.HeaderOpDelete,
-			Name:      parts[2],
+			Name:      parts[1],
 		})
 	case "add":
-		if len(parts) != 4 {
-			return fmt.Errorf("invalid header add line: %s", line)
+		if len(parts) != 3 {
+			return fmt.Errorf("invalid header add line: %s", args)
 		}
 
 		route.Headers = append(route.Headers, proxy.Header{
 			Operation: proxy.HeaderOpAdd,
-			Name:      parts[2],
-			Value:     parts[3],
+			Name:      parts[1],
+			Value:     parts[2],
 		})
 	case "replace":
-		if len(parts) != 4 {
-			return fmt.Errorf("invalid header set line: %s", line)
+		if len(parts) != 3 {
+			return fmt.Errorf("invalid header set line: %s", args)
 		}
 
 		route.Headers = append(route.Headers, proxy.Header{
 			Operation: proxy.HeaderOpReplace,
-			Name:      parts[2],
-			Value:     parts[3],
+			Name:      parts[1],
+			Value:     parts[2],
 		})
 	case "default":
-		if len(parts) != 4 {
-			return fmt.Errorf("invalid header default line: %s", line)
+		if len(parts) != 3 {
+			return fmt.Errorf("invalid header default line: %s", args)
 		}
 
 		route.Headers = append(route.Headers, proxy.Header{
 			Operation: proxy.HeaderOpDefault,
-			Name:      parts[2],
-			Value:     parts[3],
+			Name:      parts[1],
+			Value:     parts[2],
 		})
 	default:
-		return fmt.Errorf("invalid header operation: %s", parts[1])
+		return fmt.Errorf("invalid header operation: %s", parts[0])
 	}
 	return nil
 }

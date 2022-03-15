@@ -8,6 +8,7 @@ require (
 	github.com/go-acme/lego/v4 v4.6.0
 	github.com/stretchr/testify v1.7.1
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
+	golang.org/x/exp v0.0.0-20220314205449-43aec2f8a4e7
 )
 
 require (
@@ -101,7 +102,7 @@ require (
 	go.uber.org/ratelimit v0.0.0-20180316092928-c15da0234277 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
+	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/time v0.0.0-20210611083556-38a9dc6acbc6 // indirect
 	google.golang.org/api v0.20.0 // indirect
