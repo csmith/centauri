@@ -1,4 +1,4 @@
-FROM golang:1.17.8-alpine AS build
+FROM reg.c5h.io/golang
 WORKDIR /go/src/app
 COPY . .
 
