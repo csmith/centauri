@@ -1,4 +1,4 @@
-FROM reg.c5h.io/golang
+FROM reg.c5h.io/golang AS build
 WORKDIR /go/src/app
 COPY . .
 
