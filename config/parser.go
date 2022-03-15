@@ -19,7 +19,7 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 		line := strings.TrimSpace(scanner.Text())
 		directive, args, _ := strings.Cut(line, " ")
 
-		switch directive {
+		switch strings.ToLower(directive) {
 		case "route":
 			route = &proxy.Route{
 				Domains: strings.Split(args, " "),

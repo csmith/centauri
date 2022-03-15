@@ -112,3 +112,47 @@ route example.net
 	assert.Equal(t, "baz", routes[1].Headers[1].Value)
 	assert.Equal(t, proxy.HeaderOpReplace, routes[1].Headers[1].Operation)
 }
+
+func Test_Parse_ParsesCaseInsensitively(t *testing.T) {
+	routes, err := Parse(bytes.NewBuffer([]byte(`
+# Comment
+RoUtE example.com www.example.com
+	# Indented comment
+	UpStReAm localhost:8080
+	HeAdEr AdD x-test foo
+	hEaDeR dElEtE x-test-2
+
+rOuTe example.net
+	uPsTrEaM localhost:8081
+	HeAdEr DeFaUlT x-test-3 bar
+	hEaDeR rEpLaCe x-test-4 baz
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(routes))
+	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
+	assert.Equal(t, "localhost:8080", routes[0].Upstream)
+	assert.Equal(t, []string{"example.net"}, routes[1].Domains)
+	assert.Equal(t, "localhost:8081", routes[1].Upstream)
+
+	// Check headers for the first route
+	assert.Equal(t, 2, len(routes[0].Headers))
+
+	assert.Equal(t, "x-test", routes[0].Headers[0].Name)
+	assert.Equal(t, "foo", routes[0].Headers[0].Value)
+	assert.Equal(t, proxy.HeaderOpAdd, routes[0].Headers[0].Operation)
+
+	assert.Equal(t, "x-test-2", routes[0].Headers[1].Name)
+	assert.Equal(t, proxy.HeaderOpDelete, routes[0].Headers[1].Operation)
+
+	// Check headers for the second route
+	assert.Equal(t, 2, len(routes[1].Headers))
+
+	assert.Equal(t, "x-test-3", routes[1].Headers[0].Name)
+	assert.Equal(t, "bar", routes[1].Headers[0].Value)
+	assert.Equal(t, proxy.HeaderOpDefault, routes[1].Headers[0].Operation)
+
+	assert.Equal(t, "x-test-4", routes[1].Headers[1].Name)
+	assert.Equal(t, "baz", routes[1].Headers[1].Value)
+	assert.Equal(t, proxy.HeaderOpReplace, routes[1].Headers[1].Operation)
+}

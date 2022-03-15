@@ -2,4 +2,5 @@
 
 ## Other changes
 
-- Now requires Go 1.18 to build
+- Now requires Go 1.18 to build.
+- Directives in the config file are now case-insensitive.
