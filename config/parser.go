@@ -29,6 +29,9 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 			if route == nil {
 				return nil, fmt.Errorf("upstream without route: %s", line)
 			}
+			if route.Upstream != "" {
+				return nil, fmt.Errorf("route %s has multiple upstreams", route.Domains)
+			}
 			route.Upstream = args
 		case "header":
 			if route == nil {

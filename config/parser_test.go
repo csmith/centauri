@@ -69,6 +69,16 @@ route example.com
 	assert.Error(t, err)
 }
 
+func Test_Parse_ErrorsOnMultipleUpstreams(t *testing.T) {
+	_, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream server1
+	upstream server2
+`)))
+
+	assert.Error(t, err)
+}
+
 func Test_Parse_ReturnsRoutes(t *testing.T) {
 	routes, err := Parse(bytes.NewBuffer([]byte(`
 # Comment
