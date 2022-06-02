@@ -32,7 +32,7 @@ jobs:
             0
 
       - name: Push to GHCR
-        uses: redhat-actions/push-to-registry@v2.5
+        uses: redhat-actions/push-to-registry@v2.6
         with:
           image: ${{ steps.build-image.outputs.image }}
           registry: ghcr.io
