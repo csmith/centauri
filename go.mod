@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag v1.0.0
 	github.com/csmith/legotapas v1.2.0
 	github.com/go-acme/lego/v4 v4.7.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.7.4
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/exp v0.0.0-20220314205449-43aec2f8a4e7
 )
@@ -92,7 +92,7 @@ require (
 	github.com/softlayer/softlayer-go v1.0.3 // indirect
 	github.com/softlayer/xmlrpc v0.0.0-20200409220501-5f089df7cb7e // indirect
 	github.com/spf13/cast v1.3.1 // indirect
-	github.com/stretchr/objx v0.3.0 // indirect
+	github.com/stretchr/objx v0.4.0 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.287 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.0.287 // indirect
 	github.com/transip/gotransip/v6 v6.6.1 // indirect
