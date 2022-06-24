@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag v1.0.0
 	github.com/csmith/legotapas v1.2.0
 	github.com/go-acme/lego/v4 v4.7.0
-	github.com/stretchr/testify v1.7.4
+	github.com/stretchr/testify v1.7.5
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/exp v0.0.0-20220314205449-43aec2f8a4e7
 )
