@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// CertificateManager defines the interface for providing certificates to a Manager.
-type CertificateManager interface {
+// CertificateProvider defines the interface for providing certificates to a Manager.
+type CertificateProvider interface {
 	GetCertificate(subject string, altNames []string) (*tls.Certificate, error)
 }
 
@@ -16,7 +16,8 @@ type CertificateManager interface {
 type Manager struct {
 	wildcardDomains []string
 
-	certManager CertificateManager
+	providers       map[string]CertificateProvider
+	defaultProvider string
 
 	routes  []*Route
 	domains map[string]*Route
@@ -24,10 +25,11 @@ type Manager struct {
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
 // Wildcard domains, if provided, MUST each have a leading dot (e.g. ".example.com").
-func NewManager(wildcardDomains []string, certManager CertificateManager) *Manager {
+func NewManager(wildcardDomains []string, providers map[string]CertificateProvider, defaultProvider string) *Manager {
 	return &Manager{
 		wildcardDomains: wildcardDomains,
-		certManager:     certManager,
+		providers:       providers,
+		defaultProvider: defaultProvider,
 		domains:         make(map[string]*Route),
 	}
 }
@@ -89,9 +91,30 @@ func (m *Manager) CheckCertificates() error {
 	return nil
 }
 
+// selectProvider finds a CertificateProvider appropriate for the given route. If the route specifies its provider,
+// that will be used, otherwise the default for this manager will be. If no provider by that name is found, returns
+// an error.
+func (m *Manager) selectProvider(route *Route) (CertificateProvider, error) {
+	provider := route.Provider
+	if provider == "" {
+		provider = m.defaultProvider
+	}
+
+	p, ok := m.providers[provider]
+	if !ok {
+		return nil, fmt.Errorf("no certificate provider named %s", provider)
+	}
+	return p, nil
+}
+
 // updateCert updates the certificate for the given route.
 func (m *Manager) updateCert(route *Route) error {
-	cert, err := m.certManager.GetCertificate(m.applyWildcard(route.Domains[0]), m.applyWildcards(route.Domains[1:]))
+	provider, err := m.selectProvider(route)
+	if err != nil {
+		return err
+	}
+
+	cert, err := provider.GetCertificate(m.applyWildcard(route.Domains[0]), m.applyWildcards(route.Domains[1:]))
 	if err != nil {
 		return err
 	}

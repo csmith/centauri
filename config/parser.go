@@ -40,6 +40,14 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 			if err := parseHeader(args, route); err != nil {
 				return nil, err
 			}
+		case "provider":
+			if route == nil {
+				return nil, fmt.Errorf("provider without route: %s", line)
+			}
+			if route.Provider != "" {
+				return nil, fmt.Errorf("route %s has multiple providers", route.Domains)
+			}
+			route.Provider = args
 		case "#":
 			// Ignore comments
 		default:

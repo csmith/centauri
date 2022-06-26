@@ -48,7 +48,7 @@ func main() {
 		log.Fatalf("DNS provider error: %v", err)
 	}
 
-	supplier, err := certificate.NewSupplier(&certificate.LegoSupplierConfig{
+	legoSupplier, err := certificate.NewLegoSupplier(&certificate.LegoSupplierConfig{
 		Path:        *userDataPath,
 		Email:       *acmeEmail,
 		DirUrl:      *acmeDirectory,
@@ -75,8 +75,10 @@ func main() {
 		}
 	}
 
-	certManager := certificate.NewManager(store, supplier, supplier, time.Hour*24*30, time.Hour*24)
-	proxyManager = proxy.NewManager(wildcards, certManager)
+	providers := map[string]proxy.CertificateProvider{
+		"lego": certificate.NewManager(store, legoSupplier, time.Hour*24*30, time.Hour*24),
+	}
+	proxyManager = proxy.NewManager(wildcards, providers, "lego")
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()

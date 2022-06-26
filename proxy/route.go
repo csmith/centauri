@@ -9,6 +9,7 @@ type Route struct {
 	Domains  []string
 	Upstream string
 	Headers  []Header
+	Provider string
 
 	certificate *tls.Certificate
 }

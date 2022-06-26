@@ -13,13 +13,9 @@ type Store interface {
 	SaveCertificate(cert *Details) error
 }
 
-// Supplier provides new certificates.
+// Supplier provides new certificates and OCSP staples.
 type Supplier interface {
 	GetCertificate(subject string, altNames []string) (*Details, error)
-}
-
-// Stapler updates the OCSP stape of certificates.
-type Stapler interface {
 	UpdateStaple(cert *Details) error
 }
 
@@ -28,18 +24,16 @@ type Stapler interface {
 type Manager struct {
 	store    Store
 	supplier Supplier
-	stapler  Stapler
 
 	minCertValidity   time.Duration
 	minStapleValidity time.Duration
 }
 
 // NewManager returns a new certificate manager backed by the given store and supplier.
-func NewManager(store Store, supplier Supplier, stapler Stapler, minCertValidity time.Duration, minStapleValidity time.Duration) *Manager {
+func NewManager(store Store, supplier Supplier, minCertValidity time.Duration, minStapleValidity time.Duration) *Manager {
 	return &Manager{
 		store:             store,
 		supplier:          supplier,
-		stapler:           stapler,
 		minCertValidity:   minCertValidity,
 		minStapleValidity: minStapleValidity,
 	}
@@ -78,7 +72,7 @@ func (m *Manager) obtain(subject string, altNames []string) (*tls.Certificate, e
 
 // staple updates the OCSP staple for the cert and saves it in the store.
 func (m *Manager) staple(cert *Details) (*tls.Certificate, error) {
-	if err := m.stapler.UpdateStaple(cert); err != nil {
+	if err := m.supplier.UpdateStaple(cert); err != nil {
 		return nil, fmt.Errorf("failed to obtain OCSP staple for %s: %w", cert.Subject, err)
 	}
 

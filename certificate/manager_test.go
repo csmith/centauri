@@ -42,12 +42,7 @@ func (f *fakeSupplier) GetCertificate(subject string, altNames []string) (*Detai
 	return f.certificate, f.err
 }
 
-type fakeStapler struct {
-	certificate *Details
-	err         error
-}
-
-func (f *fakeStapler) UpdateStaple(cert *Details) error {
+func (f *fakeSupplier) UpdateStaple(cert *Details) error {
 	f.certificate = cert
 	return f.err
 }
@@ -110,11 +105,11 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	}
 
 	store := &fakeStore{certificate: cert}
-	stapler := &fakeStapler{}
+	supplier := &fakeSupplier{}
 
 	manager := &Manager{
 		store:             store,
-		stapler:           stapler,
+		supplier:          supplier,
 		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
@@ -124,7 +119,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
-	assert.Equal(t, cert, stapler.certificate, "should pass certificate to stapler")
+	assert.Equal(t, cert, supplier.certificate, "should pass certificate to supplier")
 	assert.Equal(t, cert, store.savedCert, "should save updated cert")
 	assert.Equal(t, "example.com", store.subject)
 	assert.Equal(t, []string{"example.net"}, store.altNames)
@@ -140,11 +135,11 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 	}
 
 	store := &fakeStore{certificate: cert}
-	stapler := &fakeStapler{err: fmt.Errorf("oops")}
+	supplier := &fakeSupplier{err: fmt.Errorf("oops")}
 
 	manager := &Manager{
 		store:             store,
-		stapler:           stapler,
+		supplier:          supplier,
 		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}
@@ -163,11 +158,11 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 	}
 
 	store := &fakeStore{certificate: cert, err: fmt.Errorf("oops")}
-	stapler := &fakeStapler{}
+	supplier := &fakeSupplier{}
 
 	manager := &Manager{
 		store:             store,
-		stapler:           stapler,
+		supplier:          supplier,
 		minCertValidity:   time.Hour,
 		minStapleValidity: time.Hour,
 	}

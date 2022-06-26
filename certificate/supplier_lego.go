@@ -44,7 +44,7 @@ func (a *acmeUser) GetEmail() string {
 }
 
 // GetRegistration returns the registration resource of the account.
-func (a acmeUser) GetRegistration() *registration.Resource {
+func (a *acmeUser) GetRegistration() *registration.Resource {
 	return a.Registration
 }
 
@@ -123,8 +123,8 @@ type LegoSupplierConfig struct {
 	DnsProvider challenge.Provider
 }
 
-// NewSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
-func NewSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
+// NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
+func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 	user := &acmeUser{Email: config.Email}
 	if err := user.load(config.Path); err != nil {
 		return nil, err

@@ -5,7 +5,7 @@ Centauri is a TLS-terminating reverse-HTTP proxy written in Go.
 ## Current status
 
 Centauri is currently in development. There may be breaking changes as it
-evovles. Individual builds _should_ be usable for production purposes, but
+evolves. Individual builds _should_ be usable for production purposes, but
 you might want to keep another more established proxy around as a backup
 just in case.
 
@@ -106,6 +106,8 @@ the following directives:
   accepted from clients
 - `upstream` - provides the hostname/IP and port of the upstream server
   the request will be proxied to
+- `provider` - specifies which certificate provider will be used
+  for the route
 - `header add` - sets a header on all responses to the client,
   adding it to any issued by upstream.
 - `header replace` - sets a header on all responses to the client,
@@ -130,7 +132,15 @@ route example.com www.example.com
 route example.net
     upstream server1:8081
     header replace Content-Security-Policy default-src 'self';
+    provider selfsigned
 ```
+
+#### Providers
+
+The following certificate providers are supported:
+
+* `lego` - uses the Lego library to obtain certificates from Let's Encrypt
+  using a DNS-01 challenge (default).
 
 ## Feedback / Contributing
 
