@@ -42,8 +42,7 @@ func Test_acmeUser_load_errorsIfFileCantBeUnmarshalled(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// The lego func we're calling panics in this case; can be re-enabled once upstream is fixed.
-func IGNORE_Test_acmeUser_load_errorsIfKeyCantBeParsed(t *testing.T) {
+func Test_acmeUser_load_errorsIfKeyCantBeParsed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "user.json")
 	_ = os.WriteFile(path, []byte(`{"key": "nope"}`), 0600)
 
