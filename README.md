@@ -48,19 +48,22 @@ options are available:
   Default: `8443`.
 - `CONFIG` - path to the route configuration (see below).
   Default: `centauri.conf`.
-- `USER_DATA` - path to the file to store ACME user data in.
-  Default: `user.pem`.
 - `CERTIFICATE_STORE` - path to the file to store certificates in.
   Default: `certs.json`
+- `WILDCARD_DOMAINS` - space separated list of domains that should
+  use a wildcard certificate instead of listing individual subdomains.
+  See below.
+
+For the lego certificate provider, the following options are used:
+
+- `USER_DATA` - path to the file to store ACME user data in.
+  Default: `user.pem`.
 - `DNS_PROVIDER` - the name of the DNS provider to use for ACME DNS-01
-  challenges. See below.
+  challenges. See "ACME DNS Configuration" below.
 - `ACME_EMAIL` - the e-mail address to supply to the ACME server when
   registering.
 - `ACME_DIRECTORY` - the URL of the ACME directory to obtain certs from.
   Default: `https://acme-v02.api.letsencrypt.org/directory`
-- `WILDCARD_DOMAINS` - space separated list of domains that should
-  use a wildcard certificate instead of listing individual subdomains.
-  See below.
 
 ### ACME DNS Configuration
 
@@ -141,6 +144,8 @@ The following certificate providers are supported:
 
 * `lego` - uses the Lego library to obtain certificates from Let's Encrypt
   using a DNS-01 challenge (default).
+* `selfsigned` - generates a self-signed certificate. This will not be
+  trusted by browsers, but may be useful for certain advanced scenarios.
 
 ## Feedback / Contributing
 

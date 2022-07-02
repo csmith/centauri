@@ -76,7 +76,8 @@ func main() {
 	}
 
 	providers := map[string]proxy.CertificateProvider{
-		"lego": certificate.NewManager(store, legoSupplier, time.Hour*24*30, time.Hour*24),
+		"lego":       certificate.NewManager(store, legoSupplier, time.Hour*24*30, time.Hour*24),
+		"selfsigned": certificate.NewManager(store, certificate.NewSelfSignedSupplier(), time.Hour*24*7, time.Second),
 	}
 	proxyManager = proxy.NewManager(wildcards, providers, "lego")
 	rewriter := proxy.NewRewriter(proxyManager)
