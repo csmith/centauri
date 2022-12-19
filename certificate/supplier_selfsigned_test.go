@@ -1,12 +1,13 @@
 package certificate
 
 import (
+	"testing"
+
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
-func TestSelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testing.T) {
+func Test_SelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testing.T) {
 	supplier := &SelfSignedSupplier{}
 	details, err := supplier.GetCertificate("subject.example.com", []string{"alt1.example.com", "alt2.example.com"})
 

@@ -10,32 +10,20 @@ import (
 	"net/http/httputil"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/csmith/centauri/certificate"
 	"github.com/csmith/centauri/config"
 	"github.com/csmith/centauri/proxy"
 	"github.com/csmith/envflag"
-	"github.com/csmith/legotapas"
-	"github.com/go-acme/lego/v4/certcrypto"
-	"github.com/go-acme/lego/v4/lego"
 )
 
 var (
 	httpPort  = flag.Int("http-port", 8080, "HTTP port")
 	httpsPort = flag.Int("https-port", 8443, "HTTPS port")
 
-	configPath           = flag.String("config", "centauri.conf", "Path to config")
-	userDataPath         = flag.String("user-data", "user.pem", "Path to user data")
-	certificateStorePath = flag.String("certificate-store", "certs.json", "Path to certificate store")
-
-	dnsProviderName = flag.String("dns-provider", "", "DNS provider to use")
-	acmeEmail       = flag.String("acme-email", "", "Email address for ACME account")
-	acmeDirectory   = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
-	wildcardDomains = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
+	configPath = flag.String("config", "centauri.conf", "Path to config")
 )
 
 var proxyManager *proxy.Manager
@@ -43,43 +31,12 @@ var proxyManager *proxy.Manager
 func main() {
 	envflag.Parse()
 
-	dnsProvider, err := legotapas.CreateProvider(*dnsProviderName)
+	providers, err := certProviders()
 	if err != nil {
-		log.Fatalf("DNS provider error: %v", err)
+		log.Fatalf("Error creating certificate providers: %v", err)
 	}
 
-	legoSupplier, err := certificate.NewLegoSupplier(&certificate.LegoSupplierConfig{
-		Path:        *userDataPath,
-		Email:       *acmeEmail,
-		DirUrl:      *acmeDirectory,
-		KeyType:     certcrypto.EC384,
-		DnsProvider: dnsProvider,
-	})
-	if err != nil {
-		log.Fatalf("Certificate supplier error: %v", err)
-	}
-
-	store, err := certificate.NewStore(*certificateStorePath)
-	if err != nil {
-		log.Fatalf("Certificate store error: %v", err)
-	}
-
-	// Ensure any wildcard domains passed have a "." prefix.
-	var wildcards []string
-	var wildcardConfig = strings.Split(*wildcardDomains, " ")
-	for i := range wildcardConfig {
-		if strings.HasPrefix(wildcardConfig[i], ".") {
-			wildcards = append(wildcards, wildcardConfig[i])
-		} else if len(wildcardConfig[i]) > 0 {
-			wildcards = append(wildcards, fmt.Sprintf(".%s", wildcardConfig[i]))
-		}
-	}
-
-	providers := map[string]proxy.CertificateProvider{
-		"lego":       certificate.NewManager(store, legoSupplier, time.Hour*24*30, time.Hour*24),
-		"selfsigned": certificate.NewManager(store, certificate.NewSelfSignedSupplier(), time.Hour*24*7, time.Second),
-	}
-	proxyManager = proxy.NewManager(wildcards, providers, "lego")
+	proxyManager = proxy.NewManager(providers, "lego")
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()
@@ -111,7 +68,7 @@ func main() {
 		err := http.Serve(l, &httputil.ReverseProxy{
 			Director:       rewriter.RewriteRequest,
 			ModifyResponse: rewriter.RewriteResponse,
-			BufferPool:     NewBufferPool(),
+			BufferPool:     newBufferPool(),
 			Transport: &http.Transport{
 				ForceAttemptHTTP2:   false,
 				DisableCompression:  true,
@@ -188,7 +145,7 @@ func updateRoutes() {
 	log.Printf("Finished installing %d routes", len(routes))
 }
 
-func NewBufferPool() *bufferPool {
+func newBufferPool() *bufferPool {
 	return &bufferPool{
 		pool: sync.Pool{
 			New: func() interface{} {

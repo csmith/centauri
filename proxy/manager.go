@@ -3,7 +3,6 @@ package proxy
 import (
 	"crypto/tls"
 	"fmt"
-	"strings"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -14,8 +13,6 @@ type CertificateProvider interface {
 // Manager is responsible for maintaining a set of routes, mapping domains to those routes, and refreshing the
 // certificates for those routes.
 type Manager struct {
-	wildcardDomains []string
-
 	providers       map[string]CertificateProvider
 	defaultProvider string
 
@@ -24,10 +21,8 @@ type Manager struct {
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
-// Wildcard domains, if provided, MUST each have a leading dot (e.g. ".example.com").
-func NewManager(wildcardDomains []string, providers map[string]CertificateProvider, defaultProvider string) *Manager {
+func NewManager(providers map[string]CertificateProvider, defaultProvider string) *Manager {
 	return &Manager{
-		wildcardDomains: wildcardDomains,
 		providers:       providers,
 		defaultProvider: defaultProvider,
 		domains:         make(map[string]*Route),
@@ -114,32 +109,11 @@ func (m *Manager) updateCert(route *Route) error {
 		return err
 	}
 
-	cert, err := provider.GetCertificate(m.applyWildcard(route.Domains[0]), m.applyWildcards(route.Domains[1:]))
+	cert, err := provider.GetCertificate(route.Domains[0], route.Domains[1:])
 	if err != nil {
 		return err
 	}
 
 	route.certificate = cert
 	return nil
-}
-
-// applyWildcards checks each entry in the given slice of domains, replacing it with a wildcard domain if necessary.
-func (m *Manager) applyWildcards(domains []string) []string {
-	var res []string
-	for i := range domains {
-		res = append(res, m.applyWildcard(domains[i]))
-	}
-	return res
-}
-
-// applyWildcard tests if any of the configured wildcard domains covers the given domain. If so, it returns the
-// matching wildcard domain; otherwise it returns the passed domain unaltered.
-func (m *Manager) applyWildcard(domain string) string {
-	for i := range m.wildcardDomains {
-		prefix := strings.TrimSuffix(domain, m.wildcardDomains[i])
-		if prefix != domain && strings.Count(prefix, ".") == 0 {
-			return "*" + m.wildcardDomains[i]
-		}
-	}
-	return domain
 }

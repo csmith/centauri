@@ -13,4 +13,4 @@
 - Directives in the config file are now case-insensitive.
 - If a route has multiple upstreams an error is now raised, instead of
   silently ignoring some of them.
-- Lego updated to v4.7.0
+- Lego updated to v4.9.1
