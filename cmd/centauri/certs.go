@@ -11,6 +11,7 @@ import (
 	"github.com/csmith/legotapas"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/lego"
+	"github.com/go-acme/lego/v4/log"
 )
 
 var (
@@ -30,6 +31,36 @@ const (
 )
 
 func certProviders() (map[string]proxy.CertificateProvider, error) {
+	store, err := certificate.NewStore(*certificateStorePath)
+	if err != nil {
+		return nil, fmt.Errorf("certificate store error: %v", err)
+	}
+
+	var wildcardConfig = strings.Split(*wildcardDomains, " ")
+	var res = make(map[string]proxy.CertificateProvider)
+
+	if legoSupplier, err := createLegoSupplier(); err != nil {
+		log.Printf("WARNING: Unable to create lego certificate supplier: %v", err)
+	} else {
+		res["lego"] = certificate.NewWildcardResolver(
+			certificate.NewManager(store, legoSupplier, acmeMinCertValidity, acmeMinOcspValidity),
+			wildcardConfig,
+		)
+	}
+
+	res["selfsigned"] = certificate.NewWildcardResolver(
+		certificate.NewManager(store, certificate.NewSelfSignedSupplier(), selfSignedMinCertValidity, selfSignedOcspValidity),
+		wildcardConfig,
+	)
+
+	return res, nil
+}
+
+func createLegoSupplier() (*certificate.LegoSupplier, error) {
+	if *dnsProviderName == "" {
+		return nil, fmt.Errorf("no DNS provider specified")
+	}
+
 	dnsProvider, err := legotapas.CreateProvider(*dnsProviderName)
 	if err != nil {
 		return nil, fmt.Errorf("dns provider error: %v", err)
@@ -45,22 +76,5 @@ func certProviders() (map[string]proxy.CertificateProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("certificate supplier error: %v", err)
 	}
-
-	store, err := certificate.NewStore(*certificateStorePath)
-	if err != nil {
-		return nil, fmt.Errorf("certificate store error: %v", err)
-	}
-
-	var wildcardConfig = strings.Split(*wildcardDomains, " ")
-
-	return map[string]proxy.CertificateProvider{
-		"lego": certificate.NewWildcardResolver(
-			certificate.NewManager(store, legoSupplier, acmeMinCertValidity, acmeMinOcspValidity),
-			wildcardConfig,
-		),
-		"selfsigned": certificate.NewWildcardResolver(
-			certificate.NewManager(store, certificate.NewSelfSignedSupplier(), selfSignedMinCertValidity, selfSignedOcspValidity),
-			wildcardConfig,
-		),
-	}, nil
+	return legoSupplier, nil
 }

@@ -187,6 +187,40 @@ func Test_Rewriter_RewriteResponse_AddsHeaders(t *testing.T) {
 	assert.Equal(t, []string{"test0", "test1", "test2"}, response.Header.Values("X-Test"))
 }
 
+func Test_Rewriter_RewriteRequest_UsesHostHeaderIfTlsNotUsed(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		Host:       "example.com",
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "example.com", provider.domain)
+	assert.Equal(t, "http://hostname:8080/foo/bar", request.URL.String())
+}
+
+func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
+	provider := &fakeProvider{}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		Host:       "example.com",
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "example.com", provider.domain)
+	assert.Equal(t, "/foo/bar", request.URL.String())
+}
+
 func Test_Rewriter_RewriteResponse_DeletesHeaders(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
@@ -270,6 +304,24 @@ func Test_Rewriter_RewriteResponse_DefaultsHeader_ifPresent(t *testing.T) {
 			},
 		},
 	}
+	rewriter := &Rewriter{provider: provider}
+
+	request := &http.Request{
+		TLS: &tls.ConnectionState{ServerName: "example.com"},
+	}
+	response := &http.Response{
+		Request: request,
+		Header:  make(http.Header),
+	}
+	response.Header.Set("X-Test", "test0")
+
+	err := rewriter.RewriteResponse(response)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"test0"}, response.Header.Values("X-Test"))
+}
+
+func Test_Rewriter_RewriteResponse_DoesNothingIfRouteIsNil(t *testing.T) {
+	provider := &fakeProvider{}
 	rewriter := &Rewriter{provider: provider}
 
 	request := &http.Request{

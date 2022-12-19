@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -17,7 +18,7 @@ import (
 
 var (
 	tailscaleHostname = flag.String("tailscale-hostname", "centauri", "Hostname to use for the tailscale frontend")
-	tailscaleKey      = flag.String("tailscale-key", "", "API key to use when connecting to tailscale")
+	tailscaleKey      = flag.String("tailscale-key", "", "Auth key to use when connecting to tailscale")
 )
 
 type tailscaleFrontend struct {
@@ -29,12 +30,16 @@ func init() {
 }
 
 func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error {
+	if *tailscaleKey == "" {
+		return fmt.Errorf("tailscale authentication key not specified")
+	}
+
 	log.Printf("Starting TCP server on http://%s/", *tailscaleHostname)
 
 	srv := &tsnet.Server{
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
-		Logf:     log.Printf,
+		Logf:     func(format string, args ...any) {},
 	}
 
 	if err := srv.Start(); err != nil {

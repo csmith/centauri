@@ -35,7 +35,11 @@ func NewRewriter(manager *Manager) *Rewriter {
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {
-	route := r.provider.RouteForDomain(req.TLS.ServerName)
+	route := r.provider.RouteForDomain(hostname(req))
+	if route == nil {
+		return
+	}
+
 	req.URL.Scheme = "http"
 	req.URL.Host = route.Upstream
 
@@ -56,7 +60,10 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 // RewriteResponse modifies the given response according to the routes provided by the Manager.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteResponse(response *http.Response) error {
-	route := r.provider.RouteForDomain(response.Request.TLS.ServerName)
+	route := r.provider.RouteForDomain(hostname(response.Request))
+	if route == nil {
+		return nil
+	}
 
 	for i := range route.Headers {
 		switch route.Headers[i].Operation {
@@ -74,4 +81,12 @@ func (r *Rewriter) RewriteResponse(response *http.Response) error {
 	}
 
 	return nil
+}
+
+func hostname(req *http.Request) string {
+	if req.TLS == nil {
+		return req.Host
+	} else {
+		return req.TLS.ServerName
+	}
 }
