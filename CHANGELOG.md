@@ -13,7 +13,7 @@
 
 ## Other changes
 
-- Now requires Go 1.18 to build.
+- Now requires Go 1.19 to build.
 - Directives in the config file are now case-insensitive.
 - If a route has multiple upstreams an error is now raised, instead of
   silently ignoring some of them.
