@@ -41,7 +41,7 @@ deal with `proxy_pass` instructions.
 Centauri can listen directly on a Tailscale network instead of
 a public TCP port, removing the need for complex configuration
 or sidecar containers. Simply change the "frontend" setting to
-"tailscale", supply and API key, and you're done!
+"tailscale", supply an API key, and you're done!
 
 ## Configuration
 

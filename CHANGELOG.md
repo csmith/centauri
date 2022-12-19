@@ -7,9 +7,9 @@
   on a per-route basis by using the new `provider selfsigned` directive.
   ([issue #15](https://github.com/csmith/centauri/issues/15))
 - Centauri can now listen directly on a Tailscale network instead
-  of on a public TCP ports. A new configuration option `frontend` has
+  of on public TCP ports. A new configuration option `frontend` has
   been added to allow selection of the frontend to use, as well as
-  options for configuring the behaviour of the tailscale frontend.
+  options for configuring the behaviour of the Tailscale frontend.
 
 ## Other changes
 
