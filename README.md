@@ -36,23 +36,41 @@ route www.example.net
 You don't need to configure separate front-ends or back-ends, or
 deal with `proxy_pass` instructions.
 
+### Native Tailscale support
+
+Centauri can listen directly on a Tailscale network instead of
+a public TCP port, removing the need for complex configuration
+or sidecar containers. Simply change the "frontend" setting to
+"tailscale", supply and API key, and you're done!
+
 ## Configuration
 
 Centauri's behaviour is configured by environment vars. The following
 options are available:
+
+- `CONFIG` - path to the route configuration (see below).
+  Default: `centauri.conf`.
+- `FRONTEND` - the frontend to use to serve requests. Valid options
+  are `tcp` and `tailscale`. Default: `tcp`.
+- `CERTIFICATE_STORE` - path to the file to store certificates in.
+  Default: `certs.json`
+- `WILDCARD_DOMAINS` - space separated list of domains that should
+  use a wildcard certificate instead of listing individual subdomains.
+  See below.
+
+For the TCP frontend, the following options are used:
 
 - `HTTP_PORT` - port to listen on for non-TLS connections. These are
   automatically redirected to https.
   Default: `8080`.
 - `HTTPS_PORT` - port to listen on for TLS connections.
   Default: `8443`.
-- `CONFIG` - path to the route configuration (see below).
-  Default: `centauri.conf`.
-- `CERTIFICATE_STORE` - path to the file to store certificates in.
-  Default: `certs.json`
-- `WILDCARD_DOMAINS` - space separated list of domains that should
-  use a wildcard certificate instead of listing individual subdomains.
-  See below.
+
+For the Tailscale frontend, the following options are used:
+
+- `TAILSCALE_HOSTNAME` - the hostname to use on the Tailscale network.
+  Default: `centauri`.
+- `TAILSCALE_KEY` - the key to use to authenticate to Tailscale. 
 
 For the lego certificate provider, the following options are used:
 
@@ -146,6 +164,15 @@ The following certificate providers are supported:
   using a DNS-01 challenge (default).
 * `selfsigned` - generates a self-signed certificate. This will not be
   trusted by browsers, but may be useful for certain advanced scenarios.
+
+## Build tags
+
+If you know in advance you will only use a single DNS provider, you can use build tags to include only support
+for that provider in the binary. For example to support only the `httpreq` provider you can build with
+`go build -tags lego_httpreq`. See the [legotapas](https://github.com/csmith/legotapas) project for more
+info.
+
+You can also disable Centauri's frontends by specifying the `notcp` and `notailscale` build tags. 
 
 ## Feedback / Contributing
 

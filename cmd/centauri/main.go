@@ -1,16 +1,11 @@
 package main
 
 import (
-	"crypto/tls"
-	"errors"
+	"context"
 	"flag"
-	"fmt"
 	"log"
-	"net/http"
-	"net/http/httputil"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -20,10 +15,8 @@ import (
 )
 
 var (
-	httpPort  = flag.Int("http-port", 8080, "HTTP port")
-	httpsPort = flag.Int("https-port", 8443, "HTTPS port")
-
-	configPath = flag.String("config", "centauri.conf", "Path to config")
+	configPath       = flag.String("config", "centauri.conf", "Path to config")
+	selectedFrontend = flag.String("frontend", "tcp", "Frontend to listen on")
 )
 
 var proxyManager *proxy.Manager
@@ -42,60 +35,26 @@ func main() {
 	listenForHup()
 	monitorCerts()
 
-	log.Printf("Starting server on port %d (https) and %d (http)", *httpsPort, *httpPort)
-
-	l, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		// Generated 2022-02-20, Mozilla Guideline v5.6, Go 1.14.4, intermediate configuration
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		},
-		GetCertificate: proxyManager.CertificateForClient,
-		NextProtos:     []string{"h2", "http/1.1"},
-	})
-	if err != nil {
-		log.Fatal(err)
+	f, ok := frontends[*selectedFrontend]
+	if !ok {
+		log.Fatalf("Invalid frontend specified: %s", *selectedFrontend)
 	}
 
-	defer l.Close()
-
-	go func() {
-		err := http.Serve(l, &httputil.ReverseProxy{
-			Director:       rewriter.RewriteRequest,
-			ModifyResponse: rewriter.RewriteResponse,
-			BufferPool:     newBufferPool(),
-			Transport: &http.Transport{
-				ForceAttemptHTTP2:   false,
-				DisableCompression:  true,
-				MaxIdleConnsPerHost: 100,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		})
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
-		}
-	}()
-
-	go func() {
-		err := http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), &proxy.Redirector{})
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
-		}
-	}()
+	err = f.Serve(proxyManager, rewriter)
+	if err != nil {
+		log.Fatalf("Failed to start frontend: %v", err)
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, syscall.SIGTERM)
 
 	// Wait for a signal
-	log.Printf("Received signal %s, stopping...", <-c)
+	log.Printf("Received signal %s, stopping frontend...", <-c)
 
-	// TODO: Stop servers properly
+	f.Stop(context.Background())
+
+	log.Printf("Frontend stopped. Goodbye!")
 }
 
 func monitorCerts() {
@@ -143,26 +102,4 @@ func updateRoutes() {
 	}
 
 	log.Printf("Finished installing %d routes", len(routes))
-}
-
-func newBufferPool() *bufferPool {
-	return &bufferPool{
-		pool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, 32*1024)
-			},
-		},
-	}
-}
-
-type bufferPool struct {
-	pool sync.Pool
-}
-
-func (b *bufferPool) Get() []byte {
-	return b.pool.Get().([]byte)
-}
-
-func (b *bufferPool) Put(bytes []byte) {
-	b.pool.Put(bytes)
 }
