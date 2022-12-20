@@ -29,7 +29,12 @@ func main() {
 		log.Fatalf("Error creating certificate providers: %v", err)
 	}
 
-	proxyManager = proxy.NewManager(providers, "lego")
+	defaultProvider := "lego"
+	if _, ok := providers[defaultProvider]; !ok {
+		defaultProvider = "selfsigned"
+	}
+
+	proxyManager = proxy.NewManager(providers, defaultProvider)
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()
