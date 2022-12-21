@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"sync"
 	"time"
 
 	"github.com/csmith/centauri/proxy"
@@ -20,10 +19,6 @@ import (
 var (
 	httpPort  = flag.Int("http-port", 8080, "Port to listen on for plain HTTP requests for the TCP frontend")
 	httpsPort = flag.Int("https-port", 8443, "Port to listen on for HTTPS requests for the TCP frontend")
-)
-
-const (
-	shutdownTimeout = time.Second * 5
 )
 
 type tcpFrontend struct {
@@ -99,26 +94,4 @@ func (t *tcpFrontend) Stop(ctx context.Context) {
 
 	shutdown(ctx, t.tlsServer)
 	shutdown(ctx, t.plainServer)
-}
-
-func newBufferPool() *bufferPool {
-	return &bufferPool{
-		pool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, 32*1024)
-			},
-		},
-	}
-}
-
-type bufferPool struct {
-	pool sync.Pool
-}
-
-func (b *bufferPool) Get() []byte {
-	return b.pool.Get().([]byte)
-}
-
-func (b *bufferPool) Put(bytes []byte) {
-	b.pool.Put(bytes)
 }

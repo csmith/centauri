@@ -2,8 +2,14 @@ package main
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/csmith/centauri/proxy"
+)
+
+const (
+	shutdownTimeout = time.Second * 5
 )
 
 type frontend interface {
@@ -12,3 +18,25 @@ type frontend interface {
 }
 
 var frontends = make(map[string]frontend)
+
+func newBufferPool() *bufferPool {
+	return &bufferPool{
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, 32*1024)
+			},
+		},
+	}
+}
+
+type bufferPool struct {
+	pool sync.Pool
+}
+
+func (b *bufferPool) Get() []byte {
+	return b.pool.Get().([]byte)
+}
+
+func (b *bufferPool) Put(bytes []byte) {
+	b.pool.Put(bytes)
+}
