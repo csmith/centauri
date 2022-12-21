@@ -4,13 +4,11 @@ package main
 
 import (
 	"context"
-	"errors"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
-	"time"
 
 	"github.com/csmith/centauri/proxy"
 	"tailscale.com/tsnet"
@@ -19,10 +17,13 @@ import (
 var (
 	tailscaleHostname = flag.String("tailscale-hostname", "centauri", "Hostname to use for the tailscale frontend")
 	tailscaleKey      = flag.String("tailscale-key", "", "Auth key to use when connecting to tailscale")
+	tailscaleMode     = flag.String("tailscale-mode", "http", "Whether to serve plain http on tailscale networks, or https with a redirect from http")
 )
 
 type tailscaleFrontend struct {
-	server *http.Server
+	tlsServer   *http.Server
+	plainServer *http.Server
+	tailscale   *tsnet.Server
 }
 
 func init() {
@@ -34,48 +35,60 @@ func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewrit
 		return fmt.Errorf("tailscale authentication key not specified")
 	}
 
-	log.Printf("Starting TCP server on http://%s/", *tailscaleHostname)
-
-	srv := &tsnet.Server{
+	t.tailscale = &tsnet.Server{
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
 		Logf:     func(format string, args ...any) {},
 	}
 
-	if err := srv.Start(); err != nil {
+	if err := t.tailscale.Start(); err != nil {
 		return err
 	}
 
-	listener, err := srv.Listen("tcp", ":80")
-	if err != nil {
-		return err
-	}
+	if *tailscaleMode == "http" {
+		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
 
-	t.server = &http.Server{
-		Handler: &httputil.ReverseProxy{
-			Director:       rewriter.RewriteRequest,
-			ModifyResponse: rewriter.RewriteResponse,
-			BufferPool:     newBufferPool(),
-			Transport: &http.Transport{
-				ForceAttemptHTTP2:   false,
-				DisableCompression:  true,
-				MaxIdleConnsPerHost: 100,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
-	}
-
-	go func() {
-		if err := t.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
+		if err := t.startHttpServer(createProxy(rewriter)); err != nil {
+			return err
 		}
-	}()
+	} else if *tailscaleMode == "https" {
+		log.Printf("Starting tailscale server on https://%s/", *tailscaleHostname)
+
+		if err := t.startHttpServer(createRedirector()); err != nil {
+			return err
+		}
+
+		if err := t.startHttpsServer(createProxy(rewriter), proxyManager); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
+func (t *tailscaleFrontend) startHttpServer(server *http.Server) error {
+	listener, err := t.tailscale.Listen("tcp", ":80")
+	if err != nil {
+		return err
+	}
+
+	t.plainServer = server
+	startServer(server, listener)
+	return nil
+}
+
+func (t *tailscaleFrontend) startHttpsServer(server *http.Server, manager *proxy.Manager) error {
+	tlsListener, err := t.tailscale.Listen("tcp", ":443")
+	if err != nil {
+		return err
+	}
+
+	t.tlsServer = server
+	startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(manager)))
+	return nil
+}
+
 func (t *tailscaleFrontend) Stop(ctx context.Context) {
-	timeoutContext, cancel := context.WithTimeout(ctx, shutdownTimeout)
-	defer cancel()
-	_ = t.server.Shutdown(timeoutContext)
+	stopServers(ctx, t.plainServer, t.tlsServer)
+	_ = t.tailscale.Close()
 }
