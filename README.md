@@ -40,8 +40,13 @@ deal with `proxy_pass` instructions.
 
 Centauri can listen directly on a Tailscale network instead of
 a public TCP port, removing the need for complex configuration
-or sidecar containers. Simply change the "frontend" setting to
-"tailscale", supply an API key, and you're done!
+or sidecar containers. Change the "frontend" setting to
+"tailscale", supply an API key, and Centauri will connect
+directly to your Tailscale network!
+
+If running in Docker, you will need to persist the directory
+at `/home/nonroot/.config` or the Tailscale client will lose
+its authorisation whenever the container restarts.
 
 ## Configuration
 
