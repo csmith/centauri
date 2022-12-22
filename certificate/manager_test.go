@@ -47,6 +47,14 @@ func (f *fakeSupplier) UpdateStaple(cert *Details) error {
 	return f.err
 }
 
+func (f *fakeSupplier) MinCertificateValidity() time.Duration {
+	return time.Hour * 24
+}
+
+func (f *fakeSupplier) MinStapleValidity() time.Duration {
+	return time.Hour
+}
+
 const (
 	certPem = `-----BEGIN CERTIFICATE-----
 MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
@@ -71,7 +79,7 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 
 func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 	cert := &Details{
-		NotAfter:       time.Now().Add(time.Hour * 2),
+		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
@@ -79,14 +87,15 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 	}
 
 	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
 
-	manager := &Manager{
-		store:             store,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	c, err := manager.GetCertificate("example.com", []string{"example.net"})
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -97,7 +106,7 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 
 func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	cert := &Details{
-		NotAfter:       time.Now().Add(time.Hour * 2),
+		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now(),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
@@ -107,14 +116,13 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	store := &fakeStore{certificate: cert}
 	supplier := &fakeSupplier{}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	c, err := manager.GetCertificate("example.com", []string{"example.net"})
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -127,7 +135,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 
 func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 	cert := &Details{
-		NotAfter:       time.Now().Add(time.Hour * 2),
+		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now(),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
@@ -137,20 +145,19 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 	store := &fakeStore{certificate: cert}
 	supplier := &fakeSupplier{err: fmt.Errorf("oops")}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	_, err := manager.GetCertificate("example.com", []string{"example.net"})
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
 func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testing.T) {
 	cert := &Details{
-		NotAfter:       time.Now().Add(time.Hour * 2),
+		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now(),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
@@ -160,14 +167,13 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 	store := &fakeStore{certificate: cert, err: fmt.Errorf("oops")}
 	supplier := &fakeSupplier{}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	_, err := manager.GetCertificate("example.com", []string{"example.net"})
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -183,14 +189,13 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 	store := &fakeStore{}
 	supplier := &fakeSupplier{certificate: cert}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	c, err := manager.GetCertificate("example.com", []string{"example.net"})
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -212,14 +217,13 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 	store := &fakeStore{certificate: cert}
 	supplier := &fakeSupplier{certificate: cert}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	c, err := manager.GetCertificate("example.com", []string{"example.net"})
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -233,14 +237,13 @@ func Test_Manager_GetCertificate_returnsErrorIfSupplierFails(t *testing.T) {
 	store := &fakeStore{}
 	supplier := &fakeSupplier{err: fmt.Errorf("oops")}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
-	}
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
 
-	_, err := manager.GetCertificate("example.com", []string{"example.net"})
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -256,13 +259,90 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 	store := &fakeStore{err: fmt.Errorf("oops")}
 	supplier := &fakeSupplier{certificate: cert}
 
-	manager := &Manager{
-		store:             store,
-		supplier:          supplier,
-		minCertValidity:   time.Hour,
-		minStapleValidity: time.Hour,
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.Error(t, err)
+}
+
+func Test_Manager_GetCertificate_usesPreferredSupplierIfSpecified(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 2),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
 	}
 
-	_, err := manager.GetCertificate("example.com", []string{"example.net"})
+	store := &fakeStore{}
+	supplier := &fakeSupplier{certificate: cert}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier, "other": &fakeSupplier{}},
+		[]string{"other"},
+	)
+
+	c, err := manager.GetCertificate("test", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "example.com", supplier.subject)
+	assert.Equal(t, []string{"example.net"}, supplier.altNames)
+}
+
+func Test_Manager_GetCertificate_errorsIfPreferredSupplierNotFound(t *testing.T) {
+	manager := NewManager(
+		&fakeStore{},
+		map[string]Supplier{"test": &fakeSupplier{}, "other": &fakeSupplier{}},
+		[]string{"other"},
+	)
+
+	_, err := manager.GetCertificate("another", "example.com", []string{"example.net"})
 	require.Error(t, err)
+}
+
+func Test_Manager_GetCertificate_errorsIfNoSuppliersFound(t *testing.T) {
+	manager := NewManager(
+		&fakeStore{},
+		map[string]Supplier{"test": &fakeSupplier{}, "other": &fakeSupplier{}},
+		[]string{"one", "two", "three"},
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.Error(t, err)
+}
+
+func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpecified(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 2),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{}
+	supplier := &fakeSupplier{certificate: cert}
+
+	manager := &Manager{
+		store:              store,
+		suppliers:          map[string]Supplier{"test": supplier, "other": &fakeSupplier{}},
+		supplierPreference: []string{"missing", "rubbish", "test", "other"},
+	}
+
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "example.com", supplier.subject)
+	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }

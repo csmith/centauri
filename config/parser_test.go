@@ -57,6 +57,15 @@ route example.com
 	assert.Error(t, err)
 }
 
+func Test_Parse_ErrorsOnHeaderDeleteWithoutHeader(t *testing.T) {
+	_, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	header delete
+`)))
+
+	assert.Error(t, err)
+}
+
 func Test_Parse_ErrorsOnHeaderReplaceWithoutValue(t *testing.T) {
 	_, err := Parse(bytes.NewBuffer([]byte(`
 route example.com

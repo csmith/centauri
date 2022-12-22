@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	legocert "github.com/go-acme/lego/v4/certificate"
@@ -205,4 +206,12 @@ func (s *LegoSupplier) UpdateStaple(cert *Details) error {
 	cert.OcspResponse = b
 	cert.NextOcspUpdate = response.NextUpdate
 	return nil
+}
+
+func (s *LegoSupplier) MinCertificateValidity() time.Duration {
+	return time.Hour * 24 * 30
+}
+
+func (s *LegoSupplier) MinStapleValidity() time.Duration {
+	return time.Hour * 24
 }

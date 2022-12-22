@@ -7,9 +7,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"github.com/go-acme/lego/v4/certcrypto"
 	"math/big"
 	"time"
+
+	"github.com/go-acme/lego/v4/certcrypto"
 )
 
 type SelfSignedSupplier struct {
@@ -58,4 +59,12 @@ func (s *SelfSignedSupplier) GetCertificate(subject string, altNames []string) (
 func (s *SelfSignedSupplier) UpdateStaple(_ *Details) error {
 	// Shouldn't be called - self-signed certs aren't stapled
 	return nil
+}
+
+func (s *SelfSignedSupplier) MinCertificateValidity() time.Duration {
+	return time.Hour * 24 * 7
+}
+
+func (s *SelfSignedSupplier) MinStapleValidity() time.Duration {
+	return time.Second
 }

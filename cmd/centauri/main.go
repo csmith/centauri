@@ -24,17 +24,12 @@ var proxyManager *proxy.Manager
 func main() {
 	envflag.Parse()
 
-	providers, err := certProviders()
+	provider, err := certProvider()
 	if err != nil {
 		log.Fatalf("Error creating certificate providers: %v", err)
 	}
 
-	defaultProvider := "lego"
-	if _, ok := providers[defaultProvider]; !ok {
-		defaultProvider = "selfsigned"
-	}
-
-	proxyManager = proxy.NewManager(providers, defaultProvider)
+	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()

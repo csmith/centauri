@@ -62,6 +62,9 @@ options are available:
 - `WILDCARD_DOMAINS` - space separated list of domains that should
   use a wildcard certificate instead of listing individual subdomains.
   See below.
+- `CERTIFICATE_PROVIDERS` - a space separated list of certificate
+  providers to try to get a certificate from, in order, if a route
+  does not have an explicit `provider`. Default: `lego selfsigned`.
 
 For the TCP frontend, the following options are used:
 
@@ -172,6 +175,10 @@ The following certificate providers are supported:
   using a DNS-01 challenge (default).
 * `selfsigned` - generates a self-signed certificate. This will not be
   trusted by browsers, but may be useful for certain advanced scenarios.
+
+Routes can specify which provider to use with the `provider` directive,
+and you can configure the global defaults using the `CERTIFICATE_PROVIDERS`
+environment var.
 
 ## Build tags
 

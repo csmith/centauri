@@ -7,25 +7,22 @@ import (
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
 type CertificateProvider interface {
-	GetCertificate(subject string, altNames []string) (*tls.Certificate, error)
+	GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 }
 
 // Manager is responsible for maintaining a set of routes, mapping domains to those routes, and refreshing the
 // certificates for those routes.
 type Manager struct {
-	providers       map[string]CertificateProvider
-	defaultProvider string
-
-	routes  []*Route
-	domains map[string]*Route
+	provider CertificateProvider
+	routes   []*Route
+	domains  map[string]*Route
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
-func NewManager(providers map[string]CertificateProvider, defaultProvider string) *Manager {
+func NewManager(provider CertificateProvider) *Manager {
 	return &Manager{
-		providers:       providers,
-		defaultProvider: defaultProvider,
-		domains:         make(map[string]*Route),
+		provider: provider,
+		domains:  make(map[string]*Route),
 	}
 }
 
@@ -86,30 +83,9 @@ func (m *Manager) CheckCertificates() error {
 	return nil
 }
 
-// selectProvider finds a CertificateProvider appropriate for the given route. If the route specifies its provider,
-// that will be used, otherwise the default for this manager will be. If no provider by that name is found, returns
-// an error.
-func (m *Manager) selectProvider(route *Route) (CertificateProvider, error) {
-	provider := route.Provider
-	if provider == "" {
-		provider = m.defaultProvider
-	}
-
-	p, ok := m.providers[provider]
-	if !ok {
-		return nil, fmt.Errorf("no certificate provider named %s", provider)
-	}
-	return p, nil
-}
-
 // updateCert updates the certificate for the given route.
 func (m *Manager) updateCert(route *Route) error {
-	provider, err := m.selectProvider(route)
-	if err != nil {
-		return err
-	}
-
-	cert, err := provider.GetCertificate(route.Domains[0], route.Domains[1:])
+	cert, err := m.provider.GetCertificate(route.Provider, route.Domains[0], route.Domains[1:])
 	if err != nil {
 		return err
 	}

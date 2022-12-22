@@ -11,11 +11,13 @@ import (
 type fakeCertManager struct {
 	certificate *tls.Certificate
 	err         error
+	supplier    string
 	subject     string
 	altNames    []string
 }
 
-func (f *fakeCertManager) GetCertificate(subject string, altNames []string) (*tls.Certificate, error) {
+func (f *fakeCertManager) GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
+	f.supplier = preferredSupplier
 	f.subject = subject
 	f.altNames = altNames
 	return f.certificate, f.err
@@ -29,10 +31,11 @@ func Test_WildcardResolver_passesRequestThroughIfNoDomainsConfigured(t *testing.
 		err:         fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, nil)
-	cert, err := resolver.GetCertificate("example.com", []string{"foo.example.com", "bar.example.com"})
+	cert, err := resolver.GetCertificate("supplier", "example.com", []string{"foo.example.com", "bar.example.com"})
 
 	assert.Equal(t, upstream.certificate, cert)
 	assert.Equal(t, upstream.err, err)
+	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "example.com", upstream.subject)
 	assert.Equal(t, []string{"foo.example.com", "bar.example.com"}, upstream.altNames)
 }
@@ -43,10 +46,11 @@ func Test_WildcardResolver_modifiesWildcardDomains(t *testing.T) {
 		err:         fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, err := resolver.GetCertificate("foo.example.com", []string{"bar.example.org"})
+	cert, err := resolver.GetCertificate("supplier", "foo.example.com", []string{"bar.example.org"})
 
 	assert.Equal(t, upstream.certificate, cert)
 	assert.Equal(t, upstream.err, err)
+	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "*.example.com", upstream.subject)
 	assert.Equal(t, []string{"*.example.org"}, upstream.altNames)
 }
@@ -57,10 +61,11 @@ func Test_WildcardResolver_doesNotModifySubdomains(t *testing.T) {
 		err:         fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, err := resolver.GetCertificate("foo.bar.example.com", []string{"foo.bar.example.org"})
+	cert, err := resolver.GetCertificate("supplier", "foo.bar.example.com", []string{"foo.bar.example.org"})
 
 	assert.Equal(t, upstream.certificate, cert)
 	assert.Equal(t, upstream.err, err)
+	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "foo.bar.example.com", upstream.subject)
 	assert.Equal(t, []string{"foo.bar.example.org"}, upstream.altNames)
 }
@@ -71,10 +76,11 @@ func Test_WildcardResolver_doesNotModifyRootDomains(t *testing.T) {
 		err:         fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, err := resolver.GetCertificate("example.com", []string{"example.org"})
+	cert, err := resolver.GetCertificate("supplier", "example.com", []string{"example.org"})
 
 	assert.Equal(t, upstream.certificate, cert)
 	assert.Equal(t, upstream.err, err)
+	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "example.com", upstream.subject)
 	assert.Equal(t, []string{"example.org"}, upstream.altNames)
 }
@@ -85,10 +91,11 @@ func Test_WildcardResolver_doesNotModifyOtherDomains(t *testing.T) {
 		err:         fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, err := resolver.GetCertificate("example.net", []string{"example.org.example.net"})
+	cert, err := resolver.GetCertificate("supplier", "example.net", []string{"example.org.example.net"})
 
 	assert.Equal(t, upstream.certificate, cert)
 	assert.Equal(t, upstream.err, err)
+	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "example.net", upstream.subject)
 	assert.Equal(t, []string{"example.org.example.net"}, upstream.altNames)
 }
