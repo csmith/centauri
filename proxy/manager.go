@@ -19,6 +19,8 @@ type Manager struct {
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
+// If the provider is nil, then the manager will not obtain certificates and CertificateForClient will always return
+// an error.
 func NewManager(provider CertificateProvider) *Manager {
 	return &Manager{
 		provider: provider,
@@ -42,8 +44,10 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 			newDomains[route.Domains[j]] = route
 		}
 
-		if err := m.updateCert(route); err != nil {
-			return err
+		if m.provider != nil {
+			if err := m.updateCert(route); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -62,6 +66,10 @@ func (m *Manager) RouteForDomain(domain string) *Route {
 // client hello. If no certificate is available, nil is returned. The error return value is unused, but
 // is kept to maintain compatibility with the tls.Config.GetCertificate func signature.
 func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if m.provider == nil {
+		return nil, fmt.Errorf("this manager does not support obtaining certificates")
+	}
+
 	route := m.domains[hello.ServerName]
 	if route == nil {
 		return nil, nil
@@ -72,6 +80,10 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
 func (m *Manager) CheckCertificates() error {
+	if m.provider == nil {
+		return nil
+	}
+
 	for i := range m.routes {
 		route := m.routes[i]
 

@@ -61,6 +61,8 @@ func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewrit
 		if err := t.startHttpsServer(createProxy(rewriter), proxyManager); err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("unknown value for tailscale mode: %v (accepted: http, https)", *tailscaleMode)
 	}
 
 	return nil
@@ -91,4 +93,8 @@ func (t *tailscaleFrontend) startHttpsServer(server *http.Server, manager *proxy
 func (t *tailscaleFrontend) Stop(ctx context.Context) {
 	stopServers(ctx, t.plainServer, t.tlsServer)
 	_ = t.tailscale.Close()
+}
+
+func (t *tailscaleFrontend) UsesCertificates() bool {
+	return *tailscaleMode == "https"
 }

@@ -24,23 +24,28 @@ var proxyManager *proxy.Manager
 func main() {
 	envflag.Parse()
 
-	provider, err := certProvider()
-	if err != nil {
-		log.Fatalf("Error creating certificate providers: %v", err)
+	f, ok := frontends[*selectedFrontend]
+	if !ok {
+		log.Fatalf("Invalid frontend specified: %s", *selectedFrontend)
+	}
+
+	var provider proxy.CertificateProvider
+	if f.UsesCertificates() {
+		var err error
+		provider, err = certProvider()
+		if err != nil {
+			log.Fatalf("Error creating certificate providers: %v", err)
+		}
+
+		monitorCerts()
 	}
 
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager)
 	updateRoutes()
 	listenForHup()
-	monitorCerts()
 
-	f, ok := frontends[*selectedFrontend]
-	if !ok {
-		log.Fatalf("Invalid frontend specified: %s", *selectedFrontend)
-	}
-
-	err = f.Serve(proxyManager, rewriter)
+	err := f.Serve(proxyManager, rewriter)
 	if err != nil {
 		log.Fatalf("Failed to start frontend: %v", err)
 	}

@@ -51,3 +51,7 @@ func (t *tcpFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) er
 func (t *tcpFrontend) Stop(ctx context.Context) {
 	stopServers(ctx, t.tlsServer, t.plainServer)
 }
+
+func (t *tcpFrontend) UsesCertificates() bool {
+	return true
+}

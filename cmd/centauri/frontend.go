@@ -21,6 +21,7 @@ const (
 type frontend interface {
 	Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error
 	Stop(ctx context.Context)
+	UsesCertificates() bool
 }
 
 var frontends = make(map[string]frontend)
