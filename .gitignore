@@ -1,3 +1,4 @@
-.idea
-centauri.conf
-*.pem
+/.idea
+/centauri.conf
+/*.pem
+/certs.json

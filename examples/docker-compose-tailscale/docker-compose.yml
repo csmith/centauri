@@ -1,0 +1,27 @@
+services:
+  centauri:
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    volumes:
+      - "./ts-data:/home/nonroot/.config"
+    environment:
+      CONFIG: "/centauri.conf"
+
+      # Configure Centauri to use Tailscale instead of listening on TCP ports
+      FRONTEND: "tailscale"
+      # The hostname Centauri will use on the Tailscale network (i.e., what shows up in your dashboard).
+      TAILSCALE_HOSTNAME: "centauri"
+      # The key to use to authenticate to Tailscale for the first time. Session data will be saved under
+      # /home/nonroot/.config/ once successfully connected to the tailnet.
+      TAILSCALE_KEY: "abc1234"
+      # As Tailscale provides an encrypted tunnel, we can safely serve content over plain HTTP instead of
+      # requiring HTTPS. This also means we don't have to worry about generating certificates.
+      TAILSCALE_MODE: "http"
+
+
+  # A container that will be proxied by Centauri. As the containers are on the same network (docker
+  # compose creates a "default" network) we can refer to this container just as "mycontainer" in the
+  # Centauri config.
+  mycontainer:
+    image: "nginx"
+    restart: "always"

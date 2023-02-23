@@ -48,6 +48,16 @@ If running in Docker, you will need to persist the directory
 at `/home/nonroot/.config` or the Tailscale client will lose
 its authorisation whenever the container restarts.
 
+## Usage
+
+Centauri is packaged as a docker container, with the latest
+stable version available at `ghcr.io/csmith/centauri:latest`.
+You can also use specific major, minor or patch versions
+such as `:0.2.0` or `:0.2`. The `:dev` tag follows the master
+branch.
+
+Some example setups can be found in the `examples` directory.
+
 ## Configuration
 
 Centauri's behaviour is configured by environment vars. The following

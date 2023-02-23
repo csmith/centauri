@@ -1,0 +1,29 @@
+services:
+  centauri:
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - "./centauri.conf:/centauri.conf:ro"
+      - "./data:/data"
+    environment:
+      CONFIG: "/centauri.conf"
+      USER_DATA: "/data/user.json"
+      CERTIFICATE_STORE: "/data/certs.json"
+      ACME_EMAIL: "you@example.com"
+
+      # Centauri uses DNS challenges to prove domain ownership. See the Lego docs for all available
+      # providers and their configuration: https://go-acme.github.io/lego/dns/
+      DNS_PROVIDER: "httpreq"
+      HTTPREQ_ENDPOINT: "https://api.mydnsprovider.example.com/httpreq"
+      HTTPREQ_USERNAME: "dns@example.com"
+      HTTPREQ_PASSWORD: "myp@ssw0rd"
+
+  # A container that will be proxied by Centauri. As the containers are on the same network (docker
+  # compose creates a "default" network) we can refer to this container just as "mycontainer" in the
+  # Centauri config.
+  mycontainer:
+    image: "nginx"
+    restart: "always"
