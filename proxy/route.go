@@ -11,8 +11,20 @@ type Route struct {
 	Headers  []Header
 	Provider string
 
-	certificate *tls.Certificate
+	certificate       *tls.Certificate
+	certificateStatus CertificateStatus
 }
+
+// CertificateStatus describes the current status of the route's certificate
+type CertificateStatus int
+
+const (
+	CertificateNotChecked   CertificateStatus = iota // The route has just been initialised, so we don't yet know
+	CertificateMissing                               // The certificate is required and no valid one is held
+	CertificateExpiringSoon                          // We have a certificate but it needs to be renewed
+	CertificateGood                                  // We have a certificate and it is in good order
+	CertificateNotRequired                           // We don't have a certificate and are happy about it
+)
 
 // HeaderOp determines how a header should be modified.
 type HeaderOp int

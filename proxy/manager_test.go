@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type fakeCertManager struct {
@@ -26,18 +25,21 @@ func (f *fakeCertManager) GetCertificate(preferredSupplier string, subject strin
 
 var dummyCert = &tls.Certificate{}
 
-func Test_Manager_SetRoutes_returnsErrorIfGetCertificateFails(t *testing.T) {
+func Test_Manager_SetRoutes_setsStatusIfGetCertificateFails(t *testing.T) {
 	certManager := &fakeCertManager{
 		err: fmt.Errorf("ruh roh"),
 	}
 
-	manager := NewManager(certManager)
-	err := manager.SetRoutes([]*Route{{
+	route := &Route{
 		Domains: []string{"example.com"},
-	}})
-	assert.Error(t, err)
+	}
+
+	manager := NewManager(certManager)
+	err := manager.SetRoutes([]*Route{route})
+	assert.NoError(t, err)
 	assert.Equal(t, "example.com", certManager.subject)
 	assert.Equal(t, []string{}, certManager.altNames)
+	assert.Equal(t, CertificateMissing, route.certificateStatus)
 }
 
 func Test_Manager_SetRoutes_returnsErrorIfDomainIsInvalid(t *testing.T) {
@@ -162,19 +164,39 @@ func Test_Manager_SetRoutes_removesPreviousRoutes(t *testing.T) {
 	assert.Nil(t, manager.RouteForDomain("test.deep.example.com"))
 }
 
-func Test_Manager_CheckCertificates_returnsErrorIfGetCertificateFails(t *testing.T) {
+func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andNoPreviousCertificateExists(t *testing.T) {
 	certManager := &fakeCertManager{
 		certificate: dummyCert,
 	}
 
-	manager := NewManager(certManager)
-	_ = manager.SetRoutes([]*Route{{
+	route := &Route{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
-	}})
+	}
+
+	manager := NewManager(certManager)
+	_ = manager.SetRoutes([]*Route{route})
+
+	route.certificate = nil
+	certManager.err = fmt.Errorf("ruh roh")
+	manager.CheckCertificates()
+	assert.Equal(t, CertificateMissing, route.certificateStatus)
+}
+
+func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andPreviousCertificateExists(t *testing.T) {
+	certManager := &fakeCertManager{
+		certificate: dummyCert,
+	}
+
+	route := &Route{
+		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+	}
+
+	manager := NewManager(certManager)
+	_ = manager.SetRoutes([]*Route{route})
 
 	certManager.err = fmt.Errorf("ruh roh")
-	err := manager.CheckCertificates()
-	assert.Error(t, err)
+	manager.CheckCertificates()
+	assert.Equal(t, CertificateExpiringSoon, route.certificateStatus)
 }
 
 func Test_Manager_CheckCertificates_passesSupplierSpecifiedByRoute(t *testing.T) {
@@ -204,16 +226,17 @@ func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 
 	newCert := &tls.Certificate{OCSPStaple: []byte("Different!")}
 	certManager.certificate = newCert
-	err := manager.CheckCertificates()
-	require.NoError(t, err)
+	manager.CheckCertificates()
 
 	assert.Equal(t, newCert, manager.RouteForDomain("example.com").certificate)
 	assert.Equal(t, newCert, manager.RouteForDomain("test.example.com").certificate)
 	assert.Equal(t, newCert, manager.RouteForDomain("test.deep.example.com").certificate)
 	assert.Equal(t, newCert, manager.RouteForDomain("test.example.net").certificate)
+	assert.Equal(t, CertificateGood, manager.RouteForDomain("example.com").certificateStatus)
+	assert.Equal(t, CertificateGood, manager.RouteForDomain("test.example.com").certificateStatus)
 }
 
-func Test_Manager_CheckCertificates_returnsIfNoProvider(t *testing.T) {
+func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
 	manager := NewManager(nil)
 	_ = manager.SetRoutes([]*Route{{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
@@ -221,6 +244,7 @@ func Test_Manager_CheckCertificates_returnsIfNoProvider(t *testing.T) {
 		Domains: []string{"test.example.net"},
 	}})
 
-	err := manager.CheckCertificates()
-	assert.NoError(t, err)
+	manager.CheckCertificates()
+	assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").certificateStatus)
+	assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("test.example.com").certificateStatus)
 }

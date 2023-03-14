@@ -1,3 +1,11 @@
+# vNext
+
+## Other changes
+
+- If Centauri can't obtain or update a certificate it will now do its
+  best to continue working, and stop serving the route in question if
+  it doesn't have a valid certificate.
+
 # v0.2.0 
 
 ## Features

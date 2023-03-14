@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -43,22 +44,23 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 
 			newDomains[route.Domains[j]] = route
 		}
-
-		if m.provider != nil {
-			if err := m.updateCert(route); err != nil {
-				return err
-			}
-		}
 	}
 
 	m.domains = newDomains
 	m.routes = newRoutes
+	m.CheckCertificates()
 	return nil
 }
 
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
 // nil is returned.
 func (m *Manager) RouteForDomain(domain string) *Route {
+	route := m.domains[domain]
+
+	if route == nil || route.certificateStatus <= CertificateMissing {
+		return nil
+	}
+
 	return m.domains[domain]
 }
 
@@ -79,29 +81,33 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
-func (m *Manager) CheckCertificates() error {
-	if m.provider == nil {
-		return nil
-	}
-
+func (m *Manager) CheckCertificates() {
 	for i := range m.routes {
 		route := m.routes[i]
 
-		if err := m.updateCert(route); err != nil {
-			return err
+		if m.provider == nil {
+			route.certificateStatus = CertificateNotRequired
+		} else {
+			m.updateCert(route)
 		}
 	}
-
-	return nil
 }
 
 // updateCert updates the certificate for the given route.
-func (m *Manager) updateCert(route *Route) error {
+func (m *Manager) updateCert(route *Route) {
 	cert, err := m.provider.GetCertificate(route.Provider, route.Domains[0], route.Domains[1:])
 	if err != nil {
-		return err
+		log.Printf("Failed to update certificate for %#v: %v", route.Domains, err)
+		if route.certificate == nil {
+			log.Printf("Existing certificate for %#v is invalid, disabling route", route.Domains)
+			route.certificateStatus = CertificateMissing
+		} else {
+			log.Printf("Existing certificate for %#v is still valid, continuing to serve", route.Domains)
+			route.certificateStatus = CertificateExpiringSoon
+		}
+		return
 	}
 
 	route.certificate = cert
-	return nil
+	route.certificateStatus = CertificateGood
 }

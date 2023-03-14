@@ -67,9 +67,7 @@ func monitorCerts() {
 		for {
 			time.Sleep(12 * time.Hour)
 			log.Printf("Checking for certificate validity...")
-			if err := proxyManager.CheckCertificates(); err != nil {
-				log.Fatalf("Error performing periodic check of certificates: %v", err)
-			}
+			proxyManager.CheckCertificates()
 		}
 	}()
 }
