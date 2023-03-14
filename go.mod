@@ -1,15 +1,15 @@
 module github.com/csmith/centauri
 
-go 1.19
+go 1.20
 
 require (
 	github.com/csmith/envflag v1.0.0
 	github.com/csmith/legotapas v1.5.0
 	github.com/go-acme/lego/v4 v4.10.0
-	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.6.0
+	github.com/stretchr/testify v1.8.2
+	golang.org/x/crypto v0.7.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
-	tailscale.com v1.36.1
+	tailscale.com v1.36.2
 )
 
 require (
@@ -158,15 +158,15 @@ require (
 	go.uber.org/ratelimit v0.2.0 // indirect
 	go4.org/mem v0.0.0-20210711025021-927187094b94 // indirect
 	go4.org/netipx v0.0.0-20220725152314-7e7bdc8411bf // indirect
-	golang.org/x/mod v0.6.0 // indirect
-	golang.org/x/net v0.6.0 // indirect
+	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.2.0 // indirect
+	golang.org/x/tools v0.6.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	google.golang.org/api v0.20.0 // indirect
