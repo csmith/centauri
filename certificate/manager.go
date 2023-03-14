@@ -60,6 +60,26 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	}
 }
 
+// GetExistingCertificate returns a previously saved certificate with the given subject and alternate names if it is
+// still valid. It also indicates whether the certificate is in need of renewal or not. Certificates should be renewed
+// by calling GetCertificate which will block and return the new certificate.
+func (m *Manager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
+	supplier, err := m.supplier(preferredSupplier)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
+		return nil, true, fmt.Errorf("no stored certificate found")
+	} else if !cert.ValidFor(0) || !cert.HasStapleFor(0) {
+		return nil, true, fmt.Errorf("certificate has expired")
+	} else {
+		key, err := cert.keyPair()
+		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || !cert.HasStapleFor(supplier.MinStapleValidity())
+		return key, needRenewal, err
+	}
+}
+
 func (m *Manager) supplier(preferred string) (Supplier, error) {
 	if preferred != "" {
 		s, ok := m.suppliers[preferred]

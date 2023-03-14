@@ -1,5 +1,15 @@
 # vNext
 
+## Features
+
+- When starting up or changing routes, Centauri will now immediately
+  start serving routes with existing certificates if they are still valid.
+  Once those routes are being served, it will start obtaining any new
+  certificates as required.
+- When multiple new routes are added, they will be served as soon as
+  certificates are obtained. Previously, none were served until all
+  routes had certificates.
+
 ## Other changes
 
 - If Centauri can't obtain or update a certificate it will now do its

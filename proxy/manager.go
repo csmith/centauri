@@ -9,6 +9,7 @@ import (
 // CertificateProvider defines the interface for providing certificates to a Manager.
 type CertificateProvider interface {
 	GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
+	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
 }
 
 // Manager is responsible for maintaining a set of routes, mapping domains to those routes, and refreshing the
@@ -43,6 +44,7 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 			}
 
 			newDomains[route.Domains[j]] = route
+			m.loadCertificate(route)
 		}
 	}
 
@@ -50,6 +52,31 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 	m.routes = newRoutes
 	m.CheckCertificates()
 	return nil
+}
+
+// loadCertificate attempts to load an existing certificate for use with the given route, to enable it to be served
+// immediately without waiting for certificate renewals.
+func (m *Manager) loadCertificate(route *Route) {
+	if m.provider == nil {
+		route.certificateStatus = CertificateNotRequired
+		return
+	}
+
+	cert, needsRenewal, err := m.provider.GetExistingCertificate(route.Provider, route.Domains[0], route.Domains[1:])
+	if err == nil {
+		route.certificate = cert
+		if needsRenewal {
+			log.Printf("Existing certificate found for %#v but it expires soon", route.Domains)
+			route.certificateStatus = CertificateExpiringSoon
+		} else {
+			log.Printf("Existing certificate found for %#v", route.Domains)
+			route.certificateStatus = CertificateGood
+		}
+	} else {
+		log.Printf("No existing certificate found for %#v, route will not be served until cert is obtained", route.Domains)
+		route.certificate = nil
+		route.certificateStatus = CertificateMissing
+	}
 }
 
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
@@ -98,13 +125,7 @@ func (m *Manager) updateCert(route *Route) {
 	cert, err := m.provider.GetCertificate(route.Provider, route.Domains[0], route.Domains[1:])
 	if err != nil {
 		log.Printf("Failed to update certificate for %#v: %v", route.Domains, err)
-		if route.certificate == nil {
-			log.Printf("Existing certificate for %#v is invalid, disabling route", route.Domains)
-			route.certificateStatus = CertificateMissing
-		} else {
-			log.Printf("Existing certificate for %#v is still valid, continuing to serve", route.Domains)
-			route.certificateStatus = CertificateExpiringSoon
-		}
+		m.loadCertificate(route)
 		return
 	}
 

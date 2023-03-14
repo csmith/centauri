@@ -346,3 +346,157 @@ func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpe
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }
+
+func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenValid(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.False(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 12),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStableSoon(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Minute * 30),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * -12),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.Error(t, err)
+	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * -2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.Error(t, err)
+	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testing.T) {
+	store := &fakeStore{certificate: nil}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.Error(t, err)
+	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T) {
+	store := &fakeStore{certificate: nil}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, r, err := manager.GetExistingCertificate("blah", "example.com", []string{"example.net"})
+	require.Error(t, err)
+	assert.False(t, r)
+}

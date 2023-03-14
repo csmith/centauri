@@ -9,6 +9,7 @@ import (
 // Provider defines the interface for providing certificates to a WildcardResolver.
 type Provider interface {
 	GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
+	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
 }
 
 // WildcardResolver wraps around a certificate provider and modifies the domain and altNames
@@ -44,6 +45,12 @@ func NewWildcardResolver(upstream Provider, domains []string) *WildcardResolver 
 // given subject and altNames, taking into account the configured wildcard domains.
 func (w *WildcardResolver) GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
 	return w.upstream.GetCertificate(preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
+}
+
+// GetExistingCertificate returns an existing, saved certificate from the upstream provider that will cover the
+// given subject and altNames, taking into account the configured wildcard domains.
+func (w *WildcardResolver) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
+	return w.upstream.GetExistingCertificate(preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
 }
 
 // applyWildcards checks each entry in the given slice of domains, replacing it with a wildcard domain if necessary.
