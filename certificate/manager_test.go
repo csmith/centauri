@@ -8,25 +8,43 @@ import (
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 )
 
 type fakeStore struct {
-	subject     string
-	altNames    []string
-	certificate *Details
-	savedCert   *Details
-	err         error
+	subject      string
+	altNames     []string
+	certificate  *Details
+	savedCert    *Details
+	err          error
+	locked       bool
+	lockedOnSave bool
+	lockedOnGet  bool
 }
 
 func (f *fakeStore) GetCertificate(subject string, altNames []string) *Details {
+	f.lockedOnGet = f.locked && subject == f.subject && slices.Equal(altNames, f.altNames)
 	f.subject = subject
 	f.altNames = altNames
 	return f.certificate
 }
 
 func (f *fakeStore) SaveCertificate(cert *Details) error {
+	f.lockedOnSave = f.locked && cert.Subject == f.subject && slices.Equal(cert.AltNames, f.altNames)
 	f.savedCert = cert
 	return f.err
+}
+
+func (f *fakeStore) LockCertificate(subject string, altNames []string) {
+	f.subject = subject
+	f.altNames = altNames
+	f.locked = true
+}
+
+func (f *fakeStore) UnlockCertificate(subject string, altNames []string) {
+	f.subject = subject
+	f.altNames = altNames
+	f.locked = false
 }
 
 type fakeSupplier struct {
@@ -345,6 +363,77 @@ func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpe
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
+}
+
+func Test_Manager_GetCertificate_acquiresLockWhenGettingCert(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.True(t, store.lockedOnGet)
+}
+
+func Test_Manager_GetCertificate_releasesLockOnCompletion(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.False(t, store.locked)
+}
+
+func Test_Manager_GetCertificate_holdsLockWhenSaving(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 2),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+		Subject:        "example.com",
+		AltNames:       []string{"example.net"},
+	}
+
+	store := &fakeStore{}
+	supplier := &fakeSupplier{certificate: cert}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.True(t, store.lockedOnSave)
 }
 
 func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenValid(t *testing.T) {

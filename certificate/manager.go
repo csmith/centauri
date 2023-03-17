@@ -11,6 +11,8 @@ import (
 type Store interface {
 	GetCertificate(subject string, altNames []string) *Details
 	SaveCertificate(cert *Details) error
+	LockCertificate(subjectName string, altNames []string)
+	UnlockCertificate(subjectName string, altNames []string)
 }
 
 // Supplier provides new certificates and OCSP staples.
@@ -45,6 +47,9 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	if err != nil {
 		return nil, err
 	}
+
+	m.store.LockCertificate(subject, altNames)
+	defer m.store.UnlockCertificate(subject, altNames)
 
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
 		log.Printf("Obtaining new certificate for '%s'", subject)
