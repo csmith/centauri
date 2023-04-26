@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/csmith/envflag v1.0.0
 	github.com/csmith/legotapas v1.5.0
-	github.com/go-acme/lego/v4 v4.10.0
+	github.com/go-acme/lego/v4 v4.10.2
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/crypto v0.8.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
@@ -140,6 +140,7 @@ require (
 	github.com/tailscale/golang-x-crypto v0.0.0-20221102133106-bc99ab8c2d17 // indirect
 	github.com/tailscale/goupnp v1.0.1-0.20210804011211-c64d0f06ea05 // indirect
 	github.com/tailscale/netlink v1.1.1-0.20211101221916-cabfb018fe85 // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20221219190806-4fa124729667 // indirect
 	github.com/tcnksm/go-httpstat v0.2.0 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.490 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.0.490 // indirect
@@ -177,6 +178,7 @@ require (
 	gopkg.in/ns1/ns1-go.v2 v2.6.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gvisor.dev/gvisor v0.0.0-20221203005347-703fd9b7fbc0 // indirect
 	inet.af/peercred v0.0.0-20210906144145-0893ea02156a // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
