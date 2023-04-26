@@ -1,14 +1,11 @@
-on: [push, pull_request]
-name: Test
+name: run go tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: stable
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Test
-        run: go test ./...
+  build:
+    uses: csmith/github-workflows/.github/workflows/go-test.yml@master
