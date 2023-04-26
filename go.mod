@@ -9,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/crypto v0.7.0
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
-	tailscale.com v1.36.2
+	tailscale.com v1.38.4
 )
 
 require (
@@ -70,7 +70,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
@@ -86,7 +86,7 @@ require (
 	github.com/infobloxopen/infoblox-go-client v1.1.1 // indirect
 	github.com/insomniacslk/dhcp v0.0.0-20221215072855-de60144f33f8 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/josharian/native v1.0.1-0.20221213033349-c1e37c09b531 // indirect
+	github.com/josharian/native v1.1.1-0.20230202152459-5c7d0dd6ab86 // indirect
 	github.com/jsimonetti/rtnetlink v1.1.2-0.20220408201609-d380b505068b // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213 // indirect
@@ -101,9 +101,9 @@ require (
 	github.com/liquidweb/liquidweb-go v1.6.3 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mdlayher/genetlink v1.2.0 // indirect
-	github.com/mdlayher/netlink v1.6.0 // indirect
+	github.com/mdlayher/netlink v1.7.1 // indirect
 	github.com/mdlayher/sdnotify v1.0.0 // indirect
-	github.com/mdlayher/socket v0.2.3 // indirect
+	github.com/mdlayher/socket v0.4.0 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/mimuret/golang-iij-dpf v0.7.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
