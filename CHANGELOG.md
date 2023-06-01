@@ -1,5 +1,7 @@
 # vNext
 
+# v0.3.0
+
 ## Features
 
 - When starting up or changing routes, Centauri will now immediately
@@ -15,6 +17,8 @@
 - If Centauri can't obtain or update a certificate it will now do its
   best to continue working, and stop serving the route in question if
   it doesn't have a valid certificate.
+- Lego updated to v4.12.0
+- Tailscale updated to v1.42.0
 
 # v0.2.0 
 
