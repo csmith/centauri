@@ -9,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.9.0
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
-	tailscale.com v1.42.0
+	tailscale.com v1.42.1
 )
 
 require (
