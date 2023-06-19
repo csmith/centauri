@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/csmith/envflag v1.0.0
 	github.com/csmith/legotapas v1.6.0
-	github.com/go-acme/lego/v4 v4.12.0
+	github.com/go-acme/lego/v4 v4.12.2
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.9.0
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
