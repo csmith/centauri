@@ -1,5 +1,12 @@
 # vNext
 
+## Features
+
+- Upstreams may now specify multiple routes. For now, centauri will
+  pick at random between them for each client request. This may change
+  in the future.
+  ([issue #26](https://github.com/csmith/centauri/issues/26))
+
 # v0.3.0
 
 ## Features

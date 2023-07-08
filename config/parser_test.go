@@ -84,16 +84,6 @@ route example.com
 	assert.Error(t, err)
 }
 
-func Test_Parse_ErrorsOnMultipleUpstreams(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
-route example.com
-	upstream server1
-	upstream server2
-`)))
-
-	assert.Error(t, err)
-}
-
 func Test_Parse_ErrorsOnMultipleProviders(t *testing.T) {
 	_, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
@@ -123,10 +113,10 @@ route example.net
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(routes))
 	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
-	assert.Equal(t, "localhost:8080", routes[0].Upstream)
+	assert.Equal(t, []proxy.Upstream{{"localhost:8080"}}, routes[0].Upstreams)
 	assert.Equal(t, "p1", routes[0].Provider)
 	assert.Equal(t, []string{"example.net"}, routes[1].Domains)
-	assert.Equal(t, "localhost:8081", routes[1].Upstream)
+	assert.Equal(t, []proxy.Upstream{{"localhost:8081"}}, routes[1].Upstreams)
 	assert.Equal(t, "", routes[1].Provider)
 
 	// Check headers for the first route
@@ -170,10 +160,10 @@ rOuTe example.net
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(routes))
 	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
-	assert.Equal(t, "localhost:8080", routes[0].Upstream)
+	assert.Equal(t, []proxy.Upstream{{"localhost:8080"}}, routes[0].Upstreams)
 	assert.Equal(t, "p1", routes[0].Provider)
 	assert.Equal(t, []string{"example.net"}, routes[1].Domains)
-	assert.Equal(t, "localhost:8081", routes[1].Upstream)
+	assert.Equal(t, []proxy.Upstream{{"localhost:8081"}}, routes[1].Upstreams)
 
 	// Check headers for the first route
 	assert.Equal(t, 2, len(routes[0].Headers))
@@ -195,4 +185,35 @@ rOuTe example.net
 	assert.Equal(t, "x-test-4", routes[1].Headers[1].Name)
 	assert.Equal(t, "baz", routes[1].Headers[1].Value)
 	assert.Equal(t, proxy.HeaderOpReplace, routes[1].Headers[1].Operation)
+}
+
+func Test_Parse_MultipleUpstreams(t *testing.T) {
+	routes, err := Parse(bytes.NewBuffer([]byte(`
+route example.com www.example.com
+	upstream localhost:8080
+	upstream localhost:8081
+	upstream localhost:8082
+
+route example.net
+	upstream localhost:8089
+	
+route example.org
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(routes))
+
+	assert.Equal(t, []proxy.Upstream{
+		{"localhost:8080"},
+		{"localhost:8081"},
+		{"localhost:8082"},
+	}, routes[0].Upstreams)
+
+	assert.Equal(t, []proxy.Upstream{
+		{"localhost:8089"},
+	}, routes[1].Upstreams)
+
+	assert.Equal(t, []proxy.Upstream{
+		// No upstreams
+	}, routes[2].Upstreams)
 }

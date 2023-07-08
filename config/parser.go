@@ -22,17 +22,15 @@ func Parse(reader io.Reader) ([]*proxy.Route, error) {
 		switch strings.ToLower(directive) {
 		case "route":
 			route = &proxy.Route{
-				Domains: strings.Split(args, " "),
+				Domains:   strings.Split(args, " "),
+				Upstreams: []proxy.Upstream{},
 			}
 			routes = append(routes, route)
 		case "upstream":
 			if route == nil {
 				return nil, fmt.Errorf("upstream without route: %s", line)
 			}
-			if route.Upstream != "" {
-				return nil, fmt.Errorf("route %s has multiple upstreams", route.Domains)
-			}
-			route.Upstream = args
+			route.Upstreams = append(route.Upstreams, proxy.Upstream{Host: args})
 		case "header":
 			if route == nil {
 				return nil, fmt.Errorf("upstream without route: %s", line)

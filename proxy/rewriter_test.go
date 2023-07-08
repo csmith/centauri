@@ -21,7 +21,7 @@ func (f *fakeProvider) RouteForDomain(domain string) *Route {
 }
 
 func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -37,7 +37,7 @@ func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -54,7 +54,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeader(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -71,7 +71,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeader(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -89,7 +89,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -107,7 +107,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_RemovesBannedHeaders(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider, bannedHeaders: []string{"x-test1", "x-test2"}}
 
 	u, _ := url.Parse("/foo/bar")
@@ -129,7 +129,7 @@ func Test_Rewriter_RewriteRequest_RemovesBannedHeaders(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_BlanksUserAgentIfUnset(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -145,7 +145,7 @@ func Test_Rewriter_RewriteRequest_BlanksUserAgentIfUnset(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_LeavesUserAgentIfSet(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -164,7 +164,7 @@ func Test_Rewriter_RewriteRequest_LeavesUserAgentIfSet(t *testing.T) {
 func Test_Rewriter_RewriteResponse_AddsHeaders(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
-			Upstream: "hostname:8080",
+			Upstreams: []Upstream{{Host: "hostname:8080"}},
 			Headers: []Header{
 				{Name: "X-Test", Value: "test1", Operation: HeaderOpAdd},
 				{Name: "X-Test", Value: "test2", Operation: HeaderOpAdd},
@@ -188,7 +188,7 @@ func Test_Rewriter_RewriteResponse_AddsHeaders(t *testing.T) {
 }
 
 func Test_Rewriter_RewriteRequest_UsesHostHeaderIfTlsNotUsed(t *testing.T) {
-	provider := &fakeProvider{route: &Route{Upstream: "hostname:8080"}}
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
 	u, _ := url.Parse("/foo/bar")
@@ -224,7 +224,7 @@ func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
 func Test_Rewriter_RewriteResponse_DeletesHeaders(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
-			Upstream: "hostname:8080",
+			Upstreams: []Upstream{{Host: "hostname:8080"}},
 			Headers: []Header{
 				{Name: "X-Test", Operation: HeaderOpDelete},
 			},
@@ -249,7 +249,7 @@ func Test_Rewriter_RewriteResponse_DeletesHeaders(t *testing.T) {
 func Test_Rewriter_RewriteResponse_ReplacesHeaders(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
-			Upstream: "hostname:8080",
+			Upstreams: []Upstream{{Host: "hostname:8080"}},
 			Headers: []Header{
 				{Name: "X-Test", Value: "test1", Operation: HeaderOpReplace},
 			},
@@ -274,7 +274,7 @@ func Test_Rewriter_RewriteResponse_ReplacesHeaders(t *testing.T) {
 func Test_Rewriter_RewriteResponse_DefaultsHeader_ifNotPresent(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
-			Upstream: "hostname:8080",
+			Upstreams: []Upstream{{Host: "hostname:8080"}},
 			Headers: []Header{
 				{Name: "X-Test", Value: "test1", Operation: HeaderOpDefault},
 			},
@@ -298,7 +298,7 @@ func Test_Rewriter_RewriteResponse_DefaultsHeader_ifNotPresent(t *testing.T) {
 func Test_Rewriter_RewriteResponse_DefaultsHeader_ifPresent(t *testing.T) {
 	provider := &fakeProvider{
 		route: &Route{
-			Upstream: "hostname:8080",
+			Upstreams: []Upstream{{Host: "hostname:8080"}},
 			Headers: []Header{
 				{Name: "X-Test", Value: "test1", Operation: HeaderOpDefault},
 			},
@@ -336,4 +336,24 @@ func Test_Rewriter_RewriteResponse_DoesNothingIfRouteIsNil(t *testing.T) {
 	err := rewriter.RewriteResponse(response)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"test0"}, response.Header.Values("X-Test"))
+}
+
+func Test_Rewriter_RewriteResponse_DoesNothingIfRouteHasNoUpstreams(t *testing.T) {
+	provider := &fakeProvider{
+		route: &Route{
+			Upstreams: []Upstream{},
+		},
+	}
+	rewriter := &Rewriter{provider: provider}
+
+	request := &http.Request{
+		TLS: &tls.ConnectionState{ServerName: "example.com"},
+	}
+	response := &http.Response{
+		Request: request,
+		Header:  make(http.Header),
+	}
+
+	err := rewriter.RewriteResponse(response)
+	require.NoError(t, err)
 }

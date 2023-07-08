@@ -6,13 +6,18 @@ import (
 
 // Route describes one way which a request may be mapped from the original HTTP request to an upstream server.
 type Route struct {
-	Domains  []string
-	Upstream string
-	Headers  []Header
-	Provider string
+	Domains   []string
+	Upstreams []Upstream
+	Headers   []Header
+	Provider  string
 
 	certificate       *tls.Certificate
 	certificateStatus CertificateStatus
+}
+
+// Upstream represents a configured upstream server for a route.
+type Upstream struct {
+	Host string
 }
 
 // CertificateStatus describes the current status of the route's certificate

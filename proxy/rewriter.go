@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"golang.org/x/exp/rand"
 	"net"
 	"net/http"
 )
@@ -36,12 +37,12 @@ func NewRewriter(manager *Manager) *Rewriter {
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {
 	route := r.provider.RouteForDomain(hostname(req))
-	if route == nil {
+	if route == nil || len(route.Upstreams) == 0 {
 		return
 	}
 
 	req.URL.Scheme = "http"
-	req.URL.Host = route.Upstream
+	req.URL.Host = r.selectUpstream(route)
 
 	ip, _, _ := net.SplitHostPort(req.RemoteAddr)
 	req.Header.Set("X-Forwarded-For", ip)
@@ -81,6 +82,12 @@ func (r *Rewriter) RewriteResponse(response *http.Response) error {
 	}
 
 	return nil
+}
+
+// selectUpstream selects an upstream host from the given route. The current implementation simply selects an upstream
+// at random.
+func (r *Rewriter) selectUpstream(route *Route) string {
+	return route.Upstreams[rand.Intn(len(route.Upstreams))].Host
 }
 
 func hostname(req *http.Request) string {
