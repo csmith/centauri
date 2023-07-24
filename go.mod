@@ -9,7 +9,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.11.0
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
-	tailscale.com v1.44.0
+	tailscale.com v1.46.0
 )
 
 require (
@@ -74,6 +74,7 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/nftables v0.1.1-0.20230115205135-9aa6fdf5a28c // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
@@ -143,10 +144,10 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tailscale/certstore v0.1.1-0.20220316223106-78d6e1c49d8d // indirect
-	github.com/tailscale/golang-x-crypto v0.0.0-20221115211329-17a3db2c30d2 // indirect
+	github.com/tailscale/golang-x-crypto v0.0.0-20230713185742-f0b76a10a08e // indirect
 	github.com/tailscale/goupnp v1.0.1-0.20210804011211-c64d0f06ea05 // indirect
 	github.com/tailscale/netlink v1.1.1-0.20211101221916-cabfb018fe85 // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20230410165232-af172621b4dd // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20230710185534-bb2c8f22eccf // indirect
 	github.com/tcnksm/go-httpstat v0.2.0 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.490 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.0.490 // indirect
