@@ -8,8 +8,8 @@ require (
 	github.com/go-acme/lego/v4 v4.12.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.11.0
-	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
-	tailscale.com v1.46.0
+	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
+	tailscale.com v1.48.0
 )
 
 require (
@@ -55,6 +55,7 @@ require (
 	github.com/coreos/go-iptables v0.6.0 // indirect
 	github.com/cpu/goacmedns v0.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dblohm7/wingoes v0.0.0-20230803162905-5c6286bb8c6e // indirect
 	github.com/deepmap/oapi-codegen v1.9.1 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/dnsimple/dnsimple-go v0.71.1 // indirect
@@ -94,7 +95,7 @@ require (
 	github.com/jsimonetti/rtnetlink v1.3.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213 // indirect
-	github.com/klauspost/compress v1.16.5 // indirect
+	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/kolo/xmlrpc v0.0.0-20200310150728-e0350524596b // indirect
 	github.com/kortschak/wol v0.0.0-20200729010619-da482cc4850a // indirect
 	github.com/labbsr0x/bindman-dns-webhook v1.0.2 // indirect
@@ -141,7 +142,7 @@ require (
 	github.com/smartystreets/go-aws-auth v0.0.0-20180515143844-0c1422d1fdb9 // indirect
 	github.com/softlayer/softlayer-go v1.0.6 // indirect
 	github.com/softlayer/xmlrpc v0.0.0-20200409220501-5f089df7cb7e // indirect
-	github.com/spf13/cast v1.5.0 // indirect
+	github.com/spf13/cast v1.5.1 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tailscale/certstore v0.1.1-0.20220316223106-78d6e1c49d8d // indirect
 	github.com/tailscale/golang-x-crypto v0.0.0-20230713185742-f0b76a10a08e // indirect
@@ -164,8 +165,8 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/ratelimit v0.2.0 // indirect
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13 // indirect
-	go4.org/netipx v0.0.0-20230303233057-f1b76eb4bb35 // indirect
-	golang.org/x/mod v0.10.0 // indirect
+	go4.org/netipx v0.0.0-20230728180743-ad4cb58a6516 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sync v0.2.0 // indirect
