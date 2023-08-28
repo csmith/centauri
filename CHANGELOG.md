@@ -1,5 +1,11 @@
 # vNext
 
+# v0.4.1
+
+## Other changes
+
+- Fixed issue with build process. No code changes. 
+
 # v0.4.0
 
 ## Features
@@ -14,6 +20,7 @@
 - Fix Centauri always sending `X-Forwarded-Proto: https` even when the
   downstream connection was over `http` (e.g. when using the `tailscale`
   frontend).
+- Tailscale updated to v1.48.1
 
 # v0.3.0
 
