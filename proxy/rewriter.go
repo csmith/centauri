@@ -41,12 +41,12 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 		return
 	}
 
-	req.URL.Scheme = "http"
-	req.URL.Host = r.selectUpstream(route)
-
 	ip, _, _ := net.SplitHostPort(req.RemoteAddr)
 	req.Header.Set("X-Forwarded-For", ip)
-	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Proto", req.URL.Scheme)
+
+	req.URL.Scheme = "http"
+	req.URL.Host = r.selectUpstream(route)
 
 	for i := range r.bannedHeaders {
 		req.Header.Del(r.bannedHeaders[i])

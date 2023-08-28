@@ -1,11 +1,19 @@
 # vNext
 
+# v0.4.0
+
 ## Features
 
 - Upstreams may now specify multiple routes. For now, centauri will
   pick at random between them for each client request. This may change
   in the future.
   ([issue #26](https://github.com/csmith/centauri/issues/26))
+
+## Other changes
+
+- Fix Centauri always sending `X-Forwarded-Proto: https` even when the
+  downstream connection was over `http` (e.g. when using the `tailscale`
+  frontend).
 
 # v0.3.0
 
