@@ -11,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/crypto v0.12.0
 	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090
-	tailscale.com v1.48.1
+	tailscale.com v1.50.0
 )
 
 require (
@@ -55,9 +55,10 @@ require (
 	github.com/civo/civogo v0.3.11 // indirect
 	github.com/cloudflare/cloudflare-go v0.49.0 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
+	github.com/coreos/go-systemd/v22 v22.4.0 // indirect
 	github.com/cpu/goacmedns v0.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dblohm7/wingoes v0.0.0-20230803162905-5c6286bb8c6e // indirect
+	github.com/dblohm7/wingoes v0.0.0-20230821191801-fc76608aecf0 // indirect
 	github.com/deepmap/oapi-codegen v1.9.1 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/dnsimple/dnsimple-go v0.71.1 // indirect
@@ -70,7 +71,7 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-resty/resty/v2 v2.1.1-0.20191201195748-d7b97669fe48 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.1-0.20230522191255-76236955d466 // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -150,7 +151,7 @@ require (
 	github.com/tailscale/golang-x-crypto v0.0.0-20230713185742-f0b76a10a08e // indirect
 	github.com/tailscale/goupnp v1.0.1-0.20210804011211-c64d0f06ea05 // indirect
 	github.com/tailscale/netlink v1.1.1-0.20211101221916-cabfb018fe85 // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20230710185534-bb2c8f22eccf // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20230824215414-93bd5cbf7fd8 // indirect
 	github.com/tcnksm/go-httpstat v0.2.0 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.490 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.0.490 // indirect
@@ -169,7 +170,7 @@ require (
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13 // indirect
 	go4.org/netipx v0.0.0-20230728180743-ad4cb58a6516 // indirect
 	golang.org/x/mod v0.11.0 // indirect
-	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
