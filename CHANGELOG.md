@@ -1,5 +1,11 @@
 # vNext
 
+# v0.4.2
+
+## Other changes
+
+- Updated dependencies
+
 # v0.4.1
 
 ## Other changes
