@@ -1,5 +1,10 @@
 # vNext
 
+## Other changes
+
+- If using Lego, Centauri will no longer attempt to register a user or obtain
+  certificates if it can't write to the user-data file.
+
 # v0.4.2
 
 ## Other changes

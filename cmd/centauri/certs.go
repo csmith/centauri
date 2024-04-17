@@ -1,8 +1,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/csmith/centauri/certificate"
@@ -11,6 +15,7 @@ import (
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/log"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -56,6 +61,10 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 		return nil, fmt.Errorf("dns provider error: %v", err)
 	}
 
+	if err := canWriteToDataPath(); err != nil {
+		return nil, fmt.Errorf("unable to write to path %s: %v", *userDataPath, err)
+	}
+
 	legoSupplier, err := certificate.NewLegoSupplier(&certificate.LegoSupplierConfig{
 		Path:        *userDataPath,
 		Email:       *acmeEmail,
@@ -67,4 +76,13 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 		return nil, fmt.Errorf("certificate supplier error: %v", err)
 	}
 	return legoSupplier, nil
+}
+
+func canWriteToDataPath() error {
+	if _, err := os.Stat(*userDataPath); errors.Is(err, fs.ErrNotExist) {
+		// If the file doesn't exist we need to check write perms on the directory
+		return unix.Access(filepath.Dir(*userDataPath), unix.W_OK)
+	} else {
+		return unix.Access(*userDataPath, unix.W_OK)
+	}
 }
