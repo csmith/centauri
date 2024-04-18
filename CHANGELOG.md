@@ -4,6 +4,10 @@
 
 - If using Lego, Centauri will no longer attempt to register a user or obtain
   certificates if it can't write to the user-data file.
+- Centauri will now drop the following headers if a client supplies them:
+  - Tailscale-User-Login
+  - Tailscale-User-Name
+  - Tailscale-User-Profile-Pic
 
 # v0.4.2
 
