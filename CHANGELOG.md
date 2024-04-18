@@ -18,6 +18,7 @@
   - Tailscale-User-Login
   - Tailscale-User-Name
   - Tailscale-User-Profile-Pic
+- Updated dependencies
 
 # v0.4.2
 
