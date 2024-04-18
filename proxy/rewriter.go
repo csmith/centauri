@@ -28,6 +28,11 @@ func NewRewriter(manager *Manager) *Rewriter {
 	}
 }
 
+// AddDecorator adds a new Decorator to the chain that is applied to each request.
+func (r *Rewriter) AddDecorator(d Decorator) {
+	r.decorators = append(r.decorators, d)
+}
+
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {

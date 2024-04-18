@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"tailscale.com/client/tailscale"
 
 	"github.com/csmith/centauri/proxy"
 	"tailscale.com/tsnet"
@@ -44,6 +45,11 @@ func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewrit
 	if err := t.tailscale.Start(); err != nil {
 		return err
 	}
+
+	lc, _ := t.tailscale.LocalClient()
+	rewriter.AddDecorator(&tailscaleHeaderDecorator{
+		localClient: lc,
+	})
 
 	if *tailscaleMode == "http" {
 		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
@@ -97,4 +103,20 @@ func (t *tailscaleFrontend) Stop(ctx context.Context) {
 
 func (t *tailscaleFrontend) UsesCertificates() bool {
 	return *tailscaleMode == "https"
+}
+
+type tailscaleHeaderDecorator struct {
+	localClient *tailscale.LocalClient
+}
+
+func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {
+	res, err := t.localClient.WhoIs(req.Context(), req.RemoteAddr)
+	if err != nil {
+		log.Printf("Unable to get tailscale client info: %v", err)
+		return
+	}
+
+	req.Header.Set("Tailscale-User-Login", res.UserProfile.DisplayName)
+	req.Header.Set("Tailscale-User-Name", res.UserProfile.LoginName)
+	req.Header.Set("Tailscale-User-Profile-Pic", res.UserProfile.ProfilePicURL)
 }

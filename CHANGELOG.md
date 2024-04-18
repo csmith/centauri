@@ -1,5 +1,15 @@
 # vNext
 
+# v0.5.0
+
+## Features
+
+- When using the Tailscale frontend, Centauri will now add details about the
+  authenticated user making the request in the following headers:
+  - Tailscale-User-Login
+  - Tailscale-User-Name
+  - Tailscale-User-Profile-Pic
+
 ## Other changes
 
 - If using Lego, Centauri will no longer attempt to register a user or obtain
