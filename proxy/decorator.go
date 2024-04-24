@@ -49,7 +49,11 @@ func NewXForwardedForDecorator() Decorator {
 func (x *xForwardedForDecorator) Decorate(req *http.Request) {
 	ip, _, _ := net.SplitHostPort(req.RemoteAddr)
 	req.Header.Set("X-Forwarded-For", ip)
-	req.Header.Set("X-Forwarded-Proto", req.URL.Scheme)
+	if req.TLS == nil {
+		req.Header.Set("X-Forwarded-Proto", "http")
+	} else {
+		req.Header.Set("X-Forwarded-Proto", "https")
+	}
 }
 
 type userAgentDecorator struct{}

@@ -77,7 +77,6 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 	u, _ := url.Parse("http://proxy/foo/bar")
 	request := &http.Request{
 		URL:        u,
-		TLS:        &tls.ConnectionState{ServerName: "example.com"},
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}

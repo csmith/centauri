@@ -1,5 +1,11 @@
 # vNext
 
+# v0.5.1
+
+## Bug fixes
+
+- Fixed X-Forwarded-Proto header not being set properly
+
 # v0.5.0
 
 ## Features

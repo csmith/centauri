@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/url"
@@ -96,11 +97,12 @@ func Test_XForwardedForDecorator_addsIPv6(t *testing.T) {
 func Test_XForwardedForDecorator_addsHttpsProtocol(t *testing.T) {
 	decorator := &xForwardedForDecorator{}
 
-	u, _ := url.Parse("https://example.com")
+	u, _ := url.Parse("/")
 	req := &http.Request{
 		URL:        u,
 		RemoteAddr: "[::1]:5678",
 		Header:     make(http.Header),
+		TLS:        &tls.ConnectionState{},
 	}
 
 	decorator.Decorate(req)
@@ -111,11 +113,12 @@ func Test_XForwardedForDecorator_addsHttpsProtocol(t *testing.T) {
 func Test_XForwardedForDecorator_addsHttpProtocol(t *testing.T) {
 	decorator := &xForwardedForDecorator{}
 
-	u, _ := url.Parse("http://example.com")
+	u, _ := url.Parse("/")
 	req := &http.Request{
 		URL:        u,
 		RemoteAddr: "[::1]:5678",
 		Header:     make(http.Header),
+		TLS:        nil,
 	}
 
 	decorator.Decorate(req)
