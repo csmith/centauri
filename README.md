@@ -44,6 +44,13 @@ or sidecar containers. Change the "frontend" setting to
 "tailscale", supply an API key, and Centauri will connect
 directly to your Tailscale network!
 
+Centauri will also pass details of the Tailscale user making
+the request to the upstream service, via the following headers:
+
+- `Tailscale-User-Login`
+- `Tailscale-User-Name`
+- `Tailscale-User-Profile-Pic`
+
 If running in Docker, you will need to persist the directory
 at `/home/nonroot/.config` or the Tailscale client will lose
 its authorisation whenever the container restarts.
@@ -198,6 +205,31 @@ for that provider in the binary. For example to support only the `httpreq` provi
 info.
 
 You can also disable Centauri's frontends by specifying the `notcp` and `notailscale` build tags. 
+
+## FAQ
+
+### What headers does/doesn't Centauri pass to the upstream service?
+
+Centauri will automatically set the following headers:
+
+- `X-Forwarded-For` - to include the IP address of the client making the request
+- `X-Forwarded-proto` - to indicate the protocol of the downstream connection (http/https)
+- `Tailscale-User-Login` - username of the Tailscale user making the request, if applicable
+- `Tailscale-User-Name` - display name of the Tailscale user making the request, if applicable
+- `Tailscale-User-Profile-Pic` - profile picture of the Tailscale user making the request, if applicable
+
+It will also actively remove any of the following headers sent by clients:
+
+- `X-Real-IP`
+- `True-Client-IP`
+- `X-Forwarded-Host`
+- `Forwarded`
+
+### Can Centauri select upstreams based on {url,port,cookies,etc}?
+
+No. Centauri currently performs all routing based on the requested hostname.
+Additional methods may be added in the future, but Centauri will likely stick
+to being simple and easy to understand vs becoming a swiss army knife.
 
 ## Feedback / Contributing
 
