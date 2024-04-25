@@ -1,5 +1,11 @@
 # vNext
 
+# v0.5.2
+
+## Bug fixes
+
+- Fixed Tailscale-User-Login and Tailscale-User-Name being swapped
+
 # v0.5.1
 
 ## Bug fixes

@@ -116,7 +116,7 @@ func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {
 		return
 	}
 
-	req.Header.Set("Tailscale-User-Login", res.UserProfile.DisplayName)
-	req.Header.Set("Tailscale-User-Name", res.UserProfile.LoginName)
+	req.Header.Set("Tailscale-User-Login", res.UserProfile.LoginName)
+	req.Header.Set("Tailscale-User-Name", res.UserProfile.DisplayName)
 	req.Header.Set("Tailscale-User-Profile-Pic", res.UserProfile.ProfilePicURL)
 }
