@@ -1,5 +1,16 @@
 # vNext
 
+# v0.5.3
+
+## Bug fixes
+
+- Fixed the wrong backend being served when a client reuses the same HTTP/2
+  connection for a different host. This only happens if both hosts use the
+  same SSL certificate (e.g. if wildcard is enabled), and the browser still
+  has a connection open from the first host. Big thanks to @ShaneMcC for
+  debugging this!
+  ([issue #89](https://github.com/csmith/centauri/issues/89))
+
 # v0.5.2
 
 ## Bug fixes

@@ -36,7 +36,7 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {
-	route := r.provider.RouteForDomain(hostname(req))
+	route := r.provider.RouteForDomain(req.Host)
 	if route == nil || len(route.Upstreams) == 0 {
 		return
 	}
@@ -52,7 +52,7 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 // RewriteResponse modifies the given response according to the routes provided by the Manager.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteResponse(response *http.Response) error {
-	route := r.provider.RouteForDomain(hostname(response.Request))
+	route := r.provider.RouteForDomain(response.Request.Host)
 	if route == nil {
 		return nil
 	}
@@ -79,12 +79,4 @@ func (r *Rewriter) RewriteResponse(response *http.Response) error {
 // at random.
 func (r *Rewriter) selectUpstream(route *Route) string {
 	return route.Upstreams[rand.Intn(len(route.Upstreams))].Host
-}
-
-func hostname(req *http.Request) string {
-	if req.TLS == nil {
-		return req.Host
-	} else {
-		return req.TLS.ServerName
-	}
 }
