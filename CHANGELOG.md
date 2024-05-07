@@ -11,6 +11,10 @@
   debugging this!
   ([issue #89](https://github.com/csmith/centauri/issues/89))
 
+## Other changes
+
+- Updated dependencies
+
 # v0.5.2
 
 ## Bug fixes
