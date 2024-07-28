@@ -82,6 +82,11 @@ options are available:
 - `CERTIFICATE_PROVIDERS` - a space separated list of certificate
   providers to try to get a certificate from, in order, if a route
   does not have an explicit `provider`. Default: `lego selfsigned`.
+- `OCSP_STAPLING` - whether to request certificates with the
+  "must-staple" extension and then automatically staple OCSP
+  responses to them. If changing this setting you should manually
+  remove Centauri's certificate store to ensure all certificates
+  are regenerated with the new setting. Default: `true`.
 
 For the TCP frontend, the following options are used:
 

@@ -48,15 +48,17 @@ func (f *fakeStore) UnlockCertificate(subject string, altNames []string) {
 }
 
 type fakeSupplier struct {
-	certificate *Details
-	subject     string
-	altNames    []string
-	err         error
+	certificate  *Details
+	subject      string
+	altNames     []string
+	shouldStaple bool
+	err          error
 }
 
-func (f *fakeSupplier) GetCertificate(subject string, altNames []string) (*Details, error) {
+func (f *fakeSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	f.subject = subject
 	f.altNames = altNames
+	f.shouldStaple = shouldStaple
 	return f.certificate, f.err
 }
 
@@ -111,6 +113,7 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -138,6 +141,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -147,6 +151,35 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, supplier.certificate, "should pass certificate to supplier")
 	assert.Equal(t, cert, store.savedCert, "should save updated cert")
+	assert.Equal(t, "example.com", store.subject)
+	assert.Equal(t, []string{"example.net"}, store.altNames)
+}
+
+func Test_Manager_GetCertificate_ignoresStapleIfDisabled(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now(),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		false,
+	)
+
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.Nil(t, supplier.certificate, "should not pass certificate to supplier")
 	assert.Equal(t, "example.com", store.subject)
 	assert.Equal(t, []string{"example.net"}, store.altNames)
 }
@@ -167,6 +200,7 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -189,6 +223,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -211,6 +246,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -239,6 +275,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -259,6 +296,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSupplierFails(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -281,6 +319,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -303,6 +342,7 @@ func Test_Manager_GetCertificate_usesPreferredSupplierIfSpecified(t *testing.T) 
 		store,
 		map[string]Supplier{"test": supplier, "other": &fakeSupplier{}},
 		[]string{"other"},
+		true,
 	)
 
 	c, err := manager.GetCertificate("test", "example.com", []string{"example.net"})
@@ -320,6 +360,7 @@ func Test_Manager_GetCertificate_errorsIfPreferredSupplierNotFound(t *testing.T)
 		&fakeStore{},
 		map[string]Supplier{"test": &fakeSupplier{}, "other": &fakeSupplier{}},
 		[]string{"other"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("another", "example.com", []string{"example.net"})
@@ -331,6 +372,7 @@ func Test_Manager_GetCertificate_errorsIfNoSuppliersFound(t *testing.T) {
 		&fakeStore{},
 		map[string]Supplier{"test": &fakeSupplier{}, "other": &fakeSupplier{}},
 		[]string{"one", "two", "three"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -381,6 +423,7 @@ func Test_Manager_GetCertificate_acquiresLockWhenGettingCert(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -404,6 +447,7 @@ func Test_Manager_GetCertificate_releasesLockOnCompletion(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -429,6 +473,7 @@ func Test_Manager_GetCertificate_holdsLockWhenSaving(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -452,6 +497,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenValid(t *testing.
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -478,6 +524,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *t
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -488,7 +535,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *t
 	assert.True(t, r)
 }
 
-func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStableSoon(t *testing.T) {
+func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now().Add(time.Minute * 30),
@@ -504,6 +551,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStableSoon(t
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -512,6 +560,32 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStableSoon(t
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.True(t, r)
+}
+
+func Test_Manager_GetExistingCertificate_ignoresExpiringStapleIfOcspDisabled(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Minute * 30),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		false,
+	)
+
+	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.False(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
@@ -530,6 +604,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -553,6 +628,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -568,6 +644,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testin
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -583,6 +660,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T)
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
+		true,
 	)
 
 	_, r, err := manager.GetExistingCertificate("blah", "example.com", []string{"example.net"})

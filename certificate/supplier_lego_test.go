@@ -147,7 +147,7 @@ func Test_Supplier_GetCertificate_passesDetailsToCertifier(t *testing.T) {
 		certifier: c,
 	}
 
-	_, _ = s.GetCertificate("example.com", []string{"alt.example.com", "example.net"})
+	_, _ = s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Equal(t, c.request.Domains, []string{"example.com", "alt.example.com", "example.net"})
 	assert.True(t, c.request.Bundle)
 	assert.True(t, c.request.MustStaple)
@@ -161,7 +161,7 @@ func Test_Supplier_GetCertificate_returnsErrorIfObtainFails(t *testing.T) {
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"})
+	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
 }
 
@@ -173,11 +173,11 @@ func Test_Supplier_GetCertificate_returnsErrorIfCertificateCantBeParsed(t *testi
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"})
+	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
 }
 
-func Test_Supplier_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
+func Test_Supplier_GetCertificate_returnsErrorIfStaplingFailsWhenEnabled(t *testing.T) {
 	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
 	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
 
@@ -189,8 +189,25 @@ func Test_Supplier_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"})
+	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
+}
+
+func Test_Supplier_GetCertificate_doesNotTryToStapleIfDisabled(t *testing.T) {
+	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
+	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
+
+	c := &fakeCertifier{
+		resource: &legocert.Resource{Certificate: pemCert},
+		ocspErr:  fmt.Errorf("denied"),
+	}
+	s := &LegoSupplier{
+		certifier: c,
+	}
+
+	cert, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, false)
+	assert.NoError(t, err)
+	assert.EqualValues(t, cert.Certificate, pemCert)
 }
 
 func Test_Supplier_GetCertificate_returnsCertificateDetails(t *testing.T) {
@@ -214,7 +231,7 @@ func Test_Supplier_GetCertificate_returnsCertificateDetails(t *testing.T) {
 		certifier: c,
 	}
 
-	cert, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"})
+	cert, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.NoError(t, err)
 	assert.EqualValues(t, cert.Certificate, pemCert)
 	assert.Equal(t, cert.Issuer, "issuer")

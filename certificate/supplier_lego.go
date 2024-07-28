@@ -159,12 +159,12 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 }
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
-func (s *LegoSupplier) GetCertificate(subject string, altNames []string) (*Details, error) {
+func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	log.Printf("Obtaining certificate for '%s' (altNames: %v)", subject, altNames)
 	res, err := s.certifier.Obtain(legocert.ObtainRequest{
 		Domains:    append([]string{subject}, altNames...),
 		Bundle:     true,
-		MustStaple: true,
+		MustStaple: shouldStaple,
 	})
 	if err != nil {
 		return nil, err
@@ -184,8 +184,10 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string) (*Detai
 		NotAfter:    pem.NotAfter,
 	}
 
-	if err = s.UpdateStaple(details); err != nil {
-		return nil, fmt.Errorf("unable to get OCSP staple for certificate: %w", err)
+	if shouldStaple {
+		if err = s.UpdateStaple(details); err != nil {
+			return nil, fmt.Errorf("unable to get OCSP staple for certificate: %w", err)
+		}
 	}
 
 	return details, nil

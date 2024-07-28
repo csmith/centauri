@@ -20,7 +20,7 @@ func NewSelfSignedSupplier() *SelfSignedSupplier {
 	return &SelfSignedSupplier{}
 }
 
-func (s *SelfSignedSupplier) GetCertificate(subject string, altNames []string) (*Details, error) {
+func (s *SelfSignedSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err

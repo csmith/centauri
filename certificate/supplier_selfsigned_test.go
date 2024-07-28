@@ -9,7 +9,7 @@ import (
 
 func Test_SelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testing.T) {
 	supplier := &SelfSignedSupplier{}
-	details, err := supplier.GetCertificate("subject.example.com", []string{"alt1.example.com", "alt2.example.com"})
+	details, err := supplier.GetCertificate("subject.example.com", []string{"alt1.example.com", "alt2.example.com"}, false)
 
 	assert.Nil(t, err)
 

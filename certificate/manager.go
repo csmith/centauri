@@ -17,7 +17,7 @@ type Store interface {
 
 // Supplier provides new certificates and OCSP staples.
 type Supplier interface {
-	GetCertificate(subject string, altNames []string) (*Details, error)
+	GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error)
 	UpdateStaple(cert *Details) error
 	MinCertificateValidity() time.Duration
 	MinStapleValidity() time.Duration
@@ -26,14 +26,16 @@ type Supplier interface {
 // Manager is responsible for co-ordinating a certificate store and supplier, providing a means to obtain a valid
 // certificate with an OCSP staple.
 type Manager struct {
+	shouldStaple       bool
 	store              Store
 	suppliers          map[string]Supplier
 	supplierPreference []string
 }
 
 // NewManager returns a new certificate manager backed by the given store and supplier.
-func NewManager(store Store, suppliers map[string]Supplier, supplierPreference []string) *Manager {
+func NewManager(store Store, suppliers map[string]Supplier, supplierPreference []string, shouldStaple bool) *Manager {
 	return &Manager{
+		shouldStaple:       shouldStaple,
 		store:              store,
 		suppliers:          suppliers,
 		supplierPreference: supplierPreference,
@@ -57,7 +59,7 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	} else if !cert.ValidFor(supplier.MinCertificateValidity()) {
 		log.Printf("Renewing certificate for '%s'", subject)
 		return m.obtain(supplier, subject, altNames)
-	} else if !cert.HasStapleFor(supplier.MinStapleValidity()) {
+	} else if m.shouldStaple && !cert.HasStapleFor(supplier.MinStapleValidity()) {
 		log.Printf("Obtaining new OCSP staple for '%s'", subject)
 		return m.staple(supplier, cert)
 	} else {
@@ -76,11 +78,11 @@ func (m *Manager) GetExistingCertificate(preferredSupplier string, subject strin
 
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
 		return nil, true, fmt.Errorf("no stored certificate found")
-	} else if !cert.ValidFor(0) || !cert.HasStapleFor(0) {
+	} else if !cert.ValidFor(0) || (m.shouldStaple && !cert.HasStapleFor(0)) {
 		return nil, true, fmt.Errorf("certificate has expired")
 	} else {
 		key, err := cert.keyPair()
-		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || !cert.HasStapleFor(supplier.MinStapleValidity())
+		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || (m.shouldStaple && !cert.HasStapleFor(supplier.MinStapleValidity()))
 		return key, needRenewal, err
 	}
 }
@@ -106,7 +108,7 @@ func (m *Manager) supplier(preferred string) (Supplier, error) {
 
 // obtain gets a new certificate and saves it to the store.
 func (m *Manager) obtain(supplier Supplier, subject string, altNames []string) (*tls.Certificate, error) {
-	cert, err := supplier.GetCertificate(subject, altNames)
+	cert, err := supplier.GetCertificate(subject, altNames, m.shouldStaple)
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain certificate for %s: %w", subject, err)
 	}
