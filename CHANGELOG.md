@@ -1,11 +1,16 @@
 # vNext
 
+# v0.6.0
+
 ## Changes
 
 - Added option to disable OCSP stapling entirely. Let's Encrypt
   [intend to stop their OCSP service](https://letsencrypt.org/2024/07/23/replacing-ocsp-with-crls.html)
   and other ACME providers are likely to follow as the CAB leans towards CRLs
   instead of mandating stapling.
+
+## Other changes
+
 - Updated dependencies
 
 # v0.5.3
