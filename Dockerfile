@@ -1,4 +1,4 @@
-FROM reg.c5h.io/golang AS build
+FROM golang:1.23.4 AS build
 WORKDIR /go/src/app
 COPY . .
 
@@ -7,7 +7,7 @@ RUN set -eux; \
     go run github.com/google/go-licenses@latest save ./... --save_path=/notices; \
     mkdir -p /mounts/data /mounts/home/nonroot/.config;
 
-FROM reg.c5h.io/base
+FROM ghcr.io/greboid/dockerbase/nonroot:1.20241216.0
 COPY --from=build /go/bin/centauri /centauri
 COPY --from=build /notices /notices
 COPY --from=build --chown=65532:65532 /mounts /
