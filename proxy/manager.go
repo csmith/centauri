@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"strings"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -43,7 +44,7 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
 			}
 
-			newDomains[route.Domains[j]] = route
+			newDomains[strings.ToLower(route.Domains[j])] = route
 			m.loadCertificate(route)
 		}
 	}
@@ -82,13 +83,13 @@ func (m *Manager) loadCertificate(route *Route) {
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
 // nil is returned.
 func (m *Manager) RouteForDomain(domain string) *Route {
-	route := m.domains[domain]
+	route := m.domains[strings.ToLower(domain)]
 
 	if route == nil || route.certificateStatus <= CertificateMissing {
 		return nil
 	}
 
-	return m.domains[domain]
+	return route
 }
 
 // CertificateForClient returns a certificate (if one exists) for the domain specified in the provided
@@ -99,7 +100,7 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 		return nil, fmt.Errorf("this manager does not support obtaining certificates")
 	}
 
-	route := m.domains[hello.ServerName]
+	route := m.domains[strings.ToLower(hello.ServerName)]
 	if route == nil {
 		return nil, nil
 	}

@@ -125,6 +125,21 @@ func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
 	assert.Equal(t, route, manager.RouteForDomain("test.deep.example.com"))
 }
 
+func Test_Manager_RouteForDomain_matchesCaseInsensitively(t *testing.T) {
+	certManager := &fakeCertManager{
+		certificate: dummyCert,
+	}
+
+	manager := NewManager(certManager)
+	route := &Route{
+		Domains: []string{"ExAmPlE.com"},
+	}
+	_ = manager.SetRoutes([]*Route{route})
+
+	assert.Equal(t, route, manager.RouteForDomain("example.com"))
+	assert.Equal(t, route, manager.RouteForDomain("EXAMPLE.COM"))
+}
+
 func Test_Manager_CertificateForClient_returnsNullIfNoRouteFound(t *testing.T) {
 	certManager := &fakeCertManager{
 		err: fmt.Errorf("ruh roh"),

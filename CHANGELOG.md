@@ -1,5 +1,11 @@
 # vNext
 
+## Bug fixes
+
+- Domain matching is now case-insensitive. Previously, if Centauri was
+  configured to serve `example.com` it wouldn't handle requests for `EXAMPLE.com`
+  even though they're canonically the same.
+
 # v0.6.0
 
 ## Changes
