@@ -1,5 +1,7 @@
 # vNext
 
+# v0.6.1
+
 ## Bug fixes
 
 - Domain matching is now case-insensitive. Previously, if Centauri was
