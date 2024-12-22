@@ -161,6 +161,7 @@ func Test_Manager_CertificateForClient_returnsCertificateForDomain(t *testing.T)
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}
 	_ = manager.SetRoutes([]*Route{route})
+	manager.CheckCertificates()
 
 	res, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.com"})
 	assert.Equal(t, dummyCert, res)
@@ -195,6 +196,7 @@ func Test_Manager_SetRoutes_setsCertificateOnRoutes(t *testing.T) {
 	_ = manager.SetRoutes([]*Route{{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}})
+	manager.CheckCertificates()
 
 	assert.Equal(t, dummyCert, manager.RouteForDomain("example.com").certificate)
 	assert.Equal(t, dummyCert, manager.RouteForDomain("test.example.com").certificate)

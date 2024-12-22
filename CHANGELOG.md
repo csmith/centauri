@@ -5,6 +5,13 @@
 - Domain matching is now case-insensitive. Previously, if Centauri was
   configured to serve `example.com` it wouldn't handle requests for `EXAMPLE.com`
   even though they're canonically the same.
+- Fixed "fast startup" still blocking on retrieving certificates. The initial
+  update after the fast load is now ran in a separate goroutine, so the frontend
+  can start serving traffic.
+
+## Other changes
+
+- Updated dependencies
 
 # v0.6.0
 

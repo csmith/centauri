@@ -51,7 +51,7 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 
 	m.domains = newDomains
 	m.routes = newRoutes
-	m.CheckCertificates()
+	go m.CheckCertificates()
 	return nil
 }
 
