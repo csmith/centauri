@@ -1,5 +1,15 @@
 # vNext
 
+# v0.6.2
+
+## Bug fixes
+
+- Orchestrator: fix compile error (thanks @Greboid)
+
+## Other changes
+
+- Updated dependencies
+
 # v0.6.1
 
 ## Bug fixes
