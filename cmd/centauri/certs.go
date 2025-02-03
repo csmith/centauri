@@ -26,7 +26,7 @@ var (
 	acmeEmail            = flag.String("acme-email", "", "Email address for ACME account")
 	acmeDirectory        = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
 	wildcardDomains      = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
-	useStaples           = flag.Bool("ocsp-stapling", true, "Enable OCSP response stapling")
+	useStaples           = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
 )
 
 func certProvider() (proxy.CertificateProvider, error) {

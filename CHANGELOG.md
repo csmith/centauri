@@ -1,5 +1,14 @@
 # vNext
 
+# v0.7.0
+
+## Other changes
+
+- Centauri now defaults to not obtaining OCSP staples. This can be re-enabled
+  using the `OCSP_STAPLING` env var. This ensures out-of-the-box compatibility
+  with Let's Encrypt who will disable support for OCSP in May.
+- Updated dependencies
+
 # v0.6.2
 
 ## Other changes

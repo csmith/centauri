@@ -86,7 +86,7 @@ options are available:
   "must-staple" extension and then automatically staple OCSP
   responses to them. If changing this setting you should manually
   remove Centauri's certificate store to ensure all certificates
-  are regenerated with the new setting. Default: `true`.
+  are regenerated with the new setting. Default: `false`.
 
 For the TCP frontend, the following options are used:
 
