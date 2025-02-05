@@ -59,7 +59,7 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	} else if !cert.ValidFor(supplier.MinCertificateValidity()) {
 		log.Printf("Renewing certificate for '%s'", subject)
 		return m.obtain(supplier, subject, altNames)
-	} else if m.shouldStaple && !cert.HasStapleFor(supplier.MinStapleValidity()) {
+	} else if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
 		log.Printf("Obtaining new OCSP staple for '%s'", subject)
 		return m.staple(supplier, cert)
 	} else {
@@ -69,7 +69,7 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 
 // GetExistingCertificate returns a previously saved certificate with the given subject and alternate names if it is
 // still valid. It also indicates whether the certificate is in need of renewal or not. Certificates should be renewed
-// by calling GetCertificate which will block and return the new certificate.
+// by calling GetCertificate, which will block and return the new certificate.
 func (m *Manager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
 	supplier, err := m.supplier(preferredSupplier)
 	if err != nil {
@@ -78,11 +78,11 @@ func (m *Manager) GetExistingCertificate(preferredSupplier string, subject strin
 
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
 		return nil, true, fmt.Errorf("no stored certificate found")
-	} else if !cert.ValidFor(0) || (m.shouldStaple && !cert.HasStapleFor(0)) {
+	} else if !cert.ValidFor(0) || (cert.RequiresStaple() && !cert.HasStapleFor(0)) {
 		return nil, true, fmt.Errorf("certificate has expired")
 	} else {
 		key, err := cert.keyPair()
-		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || (m.shouldStaple && !cert.HasStapleFor(supplier.MinStapleValidity()))
+		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || (cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()))
 		return key, needRenewal, err
 	}
 }

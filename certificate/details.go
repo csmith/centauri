@@ -2,6 +2,8 @@ package certificate
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"sort"
 	"time"
 
@@ -20,6 +22,7 @@ type Details struct {
 
 	OcspResponse   []byte    `json:"ocspResponse"`
 	NextOcspUpdate time.Time `json:"nextOcspUpdate"`
+	requiresStaple *bool     `json:"-"`
 }
 
 // ValidFor indicates whether the certificate will be valid for the entirety of the given period.
@@ -55,4 +58,26 @@ func (s *Details) keyPair() (*tls.Certificate, error) {
 	}
 	cert.OCSPStaple = s.OcspResponse
 	return &cert, nil
+}
+
+// RequiresStaple indicates whether this certificate has the `must-staple` extension enabled.
+func (s *Details) RequiresStaple() bool {
+	if s.requiresStaple != nil {
+		return *s.requiresStaple
+	}
+
+	block, _ := pem.Decode([]byte(s.Certificate))
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+
+	res := false
+	for i := range cert.Extensions {
+		if cert.Extensions[i].Id.String() == "1.3.6.1.5.5.7.1.24" {
+			res = true
+		}
+	}
+	s.requiresStaple = &res
+	return res
 }

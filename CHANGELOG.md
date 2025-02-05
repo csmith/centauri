@@ -1,12 +1,34 @@
 # vNext
 
-# v0.7.0
+# v0.8.0
+
+## Changes
+
+- Changed the behaviour for obtaining OCSP staples:
+  - Existing certificates with the must-staple extension will always have OCSP
+    responses stapled to them, regardless of the `OCSP_STAPLING` env var
+  - New certificates will continue to have the must-staple flag based on the
+    `OCSP_STAPLING` env var
+  - This ensures that when migrating between different values `OCSP_STAPLING`,
+    existing certificates continue to work. Previously turning `OCSP_STAPLING`
+    off would serve must-staple certificates without a staple.
+  - To force any changes to take effect immediately, delete the `certs.json`
+    file to force Centauri to re-request all certificates.
 
 ## Other changes
+
+- Updated dependencies
+
+# v0.7.0
+
+## Changes
 
 - Centauri now defaults to not obtaining OCSP staples. This can be re-enabled
   using the `OCSP_STAPLING` env var. This ensures out-of-the-box compatibility
   with Let's Encrypt who will disable support for OCSP in May.
+
+## Other changes
+
 - Updated dependencies
 
 # v0.6.2

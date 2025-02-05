@@ -97,6 +97,11 @@ EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
 	ocspResponse = "Yay it worked. This is not really OCSP."
 )
 
+var (
+	tr = true
+	fs = false
+)
+
 func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
@@ -104,6 +109,7 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -132,6 +138,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -155,13 +162,14 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 	assert.Equal(t, []string{"example.net"}, store.altNames)
 }
 
-func Test_Manager_GetCertificate_ignoresStapleIfDisabled(t *testing.T) {
+func Test_Manager_GetCertificate_ignoresStapleIfCertDoesntRequire(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now(),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &fs,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -171,7 +179,7 @@ func Test_Manager_GetCertificate_ignoresStapleIfDisabled(t *testing.T) {
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
-		false,
+		true,
 	)
 
 	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
@@ -191,6 +199,7 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -214,6 +223,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert, err: fmt.Errorf("oops")}
@@ -237,6 +247,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{}
@@ -266,6 +277,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -310,6 +322,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{err: fmt.Errorf("oops")}
@@ -333,6 +346,7 @@ func Test_Manager_GetCertificate_usesPreferredSupplierIfSpecified(t *testing.T) 
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{}
@@ -386,6 +400,7 @@ func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpe
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{}
@@ -414,6 +429,7 @@ func Test_Manager_GetCertificate_acquiresLockWhenGettingCert(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -438,6 +454,7 @@ func Test_Manager_GetCertificate_releasesLockOnCompletion(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -464,6 +481,7 @@ func Test_Manager_GetCertificate_holdsLockWhenSaving(t *testing.T) {
 		OcspResponse:   []byte(ocspResponse),
 		Subject:        "example.com",
 		AltNames:       []string{"example.net"},
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{}
@@ -488,6 +506,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenValid(t *testing.
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -515,6 +534,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *t
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -542,6 +562,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -562,13 +583,14 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t
 	assert.True(t, r)
 }
 
-func Test_Manager_GetExistingCertificate_ignoresExpiringStapleIfOcspDisabled(t *testing.T) {
+func Test_Manager_GetExistingCertificate_ignoresExpiringStapleIfNotRequiredByCert(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now().Add(time.Minute * 30),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &fs,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -578,7 +600,7 @@ func Test_Manager_GetExistingCertificate_ignoresExpiringStapleIfOcspDisabled(t *
 		store,
 		map[string]Supplier{"test": supplier},
 		[]string{"test"},
-		false,
+		true,
 	)
 
 	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
@@ -595,6 +617,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
@@ -619,6 +642,7 @@ func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
 	}
 
 	store := &fakeStore{certificate: cert}
