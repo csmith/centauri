@@ -9,7 +9,7 @@ require (
 	github.com/csmith/legotapas v1.6.0
 	github.com/go-acme/lego/v4 v4.21.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/sys v0.30.0
 	tailscale.com v1.80.2
