@@ -9,38 +9,38 @@ import (
 )
 
 func Test_Parse_ReturnsEmptySliceForEmptyFile(t *testing.T) {
-	routes, err := Parse(bytes.NewBuffer([]byte("")))
+	routes, _, err := Parse(bytes.NewBuffer([]byte("")))
 
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(routes))
 }
 
 func Test_Parse_ErrorsOnUnknownLine(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte("error please")))
+	_, _, err := Parse(bytes.NewBuffer([]byte("error please")))
 
 	assert.Error(t, err)
 }
 
 func Test_Parse_ErrorsOnUpstreamOutsideOfRoute(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte("upstream localhost:8080")))
+	_, _, err := Parse(bytes.NewBuffer([]byte("upstream localhost:8080")))
 
 	assert.Error(t, err)
 }
 
 func Test_Parse_ErrorsOnProviderOutsideOfRoute(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte("provider lego")))
+	_, _, err := Parse(bytes.NewBuffer([]byte("provider lego")))
 
 	assert.Error(t, err)
 }
 
 func Test_Parse_ErrorsOnHeaderOutsideOfRoute(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte("header add x-test foo")))
+	_, _, err := Parse(bytes.NewBuffer([]byte("header add x-test foo")))
 
 	assert.Error(t, err)
 }
 
 func Test_Parse_ErrorsOnHeaderWithTooFewParameters(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	header nothing
 `)))
@@ -49,7 +49,7 @@ route example.com
 }
 
 func Test_Parse_ErrorsOnHeaderAddWithoutValue(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	header add x-test
 `)))
@@ -58,7 +58,7 @@ route example.com
 }
 
 func Test_Parse_ErrorsOnHeaderDeleteWithoutHeader(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	header delete
 `)))
@@ -67,7 +67,7 @@ route example.com
 }
 
 func Test_Parse_ErrorsOnHeaderReplaceWithoutValue(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	header replace x-test
 `)))
@@ -76,7 +76,7 @@ route example.com
 }
 
 func Test_Parse_ErrorsOnHeaderDefaultWithoutValue(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	header default x-test
 `)))
@@ -85,7 +85,7 @@ route example.com
 }
 
 func Test_Parse_ErrorsOnMultipleProviders(t *testing.T) {
-	_, err := Parse(bytes.NewBuffer([]byte(`
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
 	provider lego
 	provider other
@@ -95,7 +95,7 @@ route example.com
 }
 
 func Test_Parse_ReturnsRoutes(t *testing.T) {
-	routes, err := Parse(bytes.NewBuffer([]byte(`
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
 # Comment
 route example.com www.example.com
 	# Indented comment
@@ -142,7 +142,7 @@ route example.net
 }
 
 func Test_Parse_ParsesCaseInsensitively(t *testing.T) {
-	routes, err := Parse(bytes.NewBuffer([]byte(`
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
 # Comment
 RoUtE example.com www.example.com
 	# Indented comment
@@ -188,7 +188,7 @@ rOuTe example.net
 }
 
 func Test_Parse_MultipleUpstreams(t *testing.T) {
-	routes, err := Parse(bytes.NewBuffer([]byte(`
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com www.example.com
 	upstream localhost:8080
 	upstream localhost:8081
@@ -216,4 +216,48 @@ route example.org
 	assert.Equal(t, []proxy.Upstream{
 		// No upstreams
 	}, routes[2].Upstreams)
+}
+
+func Test_Parse_Fallback_SingleRoute(t *testing.T) {
+	_, fallback, err := Parse(bytes.NewBuffer([]byte(`
+route example.com www.example.com
+	upstream localhost:8080
+	fallback
+
+route example.net
+	upstream localhost:8089
+	
+route example.org
+`)))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, fallback)
+
+	assert.Equal(t, []proxy.Upstream{
+		{"localhost:8080"},
+	}, fallback.Upstreams)
+
+	assert.Equal(t, []string{"example.com", "www.example.com"}, fallback.Domains)
+}
+
+func Test_Parse_Fallback_OutsideRoute(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`fallback`)))
+
+	assert.Error(t, err)
+}
+
+func Test_Parse_Fallback_MultipleRoutes(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com www.example.com
+	upstream localhost:8080
+	fallback
+
+route example.net
+	upstream localhost:8089
+	fallback
+	
+route example.org
+`)))
+
+	assert.Error(t, err)
 }

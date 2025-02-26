@@ -169,6 +169,10 @@ the following directives:
 - `header default` - sets a header on all response to the client,
   only if upstream has not set the same header.
 - `header delete` - removes a header from all responses to the client.
+- `fallback` - marks the route as the fallback if no other route matches.
+  This may only be specified on one route. Centauri's normal behaviour is
+  to close connections for non-matching requests, as it won't be able to
+  provide a valid certificate for that connection.
 
 Lines that are empty or start with a `#` character are ignored, as is
 any whitespace at the start or end of lines. It is recommended to indent
@@ -177,16 +181,34 @@ each `route` for readability, but it is entirely option.
 A full route config may look something like this:
 
 ```
+# This route will answer requests made to `example.com` or `www.example.com`.
+# They will be proxied to `server1:8080`, with an extra `X-Via: Centauri`
+# header sent to the upstream. In the response to the client, the `Server`
+# header will be removed, and the `Strict-Transport-Security` header will be
+# set to `max-age=15768000` if the upstream didn't set it.
 route example.com www.example.com
     upstream server1:8080
     header delete server
     header default Strict-Transport-Security max-age=15768000  
     header add X-Via Centauri
 
+# This route will answer requests made to `example.net`. They'll be proxied to
+# `server1:8081`. Certificates will be generated using the `selfsigned`
+# provider instead of Centauri's default, and the `Content-Security-Policy`
+# header will always be set to `default-src 'self'` on responses to the client.
 route example.net
     upstream server1:8081
     header replace Content-Security-Policy default-src 'self';
     provider selfsigned
+    
+# This route will answer requests made to `placeholder.example.com` and any
+# other domain that is not covered by the other routes (because it's a fallback
+# route). These requests will be proxied to either `server1:8082` or
+# `server1:8083` (picked at random).
+route placeholder.example.com
+    upstream server1:8082
+    upstream server1:8083
+    fallback
 ```
 
 #### Providers

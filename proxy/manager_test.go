@@ -46,7 +46,7 @@ func Test_Manager_SetRoutes_setsStatusIfNoCertificateFound(t *testing.T) {
 	}
 
 	manager := NewManager(certManager)
-	err := manager.SetRoutes([]*Route{route})
+	err := manager.SetRoutes([]*Route{route}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "example.com", certManager.subject)
 	assert.Equal(t, []string{}, certManager.altNames)
@@ -65,7 +65,7 @@ func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andNotExpiring(t *te
 	}
 
 	manager := NewManager(certManager)
-	err := manager.SetRoutes([]*Route{route})
+	err := manager.SetRoutes([]*Route{route}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "example.com", certManager.subject)
 	assert.Equal(t, []string{}, certManager.altNames)
@@ -84,7 +84,7 @@ func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andExpiring(t *testi
 	}
 
 	manager := NewManager(certManager)
-	err := manager.SetRoutes([]*Route{route})
+	err := manager.SetRoutes([]*Route{route}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "example.com", certManager.subject)
 	assert.Equal(t, []string{}, certManager.altNames)
@@ -95,7 +95,7 @@ func Test_Manager_SetRoutes_returnsErrorIfDomainIsInvalid(t *testing.T) {
 	manager := NewManager(nil)
 	err := manager.SetRoutes([]*Route{{
 		Domains: []string{"example..com"},
-	}})
+	}}, nil)
 	assert.Error(t, err)
 }
 
@@ -109,6 +109,21 @@ func Test_Manager_RouteForDomain_returnsNullIfNoRouteFound(t *testing.T) {
 	assert.Nil(t, res)
 }
 
+func Test_Manager_RouteForDomain_returnsFallbackIfSpecified(t *testing.T) {
+	certManager := &fakeCertManager{
+		certificate: dummyCert,
+	}
+
+	manager := NewManager(certManager)
+	route := &Route{
+		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+	}
+	_ = manager.SetRoutes([]*Route{route}, route)
+
+	res := manager.RouteForDomain("example.net")
+	assert.Equal(t, route, res)
+}
+
 func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
 	certManager := &fakeCertManager{
 		certificate: dummyCert,
@@ -118,7 +133,7 @@ func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
 	route := &Route{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 
 	assert.Equal(t, route, manager.RouteForDomain("example.com"))
 	assert.Equal(t, route, manager.RouteForDomain("test.example.com"))
@@ -134,7 +149,7 @@ func Test_Manager_RouteForDomain_matchesCaseInsensitively(t *testing.T) {
 	route := &Route{
 		Domains: []string{"ExAmPlE.com"},
 	}
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 
 	assert.Equal(t, route, manager.RouteForDomain("example.com"))
 	assert.Equal(t, route, manager.RouteForDomain("EXAMPLE.COM"))
@@ -160,7 +175,7 @@ func Test_Manager_CertificateForClient_returnsCertificateForDomain(t *testing.T)
 	route := &Route{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 	manager.CheckCertificates()
 
 	res, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.com"})
@@ -176,12 +191,29 @@ func Test_Manager_CertificateForClient_returnsCertificateForDomain(t *testing.T)
 	assert.NoError(t, err)
 }
 
+func Test_Manager_CertificateForClient_returnsCertificateForFallbackDomainIfSpecified(t *testing.T) {
+	certManager := &fakeCertManager{
+		certificate: dummyCert,
+	}
+
+	manager := NewManager(certManager)
+	route := &Route{
+		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+	}
+	_ = manager.SetRoutes([]*Route{route}, route)
+	manager.CheckCertificates()
+
+	res, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.net"})
+	assert.Equal(t, dummyCert, res)
+	assert.NoError(t, err)
+}
+
 func Test_Manager_CertificateForClient_returnsErrorIfNoProviderConfigured(t *testing.T) {
 	manager := NewManager(nil)
 	route := &Route{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 
 	_, err := manager.CertificateForClient(&tls.ClientHelloInfo{ServerName: "example.com"})
 	assert.Error(t, err)
@@ -195,7 +227,7 @@ func Test_Manager_SetRoutes_setsCertificateOnRoutes(t *testing.T) {
 	manager := NewManager(certManager)
 	_ = manager.SetRoutes([]*Route{{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
-	}})
+	}}, nil)
 	manager.CheckCertificates()
 
 	assert.Equal(t, dummyCert, manager.RouteForDomain("example.com").certificate)
@@ -207,7 +239,7 @@ func Test_Manager_SetRoutes_ignoresCertificateIfProviderNotConfigured(t *testing
 	manager := NewManager(nil)
 	_ = manager.SetRoutes([]*Route{{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
-	}})
+	}}, nil)
 
 	assert.Nil(t, manager.RouteForDomain("example.com").certificate)
 	assert.Nil(t, manager.RouteForDomain("test.example.com").certificate)
@@ -222,8 +254,8 @@ func Test_Manager_SetRoutes_removesPreviousRoutes(t *testing.T) {
 	manager := NewManager(certManager)
 	_ = manager.SetRoutes([]*Route{{
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
-	}})
-	_ = manager.SetRoutes([]*Route{})
+	}}, nil)
+	_ = manager.SetRoutes([]*Route{}, nil)
 
 	assert.Nil(t, manager.RouteForDomain("example.com"))
 	assert.Nil(t, manager.RouteForDomain("test.example.com"))
@@ -240,7 +272,7 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andNoPreviou
 	}
 
 	manager := NewManager(certManager)
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 
 	route.certificate = nil
 	certManager.err = fmt.Errorf("ruh roh")
@@ -261,7 +293,7 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andPreviousC
 	}
 
 	manager := NewManager(certManager)
-	_ = manager.SetRoutes([]*Route{route})
+	_ = manager.SetRoutes([]*Route{route}, nil)
 
 	certManager.err = fmt.Errorf("ruh roh")
 	manager.CheckCertificates()
@@ -275,7 +307,7 @@ func Test_Manager_CheckCertificates_passesSupplierSpecifiedByRoute(t *testing.T)
 	_ = manager.SetRoutes([]*Route{{
 		Domains:  []string{"test.deep.example.com", "test.example.com", "example.com"},
 		Provider: "f2",
-	}})
+	}}, nil)
 
 	assert.Equal(t, "f2", certManager.preferredSupplier)
 	assert.Equal(t, "test.deep.example.com", certManager.subject)
@@ -291,7 +323,7 @@ func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}, {
 		Domains: []string{"test.example.net"},
-	}})
+	}}, nil)
 
 	newCert := &tls.Certificate{OCSPStaple: []byte("Different!")}
 	certManager.certificate = newCert
@@ -311,7 +343,7 @@ func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
 		Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
 	}, {
 		Domains: []string{"test.example.net"},
-	}})
+	}}, nil)
 
 	manager.CheckCertificates()
 	assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").certificateStatus)

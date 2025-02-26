@@ -19,6 +19,7 @@ type Manager struct {
 	provider CertificateProvider
 	routes   []*Route
 	domains  map[string]*Route
+	fallback *Route
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
@@ -33,7 +34,9 @@ func NewManager(provider CertificateProvider) *Manager {
 
 // SetRoutes replaces all previously registered routes with the given new routes. This func may block while new
 // certificates are obtained; during this time the old routes will continue to be served to avoid too much disruption.
-func (m *Manager) SetRoutes(newRoutes []*Route) error {
+//
+// If a fallback is specified, then that route will be used for any requests that don't otherwise a route.
+func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
 	newDomains := make(map[string]*Route)
 
 	for i := range newRoutes {
@@ -51,6 +54,7 @@ func (m *Manager) SetRoutes(newRoutes []*Route) error {
 
 	m.domains = newDomains
 	m.routes = newRoutes
+	m.fallback = fallback
 	go m.CheckCertificates()
 	return nil
 }
@@ -83,7 +87,7 @@ func (m *Manager) loadCertificate(route *Route) {
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
 // nil is returned.
 func (m *Manager) RouteForDomain(domain string) *Route {
-	route := m.domains[strings.ToLower(domain)]
+	route := m.routeFor(domain)
 
 	if route == nil || route.certificateStatus <= CertificateMissing {
 		return nil
@@ -100,11 +104,21 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 		return nil, fmt.Errorf("this manager does not support obtaining certificates")
 	}
 
-	route := m.domains[strings.ToLower(hello.ServerName)]
+	route := m.routeFor(hello.ServerName)
 	if route == nil {
 		return nil, nil
 	}
 	return route.certificate, nil
+}
+
+// routeFor looks up a route to be used for the given domain. If there is no direct match and a fallback
+// route is defined, that will be returned.
+func (m *Manager) routeFor(domain string) *Route {
+	match := m.domains[strings.ToLower(domain)]
+	if match == nil {
+		return m.fallback
+	}
+	return match
 }
 
 // CheckCertificates checks and updates the certificates required for registered routes.

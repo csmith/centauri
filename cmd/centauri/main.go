@@ -94,13 +94,13 @@ func updateRoutes() {
 	}
 	defer configFile.Close()
 
-	routes, err := config.Parse(configFile)
+	routes, fallback, err := config.Parse(configFile)
 	if err != nil {
 		log.Fatalf("Failed to parse config file: %v", err)
 	}
 
 	log.Printf("Installing %d routes", len(routes))
-	if err := proxyManager.SetRoutes(routes); err != nil {
+	if err := proxyManager.SetRoutes(routes, fallback); err != nil {
 		log.Fatalf("Route manager error: %v", err)
 	}
 

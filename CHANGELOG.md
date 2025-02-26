@@ -1,5 +1,15 @@
 # vNext
 
+# v0.9.0
+
+## Features
+
+- A "fallback" route can now be specified by adding the `fallback` directive
+  to its configuration. If specified, any request that doesn't match other
+  routes will be treated as though it matches the fallback route. In practice
+  this will result in an invalid certificate being served to clients, but there
+  are some niche caches where it's desirable.
+
 # v0.8.2
 
 ## Bug fixes
