@@ -38,7 +38,6 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {
 	route := r.provider.RouteForDomain(r.hostForRequest(req))
-	println(req.URL.Hostname())
 	if route == nil || len(route.Upstreams) == 0 {
 		return
 	}
