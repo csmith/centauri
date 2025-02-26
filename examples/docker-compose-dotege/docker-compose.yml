@@ -33,6 +33,10 @@ services:
       - "config:/data/output"
       - "./centauri.conf.tpl:/data/centauri.conf.tpl:ro"
       - "/var/run/docker.sock:/var/run/docker.sock"
+    # Dotege runs as a non-privileged user, so you may need to add a group so it can access the
+    # docker socket. e.g., if the docker group on the host has gid 999:
+    group_add:
+      - 999
     environment:
       DOTEGE_SIGNAL_CONTAINER: centauri
       DOTEGE_SIGNAL_TYPE: HUP
@@ -45,6 +49,6 @@ volumes:
   config:
 
 networks:
-  # Create a network that other contains can be joined to expose them to Centauri.
+  # Create a network that other containers can be joined to expose them to Centauri.
   centauri:
     name: "centauri"
