@@ -189,7 +189,9 @@ func Test_Rewriter_RewriteResponse_AddsHeaders(t *testing.T) {
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -207,7 +209,7 @@ func Test_Rewriter_RewriteRequest_UsesHostHeaderIfTlsNotUsed(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider}
 
-	u, _ := url.Parse("/foo/bar")
+	u, _ := url.Parse("https://example.com/foo/bar")
 	request := &http.Request{
 		URL:        u,
 		Header:     make(http.Header),
@@ -224,7 +226,7 @@ func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
 	provider := &fakeProvider{}
 	rewriter := &Rewriter{provider: provider}
 
-	u, _ := url.Parse("/foo/bar")
+	u, _ := url.Parse("https://example.com/foo/bar")
 	request := &http.Request{
 		URL:        u,
 		Header:     make(http.Header),
@@ -234,7 +236,23 @@ func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
 	rewriter.RewriteRequest(request)
 
 	assert.Equal(t, "example.com", provider.domain)
-	assert.Equal(t, "/foo/bar", request.URL.String())
+	assert.Equal(t, "https://example.com/foo/bar", request.URL.String())
+}
+
+func Test_Rewriter_RewriteRequest_StripsPortsFromHosts(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		TLS:        &tls.ConnectionState{ServerName: "example.com"},
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "example.com", provider.domain)
 }
 
 func Test_Rewriter_RewriteResponse_DeletesHeaders(t *testing.T) {
@@ -248,7 +266,9 @@ func Test_Rewriter_RewriteResponse_DeletesHeaders(t *testing.T) {
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -273,7 +293,9 @@ func Test_Rewriter_RewriteResponse_ReplacesHeaders(t *testing.T) {
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -298,7 +320,9 @@ func Test_Rewriter_RewriteResponse_DefaultsHeader_ifNotPresent(t *testing.T) {
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -322,7 +346,9 @@ func Test_Rewriter_RewriteResponse_DefaultsHeader_ifPresent(t *testing.T) {
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -340,7 +366,9 @@ func Test_Rewriter_RewriteResponse_DoesNothingIfRouteIsNil(t *testing.T) {
 	provider := &fakeProvider{}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -362,7 +390,9 @@ func Test_Rewriter_RewriteResponse_DoesNothingIfRouteHasNoUpstreams(t *testing.T
 	}
 	rewriter := &Rewriter{provider: provider}
 
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
+		URL: u,
 		TLS: &tls.ConnectionState{ServerName: "example.com"},
 	}
 	response := &http.Response{
@@ -372,4 +402,25 @@ func Test_Rewriter_RewriteResponse_DoesNothingIfRouteHasNoUpstreams(t *testing.T
 
 	err := rewriter.RewriteResponse(response)
 	require.NoError(t, err)
+}
+
+func Test_Rewriter_RewriteResponse_StripsPortsFromHosts(t *testing.T) {
+	provider := &fakeProvider{
+		route: &Route{},
+	}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("https://example.com:1234/foo/bar")
+	request := &http.Request{
+		TLS: &tls.ConnectionState{ServerName: "example.com"},
+		URL: u,
+	}
+	response := &http.Response{
+		Request: request,
+		Header:  make(http.Header),
+	}
+
+	err := rewriter.RewriteResponse(response)
+	require.NoError(t, err)
+	assert.Equal(t, "example.com", provider.domain)
 }

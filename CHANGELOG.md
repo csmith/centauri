@@ -1,5 +1,12 @@
 # vNext
 
+# v0.8.1
+
+## Bug fixes
+
+- Centauri should now correctly route requests received on non-standard ports.
+  Thanks to @ShaneMcC for the bug report.
+
 # v0.8.0
 
 ## Changes
