@@ -246,6 +246,7 @@ func Test_Rewriter_RewriteRequest_StripsPortsFromHosts(t *testing.T) {
 	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
 		URL:        u,
+		Host:       "example.com:1234",
 		TLS:        &tls.ConnectionState{ServerName: "example.com"},
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
@@ -412,8 +413,9 @@ func Test_Rewriter_RewriteResponse_StripsPortsFromHosts(t *testing.T) {
 
 	u, _ := url.Parse("https://example.com:1234/foo/bar")
 	request := &http.Request{
-		TLS: &tls.ConnectionState{ServerName: "example.com"},
-		URL: u,
+		TLS:  &tls.ConnectionState{ServerName: "example.com"},
+		Host: "example.com:1234",
+		URL:  u,
 	}
 	response := &http.Response{
 		Request: request,

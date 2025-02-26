@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"golang.org/x/exp/rand"
+	"net"
 	"net/http"
 )
 
@@ -36,7 +37,8 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
 // It satisfies the signature of the Director field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(req *http.Request) {
-	route := r.provider.RouteForDomain(req.URL.Hostname())
+	route := r.provider.RouteForDomain(r.hostForRequest(req))
+	println(req.URL.Hostname())
 	if route == nil || len(route.Upstreams) == 0 {
 		return
 	}
@@ -52,7 +54,7 @@ func (r *Rewriter) RewriteRequest(req *http.Request) {
 // RewriteResponse modifies the given response according to the routes provided by the Manager.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteResponse(response *http.Response) error {
-	route := r.provider.RouteForDomain(response.Request.URL.Hostname())
+	route := r.provider.RouteForDomain(r.hostForRequest(response.Request))
 	if route == nil {
 		return nil
 	}
@@ -79,4 +81,13 @@ func (r *Rewriter) RewriteResponse(response *http.Response) error {
 // at random.
 func (r *Rewriter) selectUpstream(route *Route) string {
 	return route.Upstreams[rand.Intn(len(route.Upstreams))].Host
+}
+
+// hostForRequest returns the hostname the given request was for, without any port information.
+func (r *Rewriter) hostForRequest(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.Host)
+	if err != nil {
+		return req.Host
+	}
+	return host
 }
