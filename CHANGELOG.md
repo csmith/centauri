@@ -1,5 +1,13 @@
 # vNext
 
+# v1.0.1
+
+## Bug fixes
+
+- Fixed rare crash when the config file is reloaded rapidly with a different
+  number of routes. Thanks to @Greboid for the bug report.
+  ([issue #159](https://github.com/csmith/centauri/issues/159))
+
 # v1.0.0
 
 ## Other changes

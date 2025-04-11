@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -20,6 +21,7 @@ type Manager struct {
 	routes   []*Route
 	domains  map[string]*Route
 	fallback *Route
+	lock     *sync.RWMutex
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
@@ -29,6 +31,7 @@ func NewManager(provider CertificateProvider) *Manager {
 	return &Manager{
 		provider: provider,
 		domains:  make(map[string]*Route),
+		lock:     &sync.RWMutex{},
 	}
 }
 
@@ -52,9 +55,11 @@ func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
 		}
 	}
 
+	m.lock.Lock()
 	m.domains = newDomains
 	m.routes = newRoutes
 	m.fallback = fallback
+	m.lock.Unlock()
 	go m.CheckCertificates()
 	return nil
 }
@@ -114,7 +119,9 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 // routeFor looks up a route to be used for the given domain. If there is no direct match and a fallback
 // route is defined, that will be returned.
 func (m *Manager) routeFor(domain string) *Route {
+	m.lock.RLock()
 	match := m.domains[strings.ToLower(domain)]
+	m.lock.RUnlock()
 	if match == nil {
 		return m.fallback
 	}
@@ -124,6 +131,7 @@ func (m *Manager) routeFor(domain string) *Route {
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
 func (m *Manager) CheckCertificates() {
+	m.lock.RLock()
 	for i := range m.routes {
 		route := m.routes[i]
 
@@ -133,6 +141,7 @@ func (m *Manager) CheckCertificates() {
 			m.updateCert(route)
 		}
 	}
+	m.lock.RUnlock()
 }
 
 // updateCert updates the certificate for the given route.
