@@ -1,5 +1,11 @@
 # vNext
 
+# v1.0.0
+
+## Other changes
+
+- Updated dependencies
+
 # v0.9.0
 
 ## Features

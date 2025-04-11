@@ -4,10 +4,9 @@ Centauri is a TLS-terminating reverse-HTTP proxy written in Go.
 
 ## Current status
 
-Centauri is currently in development. There may be breaking changes as it
-evolves. Individual builds _should_ be usable for production purposes, but
-you might want to keep another more established proxy around as a backup
-just in case.
+Centauri is considered stable and feature complete. It is deployed in production
+in several places. Any breaking changes going forward will result in major
+version bumps.
 
 ## Features
 
@@ -257,6 +256,14 @@ It will also actively remove any of the following headers sent by clients:
 No. Centauri currently performs all routing based on the requested hostname.
 Additional methods may be added in the future, but Centauri will likely stick
 to being simple and easy to understand vs becoming a swiss army knife.
+
+### Can Centauri automatically route traffic to containers based on labels?
+
+Not on its own. This is a deliberate design decision, in order to avoid exposing
+a service with access to the docker daemon to the Internet. Instead, you can
+use a tool such as [Dotege](https://github.com/csmith/dotege) that will
+generate a config file for Centauri. See `examples/docker-compose-dotege` for
+a worked example.
 
 ## Feedback / Contributing
 
