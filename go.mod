@@ -12,7 +12,7 @@ require (
 	golang.org/x/crypto v0.37.0
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
 	golang.org/x/sys v0.32.0
-	tailscale.com v1.82.2
+	tailscale.com v1.82.4
 )
 
 require (
