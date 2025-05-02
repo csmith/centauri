@@ -99,7 +99,9 @@ For the Tailscale frontend, the following options are used:
 
 - `TAILSCALE_HOSTNAME` - the hostname to use on the Tailscale network.
   Default: `centauri`.
-- `TAILSCALE_KEY` - the key to use to authenticate to Tailscale. 
+- `TAILSCALE_KEY` - the key to use to register the machine on the Tailscale
+  network. If not specified, interactive authentication will be required;
+  check the logs for a link.
 - `TAILSCALE_MODE` - either `http` to serve all proxy traffic over
   http, or `https` to serve proxy traffic over https with a redirect
   from http to https. Default: `http`.

@@ -1,5 +1,11 @@
 # vNext
 
+## Changes
+
+- `TAILSCALE_KEY` is no longer required when using the Tailscale frontend.
+  If not specified, Tailscale will print a link to stdout to authorise the
+  machine. This only needs to be performed once.
+
 # v1.0.1
 
 ## Bug fixes

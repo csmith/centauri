@@ -32,10 +32,6 @@ func init() {
 }
 
 func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error {
-	if *tailscaleKey == "" {
-		return fmt.Errorf("tailscale authentication key not specified")
-	}
-
 	t.tailscale = &tsnet.Server{
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
