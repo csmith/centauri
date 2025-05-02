@@ -1,28 +1,40 @@
-# vNext
+# Changelog
 
-## Changes
+## Unreleased
+
+## 1.1.0 - 2025-05-02
+
+### Changes
 
 - `TAILSCALE_KEY` is no longer required when using the Tailscale frontend.
   If not specified, Tailscale will print a link to stdout to authorise the
   machine. This only needs to be performed once.
 
-# v1.0.1
+### Other changes
 
-## Bug fixes
+- Updated dependencies
+
+## 1.0.1 - 2025-04-11
+
+### Bug fixes
 
 - Fixed rare crash when the config file is reloaded rapidly with a different
   number of routes. Thanks to @Greboid for the bug report.
   ([issue #159](https://github.com/csmith/centauri/issues/159))
 
-# v1.0.0
+## 1.0.0 - 2025-04-11
 
-## Other changes
+_No significant changes in this release, but it marks the point where Centauri
+is considered stable. Any breaking changes in the future will result in a major
+version bump._
+
+### Other changes
 
 - Updated dependencies
 
-# v0.9.0
+## 0.9.0 - 2025-02-26
 
-## Features
+### Features
 
 - A "fallback" route can now be specified by adding the `fallback` directive
   to its configuration. If specified, any request that doesn't match other
@@ -30,23 +42,23 @@
   this will result in an invalid certificate being served to clients, but there
   are some niche caches where it's desirable.
 
-# v0.8.2
+## 0.8.2 - 2025-02-26
 
-## Bug fixes
+### Bug fixes
 
 - Centauri should now correctly route requests received on non-standard ports.
   For real this time.
 
-# v0.8.1
+## 0.8.1 - 2025-02-26
 
-## Bug fixes
+### Bug fixes
 
 - Centauri should now correctly route requests received on non-standard ports.
   Thanks to @ShaneMcC for the bug report.
 
-# v0.8.0
+## 0.8.0 - 2025-02-05
 
-## Changes
+### Changes
 
 - Changed the behaviour for obtaining OCSP staples:
   - Existing certificates with the must-staple extension will always have OCSP
@@ -59,31 +71,31 @@
   - To force any changes to take effect immediately, delete the `certs.json`
     file to force Centauri to re-request all certificates.
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.7.0
+## 0.7.0 - 2025-02-03
 
-## Changes
+### Changes
 
 - Centauri now defaults to not obtaining OCSP staples. This can be re-enabled
   using the `OCSP_STAPLING` env var. This ensures out-of-the-box compatibility
   with Let's Encrypt who will disable support for OCSP in May.
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.6.2
+## 0.6.2 - 2025-01-07
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.6.1
+## 0.6.1 - 2024-12-22
 
-## Bug fixes
+### Bug fixes
 
 - Domain matching is now case-insensitive. Previously, if Centauri was
   configured to serve `example.com` it wouldn't handle requests for `EXAMPLE.com`
@@ -92,26 +104,26 @@
   update after the fast load is now ran in a separate goroutine, so the frontend
   can start serving traffic.
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.6.0
+## 0.6.0 - 2024-12-16
 
-## Changes
+### Changes
 
 - Added option to disable OCSP stapling entirely. Let's Encrypt
   [intend to stop their OCSP service](https://letsencrypt.org/2024/07/23/replacing-ocsp-with-crls.html)
   and other ACME providers are likely to follow as the CAB leans towards CRLs
   instead of mandating stapling.
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.5.3
+## 0.5.3 - 2024-05-07
 
-## Bug fixes
+### Bug fixes
 
 - Fixed the wrong backend being served when a client reuses the same HTTP/2
   connection for a different host. This only happens if both hosts use the
@@ -120,25 +132,25 @@
   debugging this!
   ([issue #89](https://github.com/csmith/centauri/issues/89))
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.5.2
+## 0.5.2 - 2024-04-25
 
-## Bug fixes
+### Bug fixes
 
 - Fixed Tailscale-User-Login and Tailscale-User-Name being swapped
 
-# v0.5.1
+## 0.5.1 - 2024-04-24
 
-## Bug fixes
+### Bug fixes
 
 - Fixed X-Forwarded-Proto header not being set properly
 
-# v0.5.0
+## 0.5.0 - 2024-04-18
 
-## Features
+### Features
 
 - When using the Tailscale frontend, Centauri will now add details about the
   authenticated user making the request in the following headers:
@@ -146,7 +158,7 @@
   - Tailscale-User-Name
   - Tailscale-User-Profile-Pic
 
-## Other changes
+### Other changes
 
 - If using Lego, Centauri will no longer attempt to register a user or obtain
   certificates if it can't write to the user-data file.
@@ -156,37 +168,37 @@
   - Tailscale-User-Profile-Pic
 - Updated dependencies
 
-# v0.4.2
+## 0.4.2 - 2024-02-09
 
-## Other changes
+### Other changes
 
 - Updated dependencies
 
-# v0.4.1
+## 0.4.1 - 2023-08-28
 
-## Other changes
+### Other changes
 
 - Fixed issue with build process. No code changes. 
 
-# v0.4.0
+## 0.4.0 - 2023-08-28
 
-## Features
+### Features
 
 - Upstreams may now specify multiple routes. For now, centauri will
   pick at random between them for each client request. This may change
   in the future.
   ([issue #26](https://github.com/csmith/centauri/issues/26))
 
-## Other changes
+### Other changes
 
 - Fix Centauri always sending `X-Forwarded-Proto: https` even when the
   downstream connection was over `http` (e.g. when using the `tailscale`
   frontend).
 - Tailscale updated to v1.48.1
 
-# v0.3.0
+## 0.3.0 - 2023-06-01
 
-## Features
+### Features
 
 - When starting up or changing routes, Centauri will now immediately
   start serving routes with existing certificates if they are still valid.
@@ -196,7 +208,7 @@
   certificates are obtained. Previously, none were served until all
   routes had certificates.
 
-## Other changes
+### Other changes
 
 - If Centauri can't obtain or update a certificate it will now do its
   best to continue working, and stop serving the route in question if
@@ -204,9 +216,9 @@
 - Lego updated to v4.12.0
 - Tailscale updated to v1.42.0
 
-# v0.2.0 
+## 0.2.0 - 2023-01-26 
 
-## Features
+### Features
 
 - Centauri is now capable of generating self-signed certificates
   for routes, instead of obtaining them via ACME. This is controlled
@@ -217,10 +229,14 @@
   been added to allow selection of the frontend to use, as well as
   options for configuring the behaviour of the Tailscale frontend.
 
-## Other changes
+### Other changes
 
 - Now requires Go 1.19 to build.
 - Directives in the config file are now case-insensitive.
 - If a route has multiple upstreams an error is now raised, instead of
   silently ignoring some of them.
 - Lego updated to v4.9.1
+
+## 0.1.0 - 2022-03-10
+
+_Initial release._
