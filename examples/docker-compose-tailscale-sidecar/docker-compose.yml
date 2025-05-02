@@ -1,0 +1,39 @@
+# Shows how to use Centauri as a "sidecar" to expose a HTTP service on a
+# Tailscale network.
+#
+# Simply add the `centauri` service below, along with the config and volume.
+# Update the `TAILSCALE_HOSTNAME` setting to the hostname you want the service
+# exposed on, and change the name and port of the container in the config.
+#
+# When you run the container for the first time, check the logs for a link
+# to authorise the Tailscale connection. Alternatively you can generate an auth
+# key and put it in a `TAILSCALE_KEY` env var.
+
+services:
+  mycontainer:
+    image: "nginx"
+    restart: "always"
+
+  centauri:
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    volumes:
+      - "ts-data:/home/nonroot/.config"
+    configs:
+      - "centauri.conf"
+    environment:
+      # Configure Centauri to use Tailscale instead of listening on TCP ports
+      FRONTEND: "tailscale"
+      # The hostname Centauri will use on the Tailscale network. This will be the address used to
+      # access the service, if you use MagicDNS.
+      TAILSCALE_HOSTNAME: "tshost"
+
+configs:
+  centauri.conf:
+    content: |
+      route default
+          upstream mycontainer:80
+          fallback
+
+volumes:
+  ts-data:

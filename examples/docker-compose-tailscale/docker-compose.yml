@@ -4,9 +4,11 @@ services:
     restart: "always"
     volumes:
       - "./ts-data:/home/nonroot/.config"
+      - "./centauri.conf:/centauri.conf"
     environment:
+      # Tell Centauri where to read its config file. This is the default value,
+      # and can be omitted if you mount the config at /centauri.conf.
       CONFIG: "/centauri.conf"
-
       # Configure Centauri to use Tailscale instead of listening on TCP ports
       FRONTEND: "tailscale"
       # The hostname Centauri will use on the Tailscale network (i.e., what shows up in your dashboard).
