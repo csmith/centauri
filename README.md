@@ -241,7 +241,8 @@ You can also disable Centauri's frontends by specifying the `notcp` and `notails
 Centauri will automatically set the following headers:
 
 - `X-Forwarded-For` - to include the IP address of the client making the request
-- `X-Forwarded-proto` - to indicate the protocol of the downstream connection (http/https)
+- `X-Forwarded-Proto` - to indicate the protocol of the downstream connection (http/https)
+- `X-Forwarded-Host` - the original hostname the request was received for
 - `Tailscale-User-Login` - username of the Tailscale user making the request, if applicable
 - `Tailscale-User-Name` - display name of the Tailscale user making the request, if applicable
 - `Tailscale-User-Profile-Pic` - profile picture of the Tailscale user making the request, if applicable

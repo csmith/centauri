@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Features
+
+- Centauri will now pass an `X-Forwarded-Host` header to upstreams,
+  containing the original hostname that was requested by the client.
+
 ## 1.1.0 - 2025-05-02
 
 ### Changes

@@ -36,6 +36,23 @@ func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
 	assert.Equal(t, "http://hostname:8080/foo/bar", request.URL.String())
 }
 
+func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
+	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		TLS:        &tls.ConnectionState{ServerName: "example.com"},
+		Host:       "example.com",
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	rewriter.RewriteRequest(request)
+
+	assert.Equal(t, "example.com", request.Header.Get("X-Forwarded-Host"))
+}
+
 func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
 	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
