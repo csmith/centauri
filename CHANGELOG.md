@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.2.0 - 2025-05-03
+
 ### Features
 
 - Centauri will now pass an `X-Forwarded-Host` header to upstreams,
