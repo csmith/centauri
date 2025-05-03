@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"fmt"
+	"github.com/csmith/centauri/metrics"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +21,7 @@ import (
 var (
 	configPath       = flag.String("config", "centauri.conf", "Path to config")
 	selectedFrontend = flag.String("frontend", "tcp", "Frontend to listen on")
+	metricsPort      = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
 )
 
 var proxyManager *proxy.Manager
@@ -45,9 +50,16 @@ func main() {
 	updateRoutes()
 	listenForHup()
 
-	err := f.Serve(proxyManager, rewriter)
+	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
+
+	err := f.Serve(proxyManager, rewriter, recorder)
 	if err != nil {
 		log.Fatalf("Failed to start frontend: %v", err)
+	}
+
+	metricsChan := make(chan struct{}, 1)
+	if *metricsPort > 0 {
+		serveMetrics(recorder, metricsChan)
 	}
 
 	c := make(chan os.Signal, 1)
@@ -57,6 +69,7 @@ func main() {
 	// Wait for a signal
 	log.Printf("Received signal %s, stopping frontend...", <-c)
 
+	metricsChan <- struct{}{}
 	f.Stop(context.Background())
 
 	log.Printf("Frontend stopped. Goodbye!")
@@ -105,4 +118,26 @@ func updateRoutes() {
 	}
 
 	log.Printf("Finished installing %d routes", len(routes))
+}
+
+func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", recorder.Handler())
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", *metricsPort),
+		Handler: mux,
+	}
+
+	go func() {
+		log.Printf("Starting metrics server on port %d", *metricsPort)
+		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Failed to start metrics server: %v", err)
+		}
+	}()
+
+	go func() {
+		<-shutdownChan
+		_ = server.Shutdown(context.Background())
+	}()
 }

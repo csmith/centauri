@@ -19,11 +19,10 @@ func NewBannedHeaderDecorator() Decorator {
 	return &bannedHeaderDecorator{
 		headers: []string{
 			// Variety of headers used for passing on the client IP. We don't want to pass on any rubbish clients
-			// may send in these headers. Note that we explicitly set (i.e. replace) X-Forwarded-For and
-			// X-Forwarded-Proto, so they don't need to be included here.
+			// may send in these headers. Note that we explicitly set (i.e. replace) X-Forwarded-For,
+			// X-Forwarded-Proto, and X-Forwarded-Host so they don't need to be included here.
 			"X-Real-IP",
 			"True-Client-IP",
-			"X-Forwarded-Host",
 			"Forwarded",
 			"Tailscale-User-Login",
 			"Tailscale-User-Name",

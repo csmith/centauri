@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"testing"
 
@@ -31,7 +32,7 @@ func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "http://hostname:8080/foo/bar", request.URL.String())
 }
@@ -48,7 +49,7 @@ func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "example.com", request.Header.Get("X-Forwarded-Host"))
 }
@@ -64,7 +65,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "127.0.0.1", request.Header.Get("X-Forwarded-For"))
 	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-For")))
@@ -81,7 +82,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttps(t *testing.T) 
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "https", request.Header.Get("X-Forwarded-Proto"))
 	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-Proto")))
@@ -97,7 +98,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "http", request.Header.Get("X-Forwarded-Proto"))
 	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-Proto")))
@@ -115,7 +116,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 		RemoteAddr: "127.0.0.1:11003",
 	}
 	request.Header.Set("X-Forwarded-For", "127.0.0.2")
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "127.0.0.1", request.Header.Get("X-Forwarded-For"))
 	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-For")))
@@ -133,7 +134,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
 		RemoteAddr: "127.0.0.1:11003",
 	}
 	request.Header.Set("x-forwarded-proto", "ftp")
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "https", request.Header.Get("X-Forwarded-Proto"))
 	assert.Equal(t, 1, len(request.Header.Values("X-Forwarded-Proto")))
@@ -154,7 +155,7 @@ func Test_Rewriter_RewriteRequest_RemovesBannedHeaders(t *testing.T) {
 	request.Header.Add("x-test1", "value")
 	request.Header.Add("X-Test2", "value")
 	request.Header.Add("X-Test2-other", "value")
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, 0, len(request.Header.Values("x-test1")))
 	assert.Equal(t, 0, len(request.Header.Values("X-Test2")))
@@ -172,7 +173,7 @@ func Test_Rewriter_RewriteRequest_BlanksUserAgentIfUnset(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "", request.Header.Get("User-Agent"))
 }
@@ -189,7 +190,7 @@ func Test_Rewriter_RewriteRequest_LeavesUserAgentIfSet(t *testing.T) {
 		RemoteAddr: "127.0.0.1:11003",
 	}
 	request.Header.Set("User-Agent", "foo")
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "foo", request.Header.Get("User-Agent"))
 }
@@ -233,7 +234,7 @@ func Test_Rewriter_RewriteRequest_UsesHostHeaderIfTlsNotUsed(t *testing.T) {
 		Host:       "example.com",
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "example.com", provider.domain)
 	assert.Equal(t, "http://hostname:8080/foo/bar", request.URL.String())
@@ -250,7 +251,7 @@ func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
 		Host:       "example.com",
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "example.com", provider.domain)
 	assert.Equal(t, "https://example.com/foo/bar", request.URL.String())
@@ -268,7 +269,7 @@ func Test_Rewriter_RewriteRequest_StripsPortsFromHosts(t *testing.T) {
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
-	rewriter.RewriteRequest(request)
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
 	assert.Equal(t, "example.com", provider.domain)
 }

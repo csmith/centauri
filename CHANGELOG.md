@@ -10,6 +10,18 @@
   a basic error page instead of sending a 502 Bad Gateway response
   with no content. This response will also now have headers applied
   to it per the route configuration.
+- Added support for exposing metrics for use with Prometheus or
+  compatible systems. If the `METRICS_PORT` setting is configured,
+  a separate HTTP server will be started on that port with metrics
+  served at `/metrics`. Centauri currently exposes response count,
+  broken down by route and HTTP status code, and the total count of
+  TLS connections received, broken down by whether or not a cert
+  was transmitted.
+
+### Bug fixes
+
+- The X-Forwarded-For header no longer incorrectly lists the client IP
+  twice.
 
 ## 1.1.0 - 2025-05-02
 

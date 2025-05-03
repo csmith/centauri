@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"github.com/csmith/centauri/metrics"
 	"log"
 	"net"
 	"net/http"
@@ -28,14 +29,14 @@ func init() {
 	frontends["tcp"] = &tcpFrontend{}
 }
 
-func (t *tcpFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error {
+func (t *tcpFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, recorder *metrics.Recorder) error {
 	log.Printf("Starting TCP server on port %d (https) and %d (http)", *httpsPort, *httpPort)
 
-	tlsListener, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), createTLSConfig(manager))
+	tlsListener, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), createTLSConfig(recorder, manager))
 	if err != nil {
 		return err
 	}
-	t.tlsServer = createProxy(rewriter)
+	t.tlsServer = createProxy(recorder, rewriter)
 	startServer(t.tlsServer, tlsListener)
 
 	plainListener, err := net.Listen("tcp", fmt.Sprintf(":%d", *httpPort))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/csmith/centauri/metrics"
 	"log"
 	"net"
 	"net/http"
@@ -19,7 +20,7 @@ const (
 )
 
 type frontend interface {
-	Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error
+	Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, recorder *metrics.Recorder) error
 	Stop(ctx context.Context)
 	UsesCertificates() bool
 }
@@ -27,12 +28,12 @@ type frontend interface {
 var frontends = make(map[string]frontend)
 
 // createProxy creates a new http.Server configured with a reverse proxy backed by the given rewriter.
-func createProxy(rewriter *proxy.Rewriter) *http.Server {
+func createProxy(recorder *metrics.Recorder, rewriter *proxy.Rewriter) *http.Server {
 	return &http.Server{
 		Handler: &httputil.ReverseProxy{
-			Director:       rewriter.RewriteRequest,
-			ModifyResponse: rewriter.RewriteResponse,
-			ErrorHandler:   rewriter.RewriteError(handleError),
+			Rewrite:        rewriter.RewriteRequest,
+			ModifyResponse: recorder.TrackResponse(rewriter.RewriteResponse),
+			ErrorHandler:   recorder.TrackBadGateway(rewriter.RewriteError(handleError)),
 			BufferPool:     newBufferPool(),
 			Transport: &http.Transport{
 				ForceAttemptHTTP2:   false,
@@ -51,7 +52,7 @@ func createRedirector() *http.Server {
 
 // createTLSConfig creates a new tls.Config following the Mozilla intermediate configuration, and using
 // the given manager for obtaining certificates.
-func createTLSConfig(manager *proxy.Manager) *tls.Config {
+func createTLSConfig(recorder *metrics.Recorder, manager *proxy.Manager) *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// Generated 2022-02-20, Mozilla Guideline v5.6, Go 1.14.4, intermediate configuration
@@ -63,7 +64,7 @@ func createTLSConfig(manager *proxy.Manager) *tls.Config {
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
-		GetCertificate: manager.CertificateForClient,
+		GetCertificate: recorder.TrackHello(manager.CertificateForClient),
 		NextProtos:     []string{"h2", "http/1.1"},
 	}
 }

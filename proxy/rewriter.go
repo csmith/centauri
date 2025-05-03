@@ -4,6 +4,7 @@ import (
 	"golang.org/x/exp/rand"
 	"net"
 	"net/http"
+	"net/http/httputil"
 )
 
 // routeProvider is the surface we use to interact with the Manager.
@@ -35,19 +36,19 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 }
 
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
-// It satisfies the signature of the Director field of httputil.ReverseProxy.
-func (r *Rewriter) RewriteRequest(req *http.Request) {
-	route := r.provider.RouteForDomain(r.hostForRequest(req))
+// It satisfies the signature of the Rewrite field of httputil.ReverseProxy.
+func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
+	route := r.provider.RouteForDomain(r.hostForRequest(p.In))
 	if route == nil || len(route.Upstreams) == 0 {
 		return
 	}
 
 	for i := range r.decorators {
-		r.decorators[i].Decorate(req)
+		r.decorators[i].Decorate(p.Out)
 	}
 
-	req.URL.Scheme = "http"
-	req.URL.Host = r.selectUpstream(route)
+	p.Out.URL.Scheme = "http"
+	p.Out.URL.Host = r.selectUpstream(route)
 }
 
 // RewriteResponse modifies the given response according to the routes provided by the Manager.

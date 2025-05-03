@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"github.com/csmith/centauri/metrics"
 	"log"
 	"net/http"
 	"tailscale.com/client/tailscale"
@@ -31,7 +32,7 @@ func init() {
 	frontends["tailscale"] = &tailscaleFrontend{}
 }
 
-func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter) error {
+func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, recorder *metrics.Recorder) error {
 	t.tailscale = &tsnet.Server{
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
@@ -50,7 +51,7 @@ func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewrit
 	if *tailscaleMode == "http" {
 		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
 
-		if err := t.startHttpServer(createProxy(rewriter)); err != nil {
+		if err := t.startHttpServer(createProxy(recorder, rewriter)); err != nil {
 			return err
 		}
 	} else if *tailscaleMode == "https" {
@@ -60,7 +61,7 @@ func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewrit
 			return err
 		}
 
-		if err := t.startHttpsServer(createProxy(rewriter), proxyManager); err != nil {
+		if err := t.startHttpsServer(recorder, createProxy(recorder, rewriter), proxyManager); err != nil {
 			return err
 		}
 	} else {
@@ -81,14 +82,14 @@ func (t *tailscaleFrontend) startHttpServer(server *http.Server) error {
 	return nil
 }
 
-func (t *tailscaleFrontend) startHttpsServer(server *http.Server, manager *proxy.Manager) error {
+func (t *tailscaleFrontend) startHttpsServer(recorder *metrics.Recorder, server *http.Server, manager *proxy.Manager) error {
 	tlsListener, err := t.tailscale.Listen("tcp", ":443")
 	if err != nil {
 		return err
 	}
 
 	t.tlsServer = server
-	startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(manager)))
+	startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(recorder, manager)))
 	return nil
 }
 

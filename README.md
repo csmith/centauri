@@ -86,6 +86,9 @@ options are available:
   will always have responses stapled, regardless of this setting. To force
   refresh all certificates after changing this setting, delete the
   `CERTIFICATE_STORE` file. Default: `false`.
+- `METRICS_PORT` - if specified, Centauri will expose a HTTP server on the
+  given port, which will only respond to `/metrics` with Prometheus-style
+  metrics.
 
 For the TCP frontend, the following options are used:
 
@@ -232,7 +235,30 @@ for that provider in the binary. For example to support only the `httpreq` provi
 `go build -tags lego_httpreq`. See the [legotapas](https://github.com/csmith/legotapas) project for more
 info.
 
-You can also disable Centauri's frontends by specifying the `notcp` and `notailscale` build tags. 
+You can also disable Centauri's frontends by specifying the `notcp` and `notailscale` build tags.
+
+## Metrics
+
+When configured with a valid `METRICS_PORT`, Centauri will expose some metrics in a Prometheus-compatible
+format at `/metrics`.
+
+The following Centauri-specific metrics are exported:
+
+- `centauri_tls_hello_total` - counter of TLS Client Hello messages received
+  (i.e., the number of TLS connections opened to Centauri). Labels:
+  - `known`: `true` if the `ServerName` is one Centauri knows and will serve
+    a certificate for; `false` if it was unknown and the connection was closed.
+- `centauri_response_total` - counter of HTTP responses sent to clients,
+  excluding automatic redirects from HTTP->HTTPS. Labels:
+  - `route`: the name (first listed domain) of the route the response was for
+  - `status`: the HTTP response status sent to the client
+- `centauri_content_length_total` - counter of the `Content-Length` of all
+  responses proxied to clients. Labels:
+  - `route`: the name (first listed domain) of the route the response was for
+  - `status`: the HTTP response status sent to the client
+
+In addition, the built-in Prometheus collectors for Go and process specific
+metrics are enabled.
 
 ## FAQ
 
