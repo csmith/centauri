@@ -6,6 +6,10 @@
 
 - Centauri will now pass an `X-Forwarded-Host` header to upstreams,
   containing the original hostname that was requested by the client.
+- If an upstream cannot be reached, Centauri will now respond with
+  a basic error page instead of sending a 502 Bad Gateway response
+  with no content. This response will also now have headers applied
+  to it per the route configuration.
 
 ## 1.1.0 - 2025-05-02
 

@@ -32,6 +32,7 @@ func createProxy(rewriter *proxy.Rewriter) *http.Server {
 		Handler: &httputil.ReverseProxy{
 			Director:       rewriter.RewriteRequest,
 			ModifyResponse: rewriter.RewriteResponse,
+			ErrorHandler:   rewriter.RewriteError(handleError),
 			BufferPool:     newBufferPool(),
 			Transport: &http.Transport{
 				ForceAttemptHTTP2:   false,
