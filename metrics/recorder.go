@@ -36,11 +36,6 @@ func NewRecorder(routeForDomain func(domain string) *proxy.Route) *Recorder {
 			Name: "centauri_response_total",
 			Help: "The total number of HTTP responses sent to clients",
 		}, []string{"route", "status"}),
-
-		contentLengthCounter: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "centauri_content_length_total",
-			Help: "The total content-length of responses proxied to clients",
-		}, []string{"route", "status"}),
 	}
 	r.registerMetrics()
 	return r
@@ -55,10 +50,6 @@ func (r *Recorder) registerMetrics() {
 
 	if err := r.registry.Register(r.responseCounter); err != nil {
 		log.Printf("Failed to register response counter: %v", err)
-	}
-
-	if err := r.registry.Register(r.contentLengthCounter); err != nil {
-		log.Printf("Failed to register content length counter: %v", err)
 	}
 
 	// Prometheus-supplied general process metrics
@@ -103,11 +94,6 @@ func (r *Recorder) TrackResponse(fn func(*http.Response) error) func(*http.Respo
 				"route":  route.Domains[0],
 				"status": fmt.Sprintf("%d", resp.StatusCode),
 			}).Inc()
-
-			r.contentLengthCounter.With(prometheus.Labels{
-				"route":  route.Domains[0],
-				"status": fmt.Sprintf("%d", resp.StatusCode),
-			}).Add(float64(resp.ContentLength))
 		}
 
 		return fn(resp)

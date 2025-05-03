@@ -69,8 +69,7 @@ func Test_Recorder_TracksResponses(t *testing.T) {
 					"X-Forwarded-Host": {"example.com"},
 				},
 			},
-			ContentLength: 123,
-			StatusCode:    200,
+			StatusCode: 200,
 		},
 	)
 
@@ -82,8 +81,7 @@ func Test_Recorder_TracksResponses(t *testing.T) {
 					"X-Forwarded-Host": {"example.com"},
 				},
 			},
-			StatusCode:    200,
-			ContentLength: 124,
+			StatusCode: 200,
 		},
 	)
 
@@ -95,22 +93,17 @@ func Test_Recorder_TracksResponses(t *testing.T) {
 					"X-Forwarded-Host": {"example.com"},
 				},
 			},
-			StatusCode:    404,
-			ContentLength: 888,
+			StatusCode: 404,
 		},
 	)
 
-	expected := `# HELP centauri_content_length_total The total content-length of responses proxied to clients
-# TYPE centauri_content_length_total counter
-centauri_content_length_total{route="example.com",status="200"} 247
-centauri_content_length_total{route="example.com",status="404"} 888
-
-# HELP centauri_response_total The total number of HTTP responses sent to clients
+	expected := `# HELP centauri_response_total The total number of HTTP responses sent to clients
 # TYPE centauri_response_total counter
 centauri_response_total{route="example.com",status="200"} 2
 centauri_response_total{route="example.com",status="404"} 1
 `
-	assert.NoError(t, testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_response_total", "centauri_content_length_total"))
+
+	assert.NoError(t, testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_response_total"))
 }
 
 func Test_Recorder_TracksClientHellos(t *testing.T) {

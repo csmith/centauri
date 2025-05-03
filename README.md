@@ -252,10 +252,6 @@ The following Centauri-specific metrics are exported:
   excluding automatic redirects from HTTP->HTTPS. Labels:
   - `route`: the name (first listed domain) of the route the response was for
   - `status`: the HTTP response status sent to the client
-- `centauri_content_length_total` - counter of the `Content-Length` of all
-  responses proxied to clients. Labels:
-  - `route`: the name (first listed domain) of the route the response was for
-  - `status`: the HTTP response status sent to the client
 
 In addition, the built-in Prometheus collectors for Go and process specific
 metrics are enabled.
