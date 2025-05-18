@@ -28,11 +28,17 @@ var (
 var proxyManager *proxy.Manager
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	envflag.Parse()
 
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {
-		log.Fatalf("Invalid frontend specified: %v", err)
+		return fmt.Errorf("invalid frontend specified: %v", err)
 	}
 
 	var provider proxy.CertificateProvider
@@ -40,7 +46,7 @@ func main() {
 		var err error
 		provider, err = certProvider()
 		if err != nil {
-			log.Fatalf("Error creating certificate providers: %v", err)
+			return fmt.Errorf("error creating certificate providers: %v", err)
 		}
 
 		monitorCerts()
@@ -49,7 +55,7 @@ func main() {
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager)
 	if err := updateRoutes(); err != nil {
-		log.Fatalf("Failed to load initial configuration: %v", err)
+		return fmt.Errorf("failed to load initial configuration: %v", err)
 	}
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
@@ -60,7 +66,7 @@ func main() {
 		recorder: recorder,
 		errChan:  errChan,
 	}); err != nil {
-		log.Fatalf("Failed to start frontend: %v", err)
+		return fmt.Errorf("failed to start frontend: %v", err)
 	}
 
 	metricsChan := make(chan struct{}, 1)
@@ -78,17 +84,17 @@ func main() {
 			case syscall.SIGHUP:
 				log.Printf("Received signal %s, updating routes...", sig)
 				if err := updateRoutes(); err != nil {
-					log.Fatalf("Error updating routes: %v", err)
+					return fmt.Errorf("error updating routes: %v", err)
 				}
 			case syscall.SIGINT, syscall.SIGTERM:
 				log.Printf("Received signal %s, stopping frontend...", sig)
 				metricsChan <- struct{}{}
 				f.Stop(context.Background())
 				log.Printf("Frontend stopped. Goodbye!")
-				return
+				return nil
 			}
 		case err := <-errChan:
-			log.Fatalf("Fatal error: %v", err)
+			return err
 		}
 	}
 }
