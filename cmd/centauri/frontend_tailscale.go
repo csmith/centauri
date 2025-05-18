@@ -41,13 +41,13 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	if *tailscaleMode == "http" {
 		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
 
-		if err := t.startHttpServer(ctx.createProxy()); err != nil {
+		if err := t.startHttpServer(ctx, ctx.createProxy()); err != nil {
 			return err
 		}
 	} else if *tailscaleMode == "https" {
 		log.Printf("Starting tailscale server on https://%s/", *tailscaleHostname)
 
-		if err := t.startHttpServer(ctx.createRedirector()); err != nil {
+		if err := t.startHttpServer(ctx, ctx.createRedirector()); err != nil {
 			return err
 		}
 
@@ -61,13 +61,13 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	return nil
 }
 
-func (t *tailscaleFrontend) startHttpServer(handler http.Handler) error {
+func (t *tailscaleFrontend) startHttpServer(ctx *frontendContext, handler http.Handler) error {
 	listener, err := t.tailscale.Listen("tcp", ":80")
 	if err != nil {
 		return err
 	}
 
-	t.plainServer = newServer(handler)
+	t.plainServer = newServer(handler, ctx.errChan)
 	go t.plainServer.start(listener)
 	return nil
 }
@@ -78,7 +78,7 @@ func (t *tailscaleFrontend) startHttpsServer(ctx *frontendContext) error {
 		return err
 	}
 
-	t.tlsServer = newServer(ctx.createProxy())
+	t.tlsServer = newServer(ctx.createProxy(), ctx.errChan)
 	go t.tlsServer.start(tls.NewListener(tlsListener, ctx.createTLSConfig()))
 	return nil
 }

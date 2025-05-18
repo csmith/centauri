@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"github.com/csmith/centauri/metrics"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -29,6 +28,7 @@ type frontendContext struct {
 	manager  *proxy.Manager
 	rewriter *proxy.Rewriter
 	recorder *metrics.Recorder
+	errChan  chan<- error
 }
 
 // createProxy creates a reverse proxy backed by the context's rewriter.
@@ -73,20 +73,22 @@ func (fc *frontendContext) createTLSConfig() *tls.Config {
 
 // server encapsulates an HTTP server with the ability to gracefully shutdown.
 type server struct {
-	srv *http.Server
+	srv     *http.Server
+	errChan chan<- error
 }
 
-// newServer creates a new server with the provided handler.
-func newServer(handler http.Handler) *server {
+// newServer creates a new server with the provided handler and error channel.
+func newServer(handler http.Handler, errChan chan<- error) *server {
 	return &server{
-		srv: &http.Server{Handler: handler},
+		srv:     &http.Server{Handler: handler},
+		errChan: errChan,
 	}
 }
 
 // start starts the server listening on the given listener.
 func (s *server) start(listener net.Listener) {
 	if err := s.srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		s.errChan <- err
 	}
 }
 

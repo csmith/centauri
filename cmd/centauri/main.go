@@ -53,10 +53,12 @@ func main() {
 	}
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
+	errChan := make(chan error)
 	if err := f.Serve(&frontendContext{
 		manager:  proxyManager,
 		rewriter: rewriter,
 		recorder: recorder,
+		errChan:  errChan,
 	}); err != nil {
 		log.Fatalf("Failed to start frontend: %v", err)
 	}
@@ -69,19 +71,24 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	for sig := range c {
-		switch sig {
-		case syscall.SIGHUP:
-			log.Printf("Received signal %s, updating routes...", sig)
-			if err := updateRoutes(); err != nil {
-				log.Fatalf("Error updating routes: %v", err)
+	for {
+		select {
+		case sig := <-c:
+			switch sig {
+			case syscall.SIGHUP:
+				log.Printf("Received signal %s, updating routes...", sig)
+				if err := updateRoutes(); err != nil {
+					log.Fatalf("Error updating routes: %v", err)
+				}
+			case syscall.SIGINT, syscall.SIGTERM:
+				log.Printf("Received signal %s, stopping frontend...", sig)
+				metricsChan <- struct{}{}
+				f.Stop(context.Background())
+				log.Printf("Frontend stopped. Goodbye!")
+				return
 			}
-		case syscall.SIGINT, syscall.SIGTERM:
-			log.Printf("Received signal %s, stopping frontend...", sig)
-			metricsChan <- struct{}{}
-			f.Stop(context.Background())
-			log.Printf("Frontend stopped. Goodbye!")
-			return
+		case err := <-errChan:
+			log.Fatalf("Fatal error: %v", err)
 		}
 	}
 }

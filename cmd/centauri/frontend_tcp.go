@@ -28,7 +28,7 @@ func (t *tcpFrontend) Serve(ctx *frontendContext) error {
 	if err != nil {
 		return err
 	}
-	t.tlsServer = newServer(ctx.createProxy())
+	t.tlsServer = newServer(ctx.createProxy(), ctx.errChan)
 	go t.tlsServer.start(tlsListener)
 
 	plainListener, err := net.Listen("tcp", fmt.Sprintf(":%d", *httpPort))
@@ -36,7 +36,7 @@ func (t *tcpFrontend) Serve(ctx *frontendContext) error {
 		return err
 	}
 
-	t.plainServer = newServer(ctx.createRedirector())
+	t.plainServer = newServer(ctx.createRedirector(), ctx.errChan)
 	go t.plainServer.start(plainListener)
 	return nil
 }
