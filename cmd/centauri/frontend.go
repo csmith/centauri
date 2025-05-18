@@ -20,20 +20,24 @@ const (
 )
 
 type frontend interface {
-	Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, recorder *metrics.Recorder) error
+	Serve(ctx *frontendContext) error
 	Stop(ctx context.Context)
 	UsesCertificates() bool
 }
 
-var frontends = make(map[string]frontend)
+type frontendContext struct {
+	manager  *proxy.Manager
+	rewriter *proxy.Rewriter
+	recorder *metrics.Recorder
+}
 
-// createProxy creates a new http.Server configured with a reverse proxy backed by the given rewriter.
-func createProxy(recorder *metrics.Recorder, rewriter *proxy.Rewriter) *http.Server {
+// createProxy creates a new http.Server configured with a reverse proxy backed by the context's rewriter.
+func (fc *frontendContext) createProxy() *http.Server {
 	return &http.Server{
 		Handler: &httputil.ReverseProxy{
-			Rewrite:        rewriter.RewriteRequest,
-			ModifyResponse: recorder.TrackResponse(rewriter.RewriteResponse),
-			ErrorHandler:   recorder.TrackBadGateway(rewriter.RewriteError(handleError)),
+			Rewrite:        fc.rewriter.RewriteRequest,
+			ModifyResponse: fc.recorder.TrackResponse(fc.rewriter.RewriteResponse),
+			ErrorHandler:   fc.recorder.TrackBadGateway(fc.rewriter.RewriteError(handleError)),
 			BufferPool:     newBufferPool(),
 			Transport: &http.Transport{
 				ForceAttemptHTTP2:   false,
@@ -46,13 +50,13 @@ func createProxy(recorder *metrics.Recorder, rewriter *proxy.Rewriter) *http.Ser
 }
 
 // createRedirector creates a new http.Server configured to redirect all requests to HTTPS.
-func createRedirector() *http.Server {
+func (fc *frontendContext) createRedirector() *http.Server {
 	return &http.Server{Handler: &proxy.Redirector{}}
 }
 
 // createTLSConfig creates a new tls.Config following the Mozilla intermediate configuration, and using
-// the given manager for obtaining certificates.
-func createTLSConfig(recorder *metrics.Recorder, manager *proxy.Manager) *tls.Config {
+// the context's manager for obtaining certificates.
+func (fc *frontendContext) createTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		// Generated 2022-02-20, Mozilla Guideline v5.6, Go 1.14.4, intermediate configuration
@@ -64,7 +68,7 @@ func createTLSConfig(recorder *metrics.Recorder, manager *proxy.Manager) *tls.Co
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
-		GetCertificate: recorder.TrackHello(manager.CertificateForClient),
+		GetCertificate: fc.recorder.TrackHello(fc.manager.CertificateForClient),
 		NextProtos:     []string{"h2", "http/1.1"},
 	}
 }

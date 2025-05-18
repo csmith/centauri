@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,9 +30,9 @@ var proxyManager *proxy.Manager
 func main() {
 	envflag.Parse()
 
-	f, ok := frontends[*selectedFrontend]
-	if !ok {
-		log.Fatalf("Invalid frontend specified: %s", *selectedFrontend)
+	f, err := createFrontend(*selectedFrontend)
+	if err != nil {
+		log.Fatalf("Invalid frontend specified: %v", err)
 	}
 
 	var provider proxy.CertificateProvider
@@ -52,8 +53,11 @@ func main() {
 	}
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
-	err := f.Serve(proxyManager, rewriter, recorder)
-	if err != nil {
+	if err := f.Serve(&frontendContext{
+		manager:  proxyManager,
+		rewriter: rewriter,
+		recorder: recorder,
+	}); err != nil {
 		log.Fatalf("Failed to start frontend: %v", err)
 	}
 
@@ -79,6 +83,17 @@ func main() {
 			log.Printf("Frontend stopped. Goodbye!")
 			return
 		}
+	}
+}
+
+func createFrontend(name string) (frontend, error) {
+	switch strings.ToLower(name) {
+	case "tcp":
+		return &tcpFrontend{}, nil
+	case "tailscale":
+		return &tailscaleFrontend{}, nil
+	default:
+		return nil, fmt.Errorf("unknown frontend: %s", name)
 	}
 }
 

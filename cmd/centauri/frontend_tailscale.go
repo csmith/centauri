@@ -7,12 +7,9 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/csmith/centauri/metrics"
 	"log"
 	"net/http"
-	"tailscale.com/client/tailscale"
-
-	"github.com/csmith/centauri/proxy"
+	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
 
@@ -28,40 +25,33 @@ type tailscaleFrontend struct {
 	tailscale   *tsnet.Server
 }
 
-func init() {
-	frontends["tailscale"] = &tailscaleFrontend{}
-}
-
-func (t *tailscaleFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, recorder *metrics.Recorder) error {
+func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	t.tailscale = &tsnet.Server{
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
 		Logf:     func(format string, args ...any) {},
 	}
 
-	if err := t.tailscale.Start(); err != nil {
+	lc, err := t.tailscale.LocalClient()
+	if err != nil {
 		return err
 	}
-
-	lc, _ := t.tailscale.LocalClient()
-	rewriter.AddDecorator(&tailscaleHeaderDecorator{
-		localClient: lc,
-	})
+	ctx.rewriter.AddDecorator(&tailscaleHeaderDecorator{localClient: lc})
 
 	if *tailscaleMode == "http" {
 		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
 
-		if err := t.startHttpServer(createProxy(recorder, rewriter)); err != nil {
+		if err := t.startHttpServer(ctx.createProxy()); err != nil {
 			return err
 		}
 	} else if *tailscaleMode == "https" {
 		log.Printf("Starting tailscale server on https://%s/", *tailscaleHostname)
 
-		if err := t.startHttpServer(createRedirector()); err != nil {
+		if err := t.startHttpServer(ctx.createRedirector()); err != nil {
 			return err
 		}
 
-		if err := t.startHttpsServer(recorder, createProxy(recorder, rewriter), proxyManager); err != nil {
+		if err := t.startHttpsServer(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -82,14 +72,14 @@ func (t *tailscaleFrontend) startHttpServer(server *http.Server) error {
 	return nil
 }
 
-func (t *tailscaleFrontend) startHttpsServer(recorder *metrics.Recorder, server *http.Server, manager *proxy.Manager) error {
+func (t *tailscaleFrontend) startHttpsServer(ctx *frontendContext) error {
 	tlsListener, err := t.tailscale.Listen("tcp", ":443")
 	if err != nil {
 		return err
 	}
 
-	t.tlsServer = server
-	go startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(recorder, manager)))
+	t.tlsServer = ctx.createProxy()
+	go startServer(t.tlsServer, tls.NewListener(tlsListener, ctx.createTLSConfig()))
 	return nil
 }
 
@@ -103,7 +93,7 @@ func (t *tailscaleFrontend) UsesCertificates() bool {
 }
 
 type tailscaleHeaderDecorator struct {
-	localClient *tailscale.LocalClient
+	localClient *local.Client
 }
 
 func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {

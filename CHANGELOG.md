@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changes
+
+- The `FRONTEND` setting is now case-insensitive.
+
 ## 1.2.0 - 2025-05-03
 
 ### Features
