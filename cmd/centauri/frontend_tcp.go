@@ -37,7 +37,7 @@ func (t *tcpFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, re
 		return err
 	}
 	t.tlsServer = createProxy(recorder, rewriter)
-	startServer(t.tlsServer, tlsListener)
+	go startServer(t.tlsServer, tlsListener)
 
 	plainListener, err := net.Listen("tcp", fmt.Sprintf(":%d", *httpPort))
 	if err != nil {
@@ -45,7 +45,7 @@ func (t *tcpFrontend) Serve(manager *proxy.Manager, rewriter *proxy.Rewriter, re
 	}
 
 	t.plainServer = createRedirector()
-	startServer(t.plainServer, plainListener)
+	go startServer(t.plainServer, plainListener)
 	return nil
 }
 

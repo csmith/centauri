@@ -47,9 +47,9 @@ func main() {
 
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager)
-	updateRoutes()
-	listenForHup()
-
+	if err := updateRoutes(); err != nil {
+		log.Fatalf("Failed to load initial configuration: %v", err)
+	}
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
 	err := f.Serve(proxyManager, rewriter, recorder)
@@ -63,16 +63,23 @@ func main() {
 	}
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, syscall.SIGTERM)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	// Wait for a signal
-	log.Printf("Received signal %s, stopping frontend...", <-c)
-
-	metricsChan <- struct{}{}
-	f.Stop(context.Background())
-
-	log.Printf("Frontend stopped. Goodbye!")
+	for sig := range c {
+		switch sig {
+		case syscall.SIGHUP:
+			log.Printf("Received signal %s, updating routes...", sig)
+			if err := updateRoutes(); err != nil {
+				log.Fatalf("Error updating routes: %v", err)
+			}
+		case syscall.SIGINT, syscall.SIGTERM:
+			log.Printf("Received signal %s, stopping frontend...", sig)
+			metricsChan <- struct{}{}
+			f.Stop(context.Background())
+			log.Printf("Frontend stopped. Goodbye!")
+			return
+		}
+	}
 }
 
 func monitorCerts() {
@@ -85,39 +92,27 @@ func monitorCerts() {
 	}()
 }
 
-func listenForHup() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-
-	go func() {
-		for {
-			<-c
-			log.Printf("Received SIGHUP, updating routes")
-			updateRoutes()
-		}
-	}()
-}
-
-func updateRoutes() {
+func updateRoutes() error {
 	log.Printf("Reading config file %s", *configPath)
 
 	configFile, err := os.Open(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to open config file: %v", err)
+		return fmt.Errorf("failed to open config file: %w", err)
 	}
 	defer configFile.Close()
 
 	routes, fallback, err := config.Parse(configFile)
 	if err != nil {
-		log.Fatalf("Failed to parse config file: %v", err)
+		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	log.Printf("Installing %d routes", len(routes))
 	if err := proxyManager.SetRoutes(routes, fallback); err != nil {
-		log.Fatalf("Route manager error: %v", err)
+		return fmt.Errorf("route manager error: %w", err)
 	}
 
 	log.Printf("Finished installing %d routes", len(routes))
+	return nil
 }
 
 func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}) {

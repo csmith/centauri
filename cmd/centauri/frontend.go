@@ -71,11 +71,9 @@ func createTLSConfig(recorder *metrics.Recorder, manager *proxy.Manager) *tls.Co
 
 // startServer starts the given server listening on the given listener.
 func startServer(server *http.Server, listener net.Listener) {
-	go func() {
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatal(err)
-		}
-	}()
+	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
 }
 
 // stopServers gracefully stops the specified http.Server instances with a timeout.

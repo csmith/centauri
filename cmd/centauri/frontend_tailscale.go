@@ -78,7 +78,7 @@ func (t *tailscaleFrontend) startHttpServer(server *http.Server) error {
 	}
 
 	t.plainServer = server
-	startServer(server, listener)
+	go startServer(server, listener)
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (t *tailscaleFrontend) startHttpsServer(recorder *metrics.Recorder, server 
 	}
 
 	t.tlsServer = server
-	startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(recorder, manager)))
+	go startServer(t.tlsServer, tls.NewListener(tlsListener, createTLSConfig(recorder, manager)))
 	return nil
 }
 
