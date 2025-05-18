@@ -1,0 +1,217 @@
+[
+  {
+    "spec": {
+      "numberOfConnections": 125,
+      "testType": "timed",
+      "testDurationSeconds": 10,
+      "method": "GET",
+      "url": "https://localhost:9992/10kb",
+      "body": "",
+      "stream": false,
+      "timeoutSeconds": 2,
+      "client": "fasthttp"
+    },
+    "result": {
+      "bytesRead": 22270384029,
+      "bytesWritten": 186509257,
+      "timeTakenSeconds": 10.000419894,
+      "req1xx": 0,
+      "req2xx": 2118939,
+      "req3xx": 0,
+      "req4xx": 0,
+      "req5xx": 0,
+      "others": 0,
+      "latency": {
+        "mean": 588.9478507875875,
+        "stddev": 724.5225088973981,
+        "max": 124319
+      },
+      "rps": {
+        "mean": 211895.728293227,
+        "stddev": 20853.081218257306,
+        "max": 226573.98508182567,
+        "percentiles": {
+          "50": 216151.296278,
+          "75": 218665.449401,
+          "90": 221147.920723,
+          "95": 222009.990450,
+          "99": 224418.805276
+        }
+      }
+    },
+    "proxy": "haproxy",
+    "version": "3.1.7"
+  },
+  {
+    "spec": {
+      "numberOfConnections": 125,
+      "testType": "timed",
+      "testDurationSeconds": 10,
+      "method": "GET",
+      "url": "http://localhost:9991/10kb",
+      "body": "",
+      "stream": false,
+      "timeoutSeconds": 2,
+      "client": "fasthttp"
+    },
+    "result": {
+      "bytesRead": 39949222008,
+      "bytesWritten": 251396706,
+      "timeTakenSeconds": 10.000304828,
+      "req1xx": 0,
+      "req2xx": 3809041,
+      "req3xx": 0,
+      "req4xx": 0,
+      "req5xx": 0,
+      "others": 0,
+      "latency": {
+        "mean": 327.1078969745928,
+        "stddev": 253.989825917184,
+        "max": 54943
+      },
+      "rps": {
+        "mean": 380918.70184672513,
+        "stddev": 32050.542298722106,
+        "max": 412893.6384783362,
+        "percentiles": {
+          "50": 385405.588526,
+          "75": 394293.822215,
+          "90": 400771.812332,
+          "95": 405172.880342,
+          "99": 410948.531943
+        }
+      }
+    },
+    "proxy": "static-web-server",
+    "version": "2.36.1"
+  },
+  {
+    "spec": {
+      "numberOfConnections": 125,
+      "testType": "timed",
+      "testDurationSeconds": 10,
+      "method": "GET",
+      "url": "https://localhost:9992/10kb",
+      "body": "",
+      "stream": false,
+      "timeoutSeconds": 2,
+      "client": "fasthttp"
+    },
+    "result": {
+      "bytesRead": 11226455159,
+      "bytesWritten": 93953777,
+      "timeTakenSeconds": 10.002133186,
+      "req1xx": 0,
+      "req2xx": 1063229,
+      "req3xx": 0,
+      "req4xx": 0,
+      "req5xx": 0,
+      "others": 0,
+      "latency": {
+        "mean": 1174.7234198841454,
+        "stddev": 882.2565742179409,
+        "max": 90461
+      },
+      "rps": {
+        "mean": 106313.92325376684,
+        "stddev": 14806.466225778959,
+        "max": 122509.30023956764,
+        "percentiles": {
+          "50": 111950.328009,
+          "75": 114711.264646,
+          "90": 116640.832031,
+          "95": 118075.002180,
+          "99": 119804.848775
+        }
+      }
+    },
+    "proxy": "nginx",
+    "version": "1.28.0"
+  },
+  {
+    "spec": {
+      "numberOfConnections": 125,
+      "testType": "timed",
+      "testDurationSeconds": 10,
+      "method": "GET",
+      "url": "https://localhost:9992/10kb",
+      "body": "",
+      "stream": false,
+      "timeoutSeconds": 2,
+      "client": "fasthttp"
+    },
+    "result": {
+      "bytesRead": 12987197567,
+      "bytesWritten": 108554129,
+      "timeTakenSeconds": 10.000899837,
+      "req1xx": 0,
+      "req2xx": 1233108,
+      "req3xx": 0,
+      "req4xx": 0,
+      "req5xx": 0,
+      "others": 0,
+      "latency": {
+        "mean": 1012.6857242025841,
+        "stddev": 765.4203703119906,
+        "max": 83013
+      },
+      "rps": {
+        "mean": 123315.3411403179,
+        "stddev": 19420.088051717892,
+        "max": 152373.21532996604,
+        "percentiles": {
+          "50": 128148.282813,
+          "75": 137397.524346,
+          "90": 142194.664946,
+          "95": 144424.885141,
+          "99": 148445.686343
+        }
+      }
+    },
+    "proxy": "centauri",
+    "version": "1.2.0"
+  },
+  {
+    "spec": {
+      "numberOfConnections": 125,
+      "testType": "timed",
+      "testDurationSeconds": 10,
+      "method": "GET",
+      "url": "https://localhost:9992/10kb",
+      "body": "",
+      "stream": false,
+      "timeoutSeconds": 2,
+      "client": "fasthttp"
+    },
+    "result": {
+      "bytesRead": 1022732836,
+      "bytesWritten": 8567924,
+      "timeTakenSeconds": 11.040094212,
+      "req1xx": 0,
+      "req2xx": 96422,
+      "req3xx": 0,
+      "req4xx": 0,
+      "req5xx": 110,
+      "others": 0,
+      "latency": {
+        "mean": 14123.579859528447,
+        "stddev": 107375.24725522684,
+        "max": 3614015
+      },
+      "rps": {
+        "mean": 9612.903894602983,
+        "stddev": 18526.396359115777,
+        "max": 85795.28983858787,
+        "percentiles": {
+          "50": 684.450349,
+          "75": 7923.279044,
+          "90": 33259.603711,
+          "95": 68636.816379,
+          "99": 82569.306285
+        }
+      }
+    },
+    "proxy": "caddy",
+    "version": "2.10.0"
+  }
+]

@@ -1,0 +1,107 @@
+services:
+  static-web-server:
+    image: joseluisq/static-web-server:${STATIC_WEB_SERVER_VERSION:-2}
+    ports:
+      - "9991:80"
+    volumes:
+      - .:/public
+    environment:
+      - SERVER_ROOT=/public
+      - SERVER_PORT=80
+
+  centauri:
+    image: ghcr.io/csmith/centauri:${CENTAURI_VERSION:-latest}
+    ports:
+      - "9992:8443"
+    environment:
+      CONFIG: /centauri.conf
+      CERTIFICATE_PROVIDERS: selfsigned
+    configs:
+      - centauri.conf
+
+  haproxy:
+    image: haproxy:${HAPROXY_VERSION:-latest}
+    ports:
+      - "9992:443"
+    volumes:
+      - ./localhost.pem:/certs/localhost.pem:ro
+    configs:
+      - source: haproxy.cfg
+        target: /usr/local/etc/haproxy/haproxy.cfg
+
+  caddy:
+    image: caddy:${CADDY_VERSION:-latest}
+    ports:
+      - "9992:443"
+    volumes:
+      - ./localhost.pem:/certs/localhost.pem:ro
+    configs:
+      - source: caddy.conf
+        target: /etc/caddy/Caddyfile
+
+  nginx:
+    image: nginx:${NGINX_VERSION:-latest}
+    ports:
+      - "9992:443"
+    volumes:
+      - ./localhost.crt:/certs/localhost.crt:ro
+      - ./localhost.key:/certs/localhost.key:ro
+    configs:
+      - source: nginx.conf
+        target: /etc/nginx/nginx.conf
+
+configs:
+  centauri.conf:
+    content: |
+      route localhost
+          upstream static-web-server:80
+
+  haproxy.cfg:
+    content: |
+      resolvers docker_resolver
+          nameserver dns 127.0.0.11:53
+
+      frontend main
+          mode    http
+          bind    :::443 v4v6 ssl strict-sni alpn h2,http/1.1 crt /certs/
+          use_backend default
+
+      backend default
+          mode http
+          server server1 static-web-server:80
+
+  caddy.conf:
+    content: |
+      {
+        auto_https off
+        admin off
+      }
+      localhost:443 {
+        reverse_proxy /* static-web-server:80
+        tls {
+          load /certs
+        }
+      }
+
+  nginx.conf:
+    content: |
+      worker_processes auto;
+      
+      events {
+          worker_connections  1024;
+      }
+      
+      http {
+          upstream sws {
+              server static-web-server:80;
+          }
+          server {
+              listen 443 ssl;
+              ssl_certificate /certs/localhost.crt;
+              ssl_certificate_key /certs/localhost.key;
+
+              location / {
+                  proxy_pass http://sws;
+              }
+          }
+      }
