@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/csmith/centauri/metrics"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -65,7 +65,7 @@ func main() {
 
 	metricsChan := make(chan struct{}, 1)
 	if *metricsPort > 0 {
-		serveMetrics(recorder, metricsChan)
+		serveMetrics(recorder, metricsChan, errChan)
 	}
 
 	c := make(chan os.Signal, 1)
@@ -137,24 +137,22 @@ func updateRoutes() error {
 	return nil
 }
 
-func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}) {
+func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errChan chan<- error) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", recorder.Handler())
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *metricsPort),
-		Handler: mux,
-	}
+	s := newServer(mux, errChan)
 
 	go func() {
 		log.Printf("Starting metrics server on port %d", *metricsPort)
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Failed to start metrics server: %v", err)
+		if listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *metricsPort)); err != nil {
+			errChan <- fmt.Errorf("failed to listen on port %d: %w", *metricsPort, err)
+		} else {
+			s.start(listener)
 		}
 	}()
 
 	go func() {
 		<-shutdownChan
-		_ = server.Shutdown(context.Background())
+		s.stop(context.Background())
 	}()
 }
