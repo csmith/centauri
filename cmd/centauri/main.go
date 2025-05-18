@@ -28,13 +28,16 @@ var (
 var proxyManager *proxy.Manager
 
 func main() {
-	if err := run(); err != nil {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	if err := run(os.Args[1:], signalChan); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run() error {
-	envflag.Parse()
+func run(args []string, signalChan <-chan os.Signal) error {
+	envflag.Parse(envflag.WithArguments(args))
 
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {
@@ -74,12 +77,9 @@ func run() error {
 		serveMetrics(recorder, metricsChan, errChan)
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-
 	for {
 		select {
-		case sig := <-c:
+		case sig := <-signalChan:
 			switch sig {
 			case syscall.SIGHUP:
 				log.Printf("Received signal %s, updating routes...", sig)

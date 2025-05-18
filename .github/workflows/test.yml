@@ -9,3 +9,5 @@ on:
 jobs:
   build:
     uses: csmith/github-workflows/.github/workflows/go-test.yml@master
+    with:
+      tags: integration
