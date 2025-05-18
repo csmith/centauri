@@ -31,27 +31,25 @@ type frontendContext struct {
 	recorder *metrics.Recorder
 }
 
-// createProxy creates a new http.Server configured with a reverse proxy backed by the context's rewriter.
-func (fc *frontendContext) createProxy() *http.Server {
-	return &http.Server{
-		Handler: &httputil.ReverseProxy{
-			Rewrite:        fc.rewriter.RewriteRequest,
-			ModifyResponse: fc.recorder.TrackResponse(fc.rewriter.RewriteResponse),
-			ErrorHandler:   fc.recorder.TrackBadGateway(fc.rewriter.RewriteError(handleError)),
-			BufferPool:     newBufferPool(),
-			Transport: &http.Transport{
-				ForceAttemptHTTP2:   false,
-				DisableCompression:  true,
-				MaxIdleConnsPerHost: 100,
-				IdleConnTimeout:     90 * time.Second,
-			},
+// createProxy creates a reverse proxy backed by the context's rewriter.
+func (fc *frontendContext) createProxy() http.Handler {
+	return &httputil.ReverseProxy{
+		Rewrite:        fc.rewriter.RewriteRequest,
+		ModifyResponse: fc.recorder.TrackResponse(fc.rewriter.RewriteResponse),
+		ErrorHandler:   fc.recorder.TrackBadGateway(fc.rewriter.RewriteError(handleError)),
+		BufferPool:     newBufferPool(),
+		Transport: &http.Transport{
+			ForceAttemptHTTP2:   false,
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     90 * time.Second,
 		},
 	}
 }
 
-// createRedirector creates a new http.Server configured to redirect all requests to HTTPS.
-func (fc *frontendContext) createRedirector() *http.Server {
-	return &http.Server{Handler: &proxy.Redirector{}}
+// createRedirector creates a http.Handler that redirects all requests to HTTPS.
+func (fc *frontendContext) createRedirector() http.Handler {
+	return &proxy.Redirector{}
 }
 
 // createTLSConfig creates a new tls.Config following the Mozilla intermediate configuration, and using
@@ -73,26 +71,30 @@ func (fc *frontendContext) createTLSConfig() *tls.Config {
 	}
 }
 
-// startServer starts the given server listening on the given listener.
-func startServer(server *http.Server, listener net.Listener) {
-	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+// server encapsulates an HTTP server with the ability to gracefully shutdown.
+type server struct {
+	srv *http.Server
+}
+
+// newServer creates a new server with the provided handler.
+func newServer(handler http.Handler) *server {
+	return &server{
+		srv: &http.Server{Handler: handler},
+	}
+}
+
+// start starts the server listening on the given listener.
+func (s *server) start(listener net.Listener) {
+	if err := s.srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }
 
-// stopServers gracefully stops the specified http.Server instances with a timeout.
-func stopServers(ctx context.Context, servers ...*http.Server) {
-	shutdown := func(ctx context.Context, server *http.Server) {
-		timeoutContext, cancel := context.WithTimeout(ctx, shutdownTimeout)
-		defer cancel()
-		_ = server.Shutdown(timeoutContext)
-	}
-
-	for i := range servers {
-		if servers[i] != nil {
-			shutdown(ctx, servers[i])
-		}
-	}
+// stop gracefully stops the server with a timeout.
+func (s *server) stop(ctx context.Context) {
+	timeoutContext, cancel := context.WithTimeout(ctx, shutdownTimeout)
+	defer cancel()
+	_ = s.srv.Shutdown(timeoutContext)
 }
 
 type bufferPool struct {

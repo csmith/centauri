@@ -20,8 +20,8 @@ var (
 )
 
 type tailscaleFrontend struct {
-	tlsServer   *http.Server
-	plainServer *http.Server
+	tlsServer   *server
+	plainServer *server
 	tailscale   *tsnet.Server
 }
 
@@ -61,14 +61,14 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	return nil
 }
 
-func (t *tailscaleFrontend) startHttpServer(server *http.Server) error {
+func (t *tailscaleFrontend) startHttpServer(handler http.Handler) error {
 	listener, err := t.tailscale.Listen("tcp", ":80")
 	if err != nil {
 		return err
 	}
 
-	t.plainServer = server
-	go startServer(server, listener)
+	t.plainServer = newServer(handler)
+	go t.plainServer.start(listener)
 	return nil
 }
 
@@ -78,13 +78,18 @@ func (t *tailscaleFrontend) startHttpsServer(ctx *frontendContext) error {
 		return err
 	}
 
-	t.tlsServer = ctx.createProxy()
-	go startServer(t.tlsServer, tls.NewListener(tlsListener, ctx.createTLSConfig()))
+	t.tlsServer = newServer(ctx.createProxy())
+	go t.tlsServer.start(tls.NewListener(tlsListener, ctx.createTLSConfig()))
 	return nil
 }
 
 func (t *tailscaleFrontend) Stop(ctx context.Context) {
-	stopServers(ctx, t.plainServer, t.tlsServer)
+	if t.plainServer != nil {
+		t.plainServer.stop(ctx)
+	}
+	if t.tlsServer != nil {
+		t.tlsServer.stop(ctx)
+	}
 	_ = t.tailscale.Close()
 }
 

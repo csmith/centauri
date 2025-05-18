@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 )
 
 var (
@@ -18,8 +17,8 @@ var (
 )
 
 type tcpFrontend struct {
-	tlsServer   *http.Server
-	plainServer *http.Server
+	tlsServer   *server
+	plainServer *server
 }
 
 func (t *tcpFrontend) Serve(ctx *frontendContext) error {
@@ -29,21 +28,22 @@ func (t *tcpFrontend) Serve(ctx *frontendContext) error {
 	if err != nil {
 		return err
 	}
-	t.tlsServer = ctx.createProxy()
-	go startServer(t.tlsServer, tlsListener)
+	t.tlsServer = newServer(ctx.createProxy())
+	go t.tlsServer.start(tlsListener)
 
 	plainListener, err := net.Listen("tcp", fmt.Sprintf(":%d", *httpPort))
 	if err != nil {
 		return err
 	}
 
-	t.plainServer = ctx.createRedirector()
-	go startServer(t.plainServer, plainListener)
+	t.plainServer = newServer(ctx.createRedirector())
+	go t.plainServer.start(plainListener)
 	return nil
 }
 
 func (t *tcpFrontend) Stop(ctx context.Context) {
-	stopServers(ctx, t.tlsServer, t.plainServer)
+	t.tlsServer.stop(ctx)
+	t.plainServer.stop(ctx)
 }
 
 func (t *tcpFrontend) UsesCertificates() bool {
