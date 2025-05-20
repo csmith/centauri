@@ -13,11 +13,10 @@ import (
 
 // Recorder provides methods to track metrics for requests
 type Recorder struct {
-	routeForDomain       func(domain string) *proxy.Route
-	registry             *prometheus.Registry
-	helloCounter         *prometheus.CounterVec
-	responseCounter      *prometheus.CounterVec
-	contentLengthCounter *prometheus.CounterVec
+	routeForDomain  func(domain string) *proxy.Route
+	registry        *prometheus.Registry
+	helloCounter    *prometheus.CounterVec
+	responseCounter *prometheus.CounterVec
 }
 
 // NewRecorder creates a new Recorder that will use the given function to map
