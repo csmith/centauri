@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"golang.org/x/exp/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -93,7 +93,7 @@ func (r *Rewriter) rewriteHeaders(headers http.Header, request *http.Request) {
 // selectUpstream selects an upstream host from the given route. The current implementation simply selects an upstream
 // at random.
 func (r *Rewriter) selectUpstream(route *Route) string {
-	return route.Upstreams[rand.Intn(len(route.Upstreams))].Host
+	return route.Upstreams[rand.IntN(len(route.Upstreams))].Host
 }
 
 // hostForRequest returns the hostname the given request was for, without any port information.
