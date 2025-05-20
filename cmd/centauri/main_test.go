@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -67,7 +68,7 @@ func Test_Run_ProxiesToUpstream(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	res, err := getFromProxy(8703, "https://example.com/test")
+	res, err := proxyGet(8703, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -101,7 +102,7 @@ func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	res, err := getFromProxy(8703, "https://example.com/test")
+	res, err := proxyGet(8703, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -110,6 +111,148 @@ func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 	assert.Contains(t, string(b), "X-Forwarded-For: 127.0.0.1\n")
 	assert.Contains(t, string(b), "X-Forwarded-Host: example.com\n")
 	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com/test", nil)
+	assert.NoError(t, err)
+	req.Header.Set("X-Forwarded-For", "1.3.3.7")
+	req.Header.Set("X-Forwarded-Host", "example.net")
+	req.Header.Set("X-Forwarded-Proto", "tcp")
+	req.Header.Set("X-Real-IP", "1.3.3.7")
+	req.Header.Set("True-Client-IP", "1.3.3.7")
+	req.Header.Set("Forwarded", "1.3.3.7")
+	req.Header.Set("Tailscale-User-Login", "acidburn")
+	req.Header.Set("Tailscale-User-Name", "Acid Burn")
+	req.Header.Set("Tailscale-User-Profile-Pic", "http://example.net/...")
+
+	res, err := proxyDo(8703, req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	// None of the values should be passed
+	assert.NotContains(t, string(b), "1.3.3.7")
+	assert.NotContains(t, string(b), "example.net")
+	assert.NotContains(t, string(b), "tcp")
+	assert.NotContains(t, string(b), "acidburn")
+	assert.NotContains(t, string(b), "Acid Burn")
+
+	// None of the Tailscale headers should exist
+	assert.NotContains(t, string(b), "Tailscale")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy-bad-port.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "The server was unable to complete your request")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	f, err := os.CreateTemp("", "centauri-integration-test-*.config")
+	assert.NoError(t, err)
+	f.Close()
+	defer os.Remove(f.Name())
+
+	// Start with our bad port
+	b, err := os.ReadFile(testdata.Path("simple-proxy-bad-port.conf"))
+	assert.NoError(t, err)
+	err = os.WriteFile(f.Name(), b, os.FileMode(0600))
+	assert.NoError(t, err)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", f.Name(),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	// Make sure we're using the "bad" config
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+
+	// Update the config
+	b, err = os.ReadFile(testdata.Path("simple-proxy.conf"))
+	assert.NoError(t, err)
+	err = os.WriteFile(f.Name(), b, os.FileMode(0600))
+	assert.NoError(t, err)
+
+	// Send a HUP
+	signalChan <- syscall.SIGHUP
+	time.Sleep(2 * time.Second)
+
+	// Now the same request should work
+	res, err = proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	signalChan <- os.Interrupt
 	<-doneChan
@@ -153,13 +296,21 @@ func startStaticServer(port int) *server {
 	return srv
 }
 
-func getFromProxy(realPort int, fakeUrl string) (*http.Response, error) {
+func proxyGet(realPort int, fakeUrl string) (*http.Response, error) {
+	return getClientProxy(realPort).Get(fakeUrl)
+}
+
+func proxyDo(realPort int, req *http.Request) (*http.Response, error) {
+	return getClientProxy(realPort).Do(req)
+}
+
+func getClientProxy(realPort int) *http.Client {
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
-	client := http.Client{
+	return &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				addr = fmt.Sprintf("127.0.0.1:%d", realPort)
@@ -175,6 +326,4 @@ func getFromProxy(realPort int, fakeUrl string) (*http.Response, error) {
 			},
 		},
 	}
-
-	return client.Get(fakeUrl)
 }
