@@ -20,11 +20,19 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 
 		switch strings.ToLower(directive) {
 		case "route":
+			if args == "" {
+				return nil, nil, fmt.Errorf("no domains specified for route")
+			}
+			if route != nil {
+				if len(route.Upstreams) == 0 {
+					return nil, nil, fmt.Errorf("no upstreams specified for route %s", route.Domains)
+				}
+				routes = append(routes, route)
+			}
 			route = &proxy.Route{
 				Domains:   strings.Split(args, " "),
 				Upstreams: []proxy.Upstream{},
 			}
-			routes = append(routes, route)
 		case "upstream":
 			if route == nil {
 				return nil, nil, fmt.Errorf("upstream without route: %s", line)
@@ -62,6 +70,13 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 		}
 	}
 
+	if route != nil {
+		if len(route.Upstreams) == 0 {
+			return nil, nil, fmt.Errorf("no upstreams specified for route %s", route.Domains)
+		}
+		routes = append(routes, route)
+	}
+
 	if err := scanner.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -94,7 +109,7 @@ func parseHeader(args string, route *proxy.Route) error {
 		})
 	case "replace":
 		if len(parts) != 3 {
-			return fmt.Errorf("invalid header set line: %s", args)
+			return fmt.Errorf("invalid header replace line: %s", args)
 		}
 
 		route.Headers = append(route.Headers, proxy.Header{

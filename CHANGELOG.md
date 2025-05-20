@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-### Changes
+### Breaking changes
+
+- Centauri will no longer accept configurations that:
+    - define a route with no upstreams, or
+    - define a route with no domains.
+
+### Other changes
 
 - The `FRONTEND` setting is now case-insensitive.
 

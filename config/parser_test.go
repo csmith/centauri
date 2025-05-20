@@ -18,25 +18,34 @@ func Test_Parse_ReturnsEmptySliceForEmptyFile(t *testing.T) {
 func Test_Parse_ErrorsOnUnknownLine(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte("error please")))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid line")
 }
 
 func Test_Parse_ErrorsOnUpstreamOutsideOfRoute(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte("upstream localhost:8080")))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "upstream without route")
 }
 
 func Test_Parse_ErrorsOnProviderOutsideOfRoute(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte("provider lego")))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "provider without route")
 }
 
 func Test_Parse_ErrorsOnHeaderOutsideOfRoute(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte("header add x-test foo")))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "header without route")
+}
+
+func Test_Parse_ErrorsOnHeaderWithNoParameters(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	header nothing
+`)))
+
+	assert.ErrorContains(t, err, "invalid header operation")
 }
 
 func Test_Parse_ErrorsOnHeaderWithTooFewParameters(t *testing.T) {
@@ -45,7 +54,34 @@ route example.com
 	header nothing
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid header operation")
+}
+
+func Test_Parse_ErrorsOnRouteWithNoDomains(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route
+	upstream example.com
+`)))
+
+	assert.ErrorContains(t, err, "no domains specified for route")
+}
+
+func Test_Parse_ErrorsOnIntermediateRouteWithoutUpstreams(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+route example.net
+	upstream localhost:8080
+`)))
+
+	assert.ErrorContains(t, err, "no upstreams specified for route")
+}
+
+func Test_Parse_ErrorsOnFinalRouteWithoutUpstreams(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+`)))
+
+	assert.ErrorContains(t, err, "no upstreams specified for route")
 }
 
 func Test_Parse_ErrorsOnHeaderAddWithoutValue(t *testing.T) {
@@ -54,7 +90,7 @@ route example.com
 	header add x-test
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid header add line")
 }
 
 func Test_Parse_ErrorsOnHeaderDeleteWithoutHeader(t *testing.T) {
@@ -63,7 +99,7 @@ route example.com
 	header delete
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid header delete line")
 }
 
 func Test_Parse_ErrorsOnHeaderReplaceWithoutValue(t *testing.T) {
@@ -72,7 +108,7 @@ route example.com
 	header replace x-test
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid header replace line")
 }
 
 func Test_Parse_ErrorsOnHeaderDefaultWithoutValue(t *testing.T) {
@@ -81,7 +117,7 @@ route example.com
 	header default x-test
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid header default line")
 }
 
 func Test_Parse_ErrorsOnMultipleProviders(t *testing.T) {
@@ -91,7 +127,7 @@ route example.com
 	provider other
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "has multiple providers")
 }
 
 func Test_Parse_ReturnsRoutes(t *testing.T) {
@@ -196,12 +232,10 @@ route example.com www.example.com
 
 route example.net
 	upstream localhost:8089
-	
-route example.org
 `)))
 
 	assert.NoError(t, err)
-	assert.Equal(t, 3, len(routes))
+	assert.Equal(t, 2, len(routes))
 
 	assert.Equal(t, []proxy.Upstream{
 		{"localhost:8080"},
@@ -212,10 +246,6 @@ route example.org
 	assert.Equal(t, []proxy.Upstream{
 		{"localhost:8089"},
 	}, routes[1].Upstreams)
-
-	assert.Equal(t, []proxy.Upstream{
-		// No upstreams
-	}, routes[2].Upstreams)
 }
 
 func Test_Parse_Fallback_SingleRoute(t *testing.T) {
@@ -226,8 +256,6 @@ route example.com www.example.com
 
 route example.net
 	upstream localhost:8089
-	
-route example.org
 `)))
 
 	assert.NoError(t, err)
@@ -243,7 +271,7 @@ route example.org
 func Test_Parse_Fallback_OutsideRoute(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte(`fallback`)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "fallback without route")
 }
 
 func Test_Parse_Fallback_MultipleRoutes(t *testing.T) {
@@ -255,9 +283,7 @@ route example.com www.example.com
 route example.net
 	upstream localhost:8089
 	fallback
-	
-route example.org
 `)))
 
-	assert.Error(t, err)
+	assert.ErrorContains(t, err, "multiple fallback routes specified")
 }
