@@ -19,14 +19,15 @@ import (
 )
 
 var (
-	userDataPath         = flag.String("user-data", "user.pem", "Path to user data")
-	certificateStorePath = flag.String("certificate-store", "certs.json", "Path to certificate store")
-	certificateProviders = flag.String("certificate-providers", "lego selfsigned", "Space separated list of certificate providers to use by default in order of preference")
-	dnsProviderName      = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
-	acmeEmail            = flag.String("acme-email", "", "Email address for ACME account")
-	acmeDirectory        = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
-	wildcardDomains      = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
-	useStaples           = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
+	userDataPath           = flag.String("user-data", "user.pem", "Path to user data")
+	certificateStorePath   = flag.String("certificate-store", "certs.json", "Path to certificate store")
+	certificateProviders   = flag.String("certificate-providers", "lego selfsigned", "Space separated list of certificate providers to use by default in order of preference")
+	dnsProviderName        = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
+	acmeEmail              = flag.String("acme-email", "", "Email address for ACME account")
+	acmeDirectory          = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
+	acmeDisablePropagation = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
+	wildcardDomains        = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
+	useStaples             = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
 )
 
 func certProvider() (proxy.CertificateProvider, error) {
@@ -67,11 +68,12 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 	}
 
 	legoSupplier, err := certificate.NewLegoSupplier(&certificate.LegoSupplierConfig{
-		Path:        *userDataPath,
-		Email:       *acmeEmail,
-		DirUrl:      *acmeDirectory,
-		KeyType:     certcrypto.EC384,
-		DnsProvider: dnsProvider,
+		Path:                    *userDataPath,
+		Email:                   *acmeEmail,
+		DirUrl:                  *acmeDirectory,
+		KeyType:                 certcrypto.EC384,
+		DnsProvider:             dnsProvider,
+		DisablePropagationCheck: *acmeDisablePropagation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("certificate supplier error: %v", err)

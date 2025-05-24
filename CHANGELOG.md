@@ -11,6 +11,10 @@
 ### Other changes
 
 - The `FRONTEND` setting is now case-insensitive.
+- Added `ACME_DISABLE_PROPAGATION_CHECK` setting, which stops the ACME
+  client from querying DNS servers to make sure the challenge records
+  have propagated. This shouldn't be needed in normal use, but is handy
+  for testing.
 
 ## 1.2.0 - 2025-05-03
 

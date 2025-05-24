@@ -133,6 +133,8 @@ require (
 	github.com/labbsr0x/bindman-dns-webhook v1.0.2 // indirect
 	github.com/labbsr0x/goh v1.0.1 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
+	github.com/letsencrypt/challtestsrv v1.3.2 // indirect
+	github.com/letsencrypt/pebble/v2 v2.7.0 // indirect
 	github.com/linode/linodego v1.48.1 // indirect
 	github.com/liquidweb/liquidweb-cli v0.6.9 // indirect
 	github.com/liquidweb/liquidweb-go v1.6.4 // indirect
@@ -251,4 +253,9 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20250205023644-9414b50a5633 // indirect
+)
+
+tool (
+	github.com/letsencrypt/pebble/v2/cmd/pebble
+	github.com/letsencrypt/pebble/v2/cmd/pebble-challtestsrv
 )

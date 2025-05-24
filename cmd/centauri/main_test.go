@@ -10,9 +10,11 @@ import (
 	"github.com/csmith/centauri/cmd/centauri/testdata"
 	"github.com/stretchr/testify/assert"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 	"testing"
@@ -258,6 +260,68 @@ func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
 	<-doneChan
 }
 
+func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	stopPebble := startPebble()
+	defer stopPebble()
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	userPem, err := os.CreateTemp("", "centauri-integration-test-user-*.pem")
+	assert.NoError(t, err)
+	userPem.Close()
+	os.Remove(userPem.Name())
+	defer os.Remove(userPem.Name())
+
+	certsJson, err := os.CreateTemp("", "centauri-integration-test-certs-*.json")
+	assert.NoError(t, err)
+	certsJson.Close()
+	os.Remove(certsJson.Name())
+	defer os.Remove(certsJson.Name())
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"PROVIDER", "lego",
+			"DNS_PROVIDER", "exec",
+			"EXEC_PATH", testdata.Path("update.sh"),
+			"ACME_EMAIL", "test@example.com",
+			"ACME_DIRECTORY", "https://localhost:14000/dir",
+			"ACME_DISABLE_PROPAGATION_CHECK", "true",
+			"USER_DATA", userPem.Name(),
+			"CERTIFICATE_STORE", certsJson.Name(),
+			"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	start := time.Now()
+	for time.Since(start) < time.Minute {
+		time.Sleep(2 * time.Second)
+
+		res, err := proxyGet(8703, "https://example.com/test")
+		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
+			log.Printf("Centauri isn't serving a cert yet, waiting...")
+			continue
+		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, res.StatusCode)
+		assert.True(t, strings.Contains(res.TLS.PeerCertificates[0].Issuer.CommonName, "Pebble Intermediate CA"))
+		return
+	}
+
+	assert.Fail(t, "timeout exceeded")
+}
+
 func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		if !strings.HasPrefix(f.Name, "test") {
@@ -325,5 +389,65 @@ func getClientProxy(realPort int) *http.Client {
 				InsecureSkipVerify: true,
 			},
 		},
+	}
+}
+
+func startPebble() func() {
+	stopChallTestSrv := startChallTestSrv()
+
+	cmd := exec.Command("go", "tool", "github.com/letsencrypt/pebble/v2/cmd/pebble", "-strict", "-config", "pebble-config.json", "-dnsserver", "localhost:8053")
+	cmd.Dir = testdata.Path(".")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "PEBBLE_VA_NOSLEEP=1", "PEBBLE_WFE_NONCEREJECT=0", "PEBBLE_AUTHZREUSE=0")
+
+	go func() {
+		if err := cmd.Run(); err != nil {
+			panic(err)
+		}
+	}()
+
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	start := time.Now()
+	for time.Since(start) < time.Minute {
+		resp, err := client.Get("https://localhost:14000/dir")
+		if err != nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
+		resp.Body.Close()
+		break
+	}
+
+	return func() {
+		if cmd.Process != nil {
+			cmd.Process.Signal(syscall.SIGTERM)
+		}
+		stopChallTestSrv()
+	}
+}
+
+func startChallTestSrv() func() {
+	cmd := exec.Command("go", "tool", "github.com/letsencrypt/pebble/v2/cmd/pebble-challtestsrv", "-http01", "\"\"", "-https01", "\"\"", "-tlsalpn01", "\"\"")
+	cmd.Dir = testdata.Path(".")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	go func() {
+		if err := cmd.Run(); err != nil {
+			panic(err)
+		}
+	}()
+
+	return func() {
+		if cmd.Process != nil {
+			cmd.Process.Signal(syscall.SIGTERM)
+		}
 	}
 }

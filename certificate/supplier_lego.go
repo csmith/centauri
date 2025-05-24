@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-acme/lego/v4/challenge/dns01"
 	"log"
 	"os"
 	"time"
@@ -122,6 +123,8 @@ type LegoSupplierConfig struct {
 	KeyType certcrypto.KeyType
 	// DnsProvider is the DNS-01 challenge provider that will verify domain ownership.
 	DnsProvider challenge.Provider
+	// DisablePropagationCheck instructs the lego client to not bother checking for DNS propagation.
+	DisablePropagationCheck bool
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
@@ -140,7 +143,10 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 		return nil, err
 	}
 
-	if err = client.Challenge.SetDNS01Provider(config.DnsProvider); err != nil {
+	if err = client.Challenge.SetDNS01Provider(
+		config.DnsProvider,
+		dns01.CondOption(config.DisablePropagationCheck, dns01.DisableAuthoritativeNssPropagationRequirement()),
+	); err != nil {
 		return nil, err
 	}
 
