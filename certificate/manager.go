@@ -3,7 +3,7 @@ package certificate
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -54,13 +54,13 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	defer m.store.UnlockCertificate(subject, altNames)
 
 	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
-		log.Printf("Obtaining new certificate for '%s'", subject)
+		slog.Info("Obtaining new certificate", "domain", subject, "altNames", altNames)
 		return m.obtain(supplier, subject, altNames)
 	} else if !cert.ValidFor(supplier.MinCertificateValidity()) {
-		log.Printf("Renewing certificate for '%s'", subject)
+		slog.Info("Renewing certificate", "domain", subject, "altNames", altNames)
 		return m.obtain(supplier, subject, altNames)
 	} else if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
-		log.Printf("Obtaining new OCSP staple for '%s'", subject)
+		slog.Info("Obtaining new OCSP staple", "domain", subject, "altNames", altNames)
 		return m.staple(supplier, cert)
 	} else {
 		return cert.keyPair()

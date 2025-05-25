@@ -15,6 +15,11 @@
   client from querying DNS servers to make sure the challenge records
   have propagated. This shouldn't be needed in normal use, but is handy
   for testing.
+- Centauri now uses structured logging. This allows you to filter logs by
+  level (using the `LOG_LEVEL` setting), change the output format to JSON
+  (using the `LOG_FORMAT` setting). The default log level is `INFO`; a
+  lot of the more spammy day-to-day log lines are now `DEBUG` and hidden by
+  default.
 
 ## 1.2.0 - 2025-05-03
 

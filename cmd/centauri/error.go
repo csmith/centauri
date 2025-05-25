@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -18,7 +18,7 @@ const badGatewayError = `<!doctype html>
 
 // handleError handles the reverse proxy not being able to connect to an upstream
 func handleError(writer http.ResponseWriter, request *http.Request, err error) {
-	log.Printf("Failed to connect to upstream %s: %v", request.Host, err)
+	slog.Warn("Failed to connect to upstream", "host", request.Host, "error", err)
 	writer.WriteHeader(http.StatusBadGateway)
 	_, _ = writer.Write([]byte(badGatewayError))
 }

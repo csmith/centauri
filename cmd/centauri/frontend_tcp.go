@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 )
 
@@ -22,7 +22,7 @@ type tcpFrontend struct {
 }
 
 func (t *tcpFrontend) Serve(ctx *frontendContext) error {
-	log.Printf("Starting TCP server on port %d (https) and %d (http)", *httpsPort, *httpPort)
+	slog.Info("Starting TCP server", "httpsPort", *httpsPort, "httpPort", *httpPort)
 
 	tlsListener, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), ctx.createTLSConfig())
 	if err != nil {

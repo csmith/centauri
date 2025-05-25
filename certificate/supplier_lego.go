@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-acme/lego/v4/challenge/dns01"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -61,7 +61,7 @@ func (a *acmeUser) load(path string) error {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		// No saved data, let's just create a new private key
-		log.Printf("No saved user details found, creating a new private key")
+		slog.Info("No saved user details found, creating a new private key")
 		privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 		if err != nil {
 			return fmt.Errorf("unable to generate private key: %w", err)
@@ -90,7 +90,7 @@ func (a *acmeUser) load(path string) error {
 // registerAndSave registers the user with the given ACME registration service, and on successful registration
 // serialises the user information to disk at the specified path.
 func (a *acmeUser) registerAndSave(registrar registrar, path string) error {
-	log.Printf("Registering user '%s'", a.Email)
+	slog.Info("Registering user", "email", a.Email)
 	reg, err := registrar.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
 		return fmt.Errorf("unable to register new account: %w", err)
@@ -166,7 +166,7 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
 func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
-	log.Printf("Obtaining certificate for '%s' (altNames: %v)", subject, altNames)
+	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames)
 	res, err := s.certifier.Obtain(legocert.ObtainRequest{
 		Domains:    append([]string{subject}, altNames...),
 		Bundle:     true,
@@ -201,7 +201,7 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 
 // UpdateStaple requests a new OCSP staple for the given certificate.
 func (s *LegoSupplier) UpdateStaple(cert *Details) error {
-	log.Printf("Updating OCSP staple for '%s' (altNames: %v)", cert.Subject, cert.AltNames)
+	slog.Info("Updating OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
 	b, response, err := s.certifier.GetOCSP([]byte(cert.Certificate))
 	if err != nil {
 		return err

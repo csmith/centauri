@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,7 +20,7 @@ func (r *Redirector) ServeHTTP(writer http.ResponseWriter, request *http.Request
 
 	// Make sure the host isn't garbage
 	if !isDomainName(host) {
-		log.Printf("Invalid host header '%s', not redirecting", request.Host)
+		slog.Debug("Invalid host header from HTTP client, not redirecting", "host", request.Host)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}

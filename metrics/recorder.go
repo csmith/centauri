@@ -7,7 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -44,20 +44,20 @@ func NewRecorder(routeForDomain func(domain string) *proxy.Route) *Recorder {
 func (r *Recorder) registerMetrics() {
 	// Centauri-specific metrics
 	if err := r.registry.Register(r.helloCounter); err != nil {
-		log.Printf("Failed to register hello counter: %v", err)
+		slog.Error("Failed to register hello counter", "error", err)
 	}
 
 	if err := r.registry.Register(r.responseCounter); err != nil {
-		log.Printf("Failed to register response counter: %v", err)
+		slog.Error("Failed to register response counter", "error", err)
 	}
 
 	// Prometheus-supplied general process metrics
 	if err := r.registry.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})); err != nil {
-		log.Printf("Failed to register process collector: %v", err)
+		slog.Error("Failed to register process collector", "error", err)
 	}
 
 	if err := r.registry.Register(collectors.NewGoCollector()); err != nil {
-		log.Printf("Failed to register go collector: %v", err)
+		slog.Error("Failed to register go collector", "error", err)
 	}
 }
 

@@ -89,6 +89,10 @@ options are available:
 - `METRICS_PORT` - if specified, Centauri will expose a HTTP server on the
   given port, which will only respond to `/metrics` with Prometheus-style
   metrics.
+- `LOG_LEVEL` - the minimum log level Centauri should output. One of
+  `DEBUG`, `INFO`, `WARN`, `ERROR`. Default: `INFO`
+- `LOG_FORMAT` - the format logs should be output in. One of `TEXT`, `JSON`.
+  Default: `TEXT`
 
 For the TCP frontend, the following options are used:
 
@@ -119,6 +123,9 @@ For the lego certificate provider, the following options are used:
   registering.
 - `ACME_DIRECTORY` - the URL of the ACME directory to obtain certs from.
   Default: `https://acme-v02.api.letsencrypt.org/directory`
+- `ACME_DISABLE_PROPAGATION_CHECK` - stops the ACME client from checking
+  that its DNS records have propagated before requesting a certificate.
+  Default: `false`
 
 ### ACME DNS Configuration
 

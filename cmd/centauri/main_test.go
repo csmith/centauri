@@ -10,7 +10,7 @@ import (
 	"github.com/csmith/centauri/cmd/centauri/testdata"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -309,7 +309,7 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 
 		res, err := proxyGet(8703, "https://example.com/test")
 		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
-			log.Printf("Centauri isn't serving a cert yet, waiting...")
+			slog.Warn("Centauri isn't serving a cert yet, waiting...")
 			continue
 		}
 

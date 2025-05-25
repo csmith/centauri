@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/csmith/centauri/metrics"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -32,12 +32,14 @@ func main() {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	if err := run(os.Args[1:], signalChan); err != nil {
-		log.Fatal(err)
+		slog.Error("Centauri encountered a fatal error", "error", err)
+		os.Exit(1)
 	}
 }
 
 func run(args []string, signalChan <-chan os.Signal) error {
 	envflag.Parse(envflag.WithArguments(args))
+	initLogging()
 
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {
@@ -82,15 +84,15 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		case sig := <-signalChan:
 			switch sig {
 			case syscall.SIGHUP:
-				log.Printf("Received signal %s, updating routes...", sig)
+				slog.Info("Received signal, updating routes...", "signal", sig)
 				if err := updateRoutes(); err != nil {
 					return fmt.Errorf("error updating routes: %v", err)
 				}
 			case syscall.SIGINT, syscall.SIGTERM:
-				log.Printf("Received signal %s, stopping frontend...", sig)
+				slog.Info("Received signal, stopping frontend...", "signal", sig)
 				metricsChan <- struct{}{}
 				f.Stop(context.Background())
-				log.Printf("Frontend stopped. Goodbye!")
+				slog.Info("Frontend stopped. Goodbye!")
 				return nil
 			}
 		case err := <-errChan:
@@ -114,14 +116,14 @@ func monitorCerts() {
 	go func() {
 		for {
 			time.Sleep(12 * time.Hour)
-			log.Printf("Checking for certificate validity...")
+			slog.Info("Checking for certificate validity...")
 			proxyManager.CheckCertificates()
 		}
 	}()
 }
 
 func updateRoutes() error {
-	log.Printf("Reading config file %s", *configPath)
+	slog.Debug("Reading config file", "path", *configPath)
 
 	configFile, err := os.Open(*configPath)
 	if err != nil {
@@ -134,12 +136,12 @@ func updateRoutes() error {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	log.Printf("Installing %d routes", len(routes))
+	slog.Debug("Installing routes", "count", len(routes))
 	if err := proxyManager.SetRoutes(routes, fallback); err != nil {
 		return fmt.Errorf("route manager error: %w", err)
 	}
 
-	log.Printf("Finished installing %d routes", len(routes))
+	slog.Debug("Finished installing routes", "count", len(routes))
 	return nil
 }
 
@@ -149,7 +151,7 @@ func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errC
 	s := newServer(mux, errChan)
 
 	go func() {
-		log.Printf("Starting metrics server on port %d", *metricsPort)
+		slog.Info("Starting metrics server", "port", *metricsPort)
 		if listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *metricsPort)); err != nil {
 			errChan <- fmt.Errorf("failed to listen on port %d: %w", *metricsPort, err)
 		} else {

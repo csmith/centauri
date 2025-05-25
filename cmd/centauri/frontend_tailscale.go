@@ -7,7 +7,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
@@ -39,13 +39,13 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	ctx.rewriter.AddDecorator(&tailscaleHeaderDecorator{localClient: lc})
 
 	if *tailscaleMode == "http" {
-		log.Printf("Starting tailscale server on http://%s/", *tailscaleHostname)
+		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "http")
 
 		if err := t.startHttpServer(ctx, ctx.createProxy()); err != nil {
 			return err
 		}
 	} else if *tailscaleMode == "https" {
-		log.Printf("Starting tailscale server on https://%s/", *tailscaleHostname)
+		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "https")
 
 		if err := t.startHttpServer(ctx, ctx.createRedirector()); err != nil {
 			return err
@@ -104,7 +104,7 @@ type tailscaleHeaderDecorator struct {
 func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {
 	res, err := t.localClient.WhoIs(req.Context(), req.RemoteAddr)
 	if err != nil {
-		log.Printf("Unable to get tailscale client info: %v", err)
+		slog.Warn("Unable to get tailscale client info; not passing headers to upstream", "error", err)
 		return
 	}
 

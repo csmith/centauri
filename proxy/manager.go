@@ -3,7 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 )
@@ -76,14 +76,14 @@ func (m *Manager) loadCertificate(route *Route) {
 	if err == nil {
 		route.certificate = cert
 		if needsRenewal {
-			log.Printf("Existing certificate found for %#v but it expires soon", route.Domains)
+			slog.Debug("Existing certificate found but it expires soon", "route", route.Domains[0])
 			route.certificateStatus = CertificateExpiringSoon
 		} else {
-			log.Printf("Existing certificate found for %#v", route.Domains)
+			slog.Debug("Existing certificate found", "route", route.Domains[0])
 			route.certificateStatus = CertificateGood
 		}
 	} else {
-		log.Printf("No existing certificate found for %#v, route will not be served until cert is obtained", route.Domains)
+		slog.Info("No existing certificate found, route will not be served until cert is obtained", "route", route.Domains[0])
 		route.certificate = nil
 		route.certificateStatus = CertificateMissing
 	}
@@ -148,7 +148,7 @@ func (m *Manager) CheckCertificates() {
 func (m *Manager) updateCert(route *Route) {
 	cert, err := m.provider.GetCertificate(route.Provider, route.Domains[0], route.Domains[1:])
 	if err != nil {
-		log.Printf("Failed to update certificate for %#v: %v", route.Domains, err)
+		slog.Error("Failed to update certificate", "route", route.Domains[0], "error", err)
 		m.loadCertificate(route)
 		return
 	}

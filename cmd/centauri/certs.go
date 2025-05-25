@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/csmith/legotapas"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/lego"
-	"github.com/go-acme/lego/v4/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -40,7 +40,7 @@ func certProvider() (proxy.CertificateProvider, error) {
 	var suppliers = make(map[string]certificate.Supplier)
 
 	if legoSupplier, err := createLegoSupplier(); err != nil {
-		log.Printf("WARNING: Unable to create lego certificate supplier: %v", err)
+		slog.Warn("WARNING: Unable to create lego certificate supplier", "error", err)
 	} else {
 		suppliers["lego"] = legoSupplier
 	}
