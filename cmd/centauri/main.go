@@ -16,7 +16,7 @@ import (
 
 	"github.com/csmith/centauri/config"
 	"github.com/csmith/centauri/proxy"
-	"github.com/csmith/envflag"
+	"github.com/csmith/envflag/v2"
 )
 
 var (

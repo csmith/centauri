@@ -5,7 +5,7 @@ go 1.24.2
 toolchain go1.24.3
 
 require (
-	github.com/csmith/envflag v1.0.0
+	github.com/csmith/envflag/v2 v2.0.0
 	github.com/csmith/legotapas v1.7.0
 	github.com/csmith/slogflags v1.1.0
 	github.com/go-acme/lego/v4 v4.23.1
