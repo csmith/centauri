@@ -2,7 +2,8 @@ FROM golang:1.24.3 AS build
 WORKDIR /go/src/app
 COPY . .
 
-RUN set -eux; \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    set -eux; \
     CGO_ENABLED=0 GO111MODULE=on go install ./cmd/centauri; \
     go run github.com/google/go-licenses@latest save ./... --save_path=/notices; \
     mkdir -p /mounts/data /mounts/home/nonroot/.config;
