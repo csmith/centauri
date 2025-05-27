@@ -26,6 +26,9 @@ services:
     environment:
       CONFIG: /centauri.conf
       CERTIFICATE_PROVIDERS: selfsigned
+      DEBUG_CPU_PROFILE: ${CENTAURI_PPROF_FILE}
+    volumes:
+      - .:/host
     configs:
       - centauri.conf
 

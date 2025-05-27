@@ -93,6 +93,9 @@ options are available:
   `DEBUG`, `INFO`, `WARN`, `ERROR`. Default: `INFO`
 - `LOG_FORMAT` - the format logs should be output in. One of `TEXT`, `JSON`.
   Default: `TEXT`
+- `DEBUG_CPU_PROFILE` - if set, Centauri will write a CPU profile to the
+  given file. This may impact performance, and shouldn't be used on production
+  deployments.
 
 For the TCP frontend, the following options are used:
 

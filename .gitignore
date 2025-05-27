@@ -1,5 +1,6 @@
 /.idea
 /centauri.conf
 /*.pem
+*.pprof
 user.pem
 certs.json

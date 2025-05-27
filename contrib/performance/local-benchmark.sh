@@ -2,6 +2,16 @@
 
 set -e
 
+# Parse arguments
+PPROF_FILE=""
+if [[ "$1" == "--pprof" ]]; then
+    PPROF_FILE="centauri-$(date +%Y%m%d-%H%M%S).pprof"
+    touch "$PPROF_FILE"
+    chmod 666 "$PPROF_FILE"
+    export CENTAURI_PPROF_FILE="/host/$PPROF_FILE"
+    echo "Created pprof file: $PPROF_FILE"
+fi
+
 echo "Building centauri-local container..."
 docker compose build centauri-local
 
@@ -17,6 +27,10 @@ bombardier_output=$(bombardier -p r -o json -k https://localhost:9992/10kb)
 echo "Stopping containers..."
 docker compose down
 
+if [[ -n "$PPROF_FILE" ]]; then
+    chmod 600 "$PPROF_FILE"
+fi
+
 echo ""
 echo "=== BENCHMARK RESULTS ==="
 echo ""
@@ -31,3 +45,9 @@ echo "$bombardier_output" | jq -r '
 
 echo ""
 echo "========================="
+
+if [[ -n "$PPROF_FILE" ]]; then
+    echo ""
+    echo "CPU profile saved to: $PPROF_FILE"
+    echo "Analyze with: go tool pprof $PPROF_FILE"
+fi

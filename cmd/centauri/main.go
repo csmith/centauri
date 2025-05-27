@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -23,6 +24,7 @@ var (
 	configPath       = flag.String("config", "centauri.conf", "Path to config")
 	selectedFrontend = flag.String("frontend", "tcp", "Frontend to listen on")
 	metricsPort      = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
+	debugCpuProfile  = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
 )
 
 var proxyManager *proxy.Manager
@@ -40,6 +42,20 @@ func main() {
 func run(args []string, signalChan <-chan os.Signal) error {
 	envflag.Parse(envflag.WithArguments(args))
 	initLogging()
+
+	if *debugCpuProfile != "" {
+		slog.Warn("Running with CPU profiling. This will heavily impact performance.", "target", *debugCpuProfile)
+		cpuFile, err := os.Create(*debugCpuProfile)
+		if err != nil {
+			return fmt.Errorf("could not create file for cpu profiling: %w", err)
+		}
+		defer cpuFile.Close()
+
+		if err := pprof.StartCPUProfile(cpuFile); err != nil {
+			return fmt.Errorf("could not start CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {

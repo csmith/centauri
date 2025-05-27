@@ -20,6 +20,8 @@
   (using the `LOG_FORMAT` setting). The default log level is `INFO`; a
   lot of the more spammy day-to-day log lines are now `DEBUG` and hidden by
   default.
+- Added `DEBUG_CPU_PROFILE` setting, which will write out a CPU profile
+  to the given file. Shouldn't be used in production deployments!
 
 ## 1.2.0 - 2025-05-03
 
