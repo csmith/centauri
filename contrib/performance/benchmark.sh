@@ -21,25 +21,19 @@ for proxy in "${!PROXIES[@]}"; do
     version="${PROXIES[$proxy]}"
     echo "Testing $proxy:$version..."
 
-    case $proxy in
-        static-web-server) export STATIC_WEB_SERVER_VERSION="$version" ;;
-        centauri) export CENTAURI_VERSION="$version" ;;
-        haproxy) export HAPROXY_VERSION="$version" ;;
-        caddy) export CADDY_VERSION="$version" ;;
-        nginx) export NGINX_VERSION="$version" ;;
-        apache) export APACHE_VERSION="$version" ;;
-    esac
+    var_name="${proxy//-/_}"
+    export "${var_name^^}_VERSION"="$version"
 
     if [ "$proxy" = "static-web-server" ]; then
         docker compose up -d static-web-server
         echo "Waiting for services to start..."
-        sleep 10
+        sleep 2 
         echo "Running bombardier test for $proxy..."
         bombardier_output=$(bombardier -p r -o json http://localhost:9991/10kb)
     else
         docker compose up -d static-web-server "$proxy"
         echo "Waiting for services to start..."
-        sleep 10
+        sleep 2 
         echo "Running bombardier test for $proxy..."
         bombardier_output=$(bombardier -p r -o json -k https://localhost:9992/10kb)
     fi
