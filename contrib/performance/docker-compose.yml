@@ -19,6 +19,16 @@ services:
     configs:
       - centauri.conf
 
+  centauri-local:
+    build: ../..
+    ports:
+      - "9992:8443"
+    environment:
+      CONFIG: /centauri.conf
+      CERTIFICATE_PROVIDERS: selfsigned
+    configs:
+      - centauri.conf
+
   haproxy:
     image: haproxy:${HAPROXY_VERSION:-latest}
     ports:
