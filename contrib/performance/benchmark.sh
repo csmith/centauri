@@ -8,7 +8,7 @@ PROXIES[centauri]="1.2.0"
 PROXIES[haproxy]="3.1.7"
 PROXIES[caddy]="2.10.0"
 PROXIES[nginx]="1.28.0"
-PROXIES[httpd]="2.4.63"
+PROXIES[apache]="2.4.63"
 
 RESULTS_FILE="benchmark_results.json"
 README_FILE="README.md"
@@ -27,7 +27,7 @@ for proxy in "${!PROXIES[@]}"; do
         haproxy) export HAPROXY_VERSION="$version" ;;
         caddy) export CADDY_VERSION="$version" ;;
         nginx) export NGINX_VERSION="$version" ;;
-        httpd) export HTTPD_VERSION="$version" ;;
+        apache) export APACHE_VERSION="$version" ;;
     esac
 
     if [ "$proxy" = "static-web-server" ]; then

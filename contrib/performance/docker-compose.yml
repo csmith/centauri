@@ -50,15 +50,15 @@ services:
       - source: nginx.conf
         target: /etc/nginx/nginx.conf
 
-  httpd:
-    image: httpd:${HTTPD_VERSION:-latest}
+  apache:
+    image: httpd:${APACHE_VERSION:-latest}
     ports:
       - "9992:443"
     volumes:
       - ./localhost.crt:/certs/localhost.crt:ro
       - ./localhost.key:/certs/localhost.key:ro
     configs:
-      - source: httpd.conf
+      - source: apache.conf
         target: /usr/local/apache2/conf/httpd.conf
 
 configs:
@@ -117,7 +117,7 @@ configs:
           }
       }
 
-  httpd.conf:
+  apache.conf:
     content: |
       LoadModule mpm_event_module modules/mod_mpm_event.so
       LoadModule ssl_module modules/mod_ssl.so
