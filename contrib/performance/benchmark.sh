@@ -8,6 +8,7 @@ PROXIES[centauri]="1.2.0"
 PROXIES[haproxy]="3.1.7"
 PROXIES[caddy]="2.10.0"
 PROXIES[nginx]="1.28.0"
+PROXIES[httpd]="2.4.63"
 
 RESULTS_FILE="benchmark_results.json"
 README_FILE="README.md"
@@ -19,15 +20,16 @@ echo "Starting benchmark tests..."
 for proxy in "${!PROXIES[@]}"; do
     version="${PROXIES[$proxy]}"
     echo "Testing $proxy:$version..."
-    
+
     case $proxy in
         static-web-server) export STATIC_WEB_SERVER_VERSION="$version" ;;
         centauri) export CENTAURI_VERSION="$version" ;;
         haproxy) export HAPROXY_VERSION="$version" ;;
         caddy) export CADDY_VERSION="$version" ;;
         nginx) export NGINX_VERSION="$version" ;;
+        httpd) export HTTPD_VERSION="$version" ;;
     esac
-    
+
     if [ "$proxy" = "static-web-server" ]; then
         docker compose up -d static-web-server
         echo "Waiting for services to start..."
@@ -41,13 +43,13 @@ for proxy in "${!PROXIES[@]}"; do
         echo "Running bombardier test for $proxy..."
         bombardier_output=$(bombardier -p r -o json -k https://localhost:9992/10kb)
     fi
-    
+
     result=$(echo "$bombardier_output" | jq --arg proxy "$proxy" --arg version "$version" '. + {proxy: $proxy, version: $version}')
-    
+
     jq --argjson new_result "$result" '. += [$new_result]' "$RESULTS_FILE" > tmp.json && mv tmp.json "$RESULTS_FILE"
-    
+
     docker compose down
-    
+
     echo "Completed test for $proxy:$version"
 done
 

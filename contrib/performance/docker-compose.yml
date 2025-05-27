@@ -50,6 +50,17 @@ services:
       - source: nginx.conf
         target: /etc/nginx/nginx.conf
 
+  httpd:
+    image: httpd:${HTTPD_VERSION:-latest}
+    ports:
+      - "9992:443"
+    volumes:
+      - ./localhost.crt:/certs/localhost.crt:ro
+      - ./localhost.key:/certs/localhost.key:ro
+    configs:
+      - source: httpd.conf
+        target: /usr/local/apache2/conf/httpd.conf
+
 configs:
   centauri.conf:
     content: |
@@ -86,11 +97,11 @@ configs:
   nginx.conf:
     content: |
       worker_processes auto;
-      
+
       events {
           worker_connections  1024;
       }
-      
+
       http {
           upstream sws {
               server static-web-server:80;
@@ -105,3 +116,20 @@ configs:
               }
           }
       }
+
+  httpd.conf:
+    content: |
+      LoadModule mpm_event_module modules/mod_mpm_event.so
+      LoadModule ssl_module modules/mod_ssl.so
+      LoadModule proxy_module modules/mod_proxy.so
+      LoadModule proxy_http_module modules/mod_proxy_http.so
+      LoadModule unixd_module modules/mod_unixd.so
+      LoadModule authz_core_module modules/mod_authz_core.so
+      Listen 443
+      <VirtualHost *:443>
+              SSLEngine on
+              SSLCertificateFile /certs/localhost.crt
+              SSLCertificateKeyFile /certs/localhost.key
+              ProxyPass / http://static-web-server:80/
+              ProxyPassReverse / http://static-web-server:80/
+      </VirtualHost>
