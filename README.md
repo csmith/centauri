@@ -1,6 +1,6 @@
 # Centauri
 
-Centauri is a TLS-terminating reverse-HTTP proxy written in Go.
+Centauri is a TLS-terminating reverse HTTP proxy written in Go.
 
 ## Current status
 

@@ -1,0 +1,38 @@
+site_name: Centauri
+repo_url: https://github.com/csmith/centauri
+repo_name: csmith/centauri
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+      primary: deep purple
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+      primary: deep purple
+  features:
+    - navigation.sections
+
+nav:
+  - About: index.md
+  - Setup and Configuration: setup.md
+  - Routes: routes.md
+  - Examples: examples.md
+  - FAQ: faq.md
+  - Advanced features:
+    - Metrics: metrics.md
+    - Wildcard domains: wildcards.md
+    - Build tags: buildtags.md
+
+markdown_extensions:
+  - admonition
