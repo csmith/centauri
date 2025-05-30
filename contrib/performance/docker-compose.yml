@@ -74,6 +74,19 @@ services:
       - source: apache.conf
         target: /usr/local/apache2/conf/httpd.conf
 
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-latest}
+    ports:
+      - "9992:443"
+    volumes:
+      - ./localhost.crt:/certs/localhost.crt:ro
+      - ./localhost.key:/certs/localhost.key:ro
+    configs:
+      - source: traefik.yml
+        target: /etc/traefik/traefik.yml
+      - source: traefik-dynamic.yml
+        target: /etc/traefik/dynamic.yml
+
 configs:
   centauri.conf:
     content: |
@@ -146,3 +159,34 @@ configs:
               ProxyPass / http://static-web-server:80/
               ProxyPassReverse / http://static-web-server:80/
       </VirtualHost>
+
+  traefik.yml:
+    content: |
+      api:
+        dashboard: false
+      providers:
+        file:
+          filename: /etc/traefik/dynamic.yml
+      entryPoints:
+        web-secure:
+          address: ":443"
+
+  traefik-dynamic.yml:
+    content: |
+      tls:    
+        certificates:
+          - certFile: /certs/localhost.crt
+            keyFile: /certs/localhost.key
+      http:
+        routers:
+          localhost:
+            rule: "Host(`localhost`)"
+            tls: true
+            service: static-web-service
+            entryPoints:
+              - web-secure
+        services:
+          static-web-service:
+            loadBalancer:
+              servers:
+                - url: "http://static-web-server:80"

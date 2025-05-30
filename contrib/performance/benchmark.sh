@@ -9,6 +9,7 @@ PROXIES[haproxy]="3.1.7"
 PROXIES[caddy]="2.10.0"
 PROXIES[nginx]="1.28.0"
 PROXIES[apache]="2.4.63"
+PROXIES[traefik]="3.4.1"
 
 RESULTS_FILE="benchmark_results.json"
 README_FILE="README.md"
