@@ -16,24 +16,69 @@ Centauri stores certificates, ACME client details, and tailscale network
 details on disk. These need to be persisted across runs (e.g. by mounting a
 volume into the Docker container).
 
-You can configure the location for certificates using the
-[`CERTIFICATES_STORE`](#certificate_store)
-setting, and for ACME details with the
-[`USER_DATA`](#user_data) setting.
+You can configure the individual paths to these files using the settings:
+    - [`CERTIFICATES_STORE`](#certificate_store),
+    - [`USER_DATA`](#user_data), and
+    - [`TAILSCALE_DIR`](#tailscale_dir)
 
-Tailscale will store its data under `/home/nonroot/.config` unless configured
-otherwise with [`TAILSCALE_DIR`](#tailscale_dir).
+When using Docker, these default to paths under `/data/`, so you can simply
+mount a volume there to persist all of Centauri's data.
+
+## Simple example using docker-compose
+
+Here's a minimal example that runs Centauri with a single service behind it.
+[More detailed examples are available](examples.md).
+
+```yaml
+services:
+  centauri:
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - "data:/data"
+    configs:
+      - "centauri.conf"
+    environment:
+      ACME_EMAIL: "you@example.com"
+
+      # Centauri uses DNS challenges to prove domain ownership. See the Lego docs for all available
+      # providers and their configuration: https://go-acme.github.io/lego/dns/
+      DNS_PROVIDER: "httpreq"
+      HTTPREQ_ENDPOINT: "https://api.mydnsprovider.example.com/httpreq"
+      HTTPREQ_USERNAME: "dns@example.com"
+      HTTPREQ_PASSWORD: "myp@ssw0rd"
+
+  # A container that will be proxied by Centauri. As the containers are on the same network (docker
+  # compose creates a "default" network) we can refer to this container just as "mycontainer" in the
+  # Centauri config.
+  mycontainer:
+    image: "nginx"
+    restart: "always"
+
+  volumes:
+    data:
+
+  configs:
+    centauri.conf:
+      contents: |
+        route subdomain.example.com
+          upstream mycontainer:80
+```
 
 ## General configuration options
 
 ### `CONFIG`
 
-- **Default**: `centauri.conf`
+- **Default (CLI)**: `centauri.conf`
+- **Default (Docker)**: `/centauri.conf`
 
 The path to read the [route configuration](routes.md) from.
 
-The default value is relative to the current working directory, which is
-`/home/nonroot` when using the docker image.
+If the value is not absolute, it is treated as relative to the current working
+directory.
 
 ### `FRONTEND`
 
@@ -48,7 +93,8 @@ Each frontend has several additional options:
 
 ### `CERTIFICATE_STORE`
 
-- **Default**: `certs.json`
+- **Default (CLI)**: `certs.json`
+- **Default (Docker)**: `/data/certs.json`
 
 The location that Centauri should save the certificates it obtains or
 generates.
@@ -56,8 +102,8 @@ generates.
 This should be persisted across runs of Centauri (i.e., within a docker
 volume, or otherwise mounted in.)
 
-The default value is relative to the current working directory, which is
-`/home/nonroot` when using the docker image.
+If the value is not absolute, it is treated as relative to the current working
+directory.
 
 ### `CERTIFICATE_PROVIDERS`
 
@@ -171,14 +217,14 @@ certificates as normal and accept HTTPS traffic over tailscale.
 
 ### `TAILSCALE_DIR`
 
-- **Default**: -
+- **Default (CLI)**: -
+- **Default (Docker)**: `/data/tailscale`
 
 The directory to store Tailscale's state in. This is required to reconnect
 to the tailnet when Centauri is restarted (unless you provide a reusable
 [key](#tailscale_key)).
 
 If not specified, Tailscale will create a dir under the user config directory.
-In the docker image this will be under `/home/nonroot/.config`.
 
 ## Lego options
 
@@ -186,15 +232,16 @@ For the lego certificate provider, the following options are used:
 
 ### `USER_DATA`
 
-- **Default**: `user.pem`
+- **Default (CLI)**: `user.pem`
+- **Default (Docker)**: `/data/user.pem`
 
 Path to the file to store ACME user data.
 
 This should be persisted across runs of Centauri (i.e., within a docker
 volume, or otherwise mounted in.)
 
-The default value is relative to the current working directory, which is
-`/home/nonroot` when using the docker image.
+If the value is not absolute, it is treated as relative to the current working
+directory.
 
 ### `DNS_PROVIDER`
 

@@ -4,6 +4,15 @@
 
 ### Breaking changes
 
+- The default paths used within the Docker image have changed:
+    - Centauri's config is now loaded from `/centauri.conf`
+      (previously: `/home/nonroot/centauri.conf`)
+    - ACME user data is stored in `/data/user.pem`
+      (previously: `/home/nonroot/user.pem`)
+    - Certificates are stored in `/data/certs.json`
+      (previously: `/home/nonroot/certs.json`)
+    - Tailscale state is now stored in `/data/tailscale/`
+      (previously: `/home/nonroot/.config/tsnet___centauri/`)
 - Centauri will no longer accept configurations that:
     - define a route with no upstreams, or
     - define a route with no domains.

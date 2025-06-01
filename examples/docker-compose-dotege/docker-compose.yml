@@ -13,8 +13,6 @@ services:
       - "centauri"
     environment:
       CONFIG: "/config/centauri.conf"
-      USER_DATA: "/data/user.json"
-      CERTIFICATE_STORE: "/data/certs.json"
       ACME_EMAIL: "you@example.com"
 
       # Centauri uses DNS challenges to prove domain ownership. See the Lego docs for all available

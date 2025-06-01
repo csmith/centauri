@@ -43,8 +43,3 @@ the request to the upstream service, via the following headers:
 - `Tailscale-User-Login`
 - `Tailscale-User-Name`
 - `Tailscale-User-Profile-Pic`
-
-If running in Docker, you will need to persist the state
-directory (`/home/nonroot/.config` by default, configurable
-with `TAILSCALE_DIR`) or the Tailscale client will lose
-its authorisation whenever the container restarts.

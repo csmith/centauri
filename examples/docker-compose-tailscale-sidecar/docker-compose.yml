@@ -22,14 +22,11 @@ services:
     configs:
       - "centauri.conf"
     environment:
-      CONFIG: "/centauri.conf"
       # Configure Centauri to use Tailscale instead of listening on TCP ports
       FRONTEND: "tailscale"
       # The hostname Centauri will use on the Tailscale network. This will be the address used to
       # access the service, if you use MagicDNS.
       TAILSCALE_HOSTNAME: "tshost"
-      # Store tailscale state information in /data
-      TAILSCALE_DIR: "/data"
 
 configs:
   centauri.conf:
