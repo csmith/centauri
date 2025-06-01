@@ -17,6 +17,7 @@ var (
 	tailscaleHostname = flag.String("tailscale-hostname", "centauri", "Hostname to use for the tailscale frontend")
 	tailscaleKey      = flag.String("tailscale-key", "", "Auth key to use when connecting to tailscale")
 	tailscaleMode     = flag.String("tailscale-mode", "http", "Whether to serve plain http on tailscale networks, or https with a redirect from http")
+	tailscaleDir      = flag.String("tailscale-dir", "", "Directory to use to persist tailscale state")
 )
 
 type tailscaleFrontend struct {
@@ -30,6 +31,7 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
 		Logf:     func(format string, args ...any) {},
+		Dir:      *tailscaleDir,
 	}
 
 	lc, err := t.tailscale.LocalClient()

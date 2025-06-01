@@ -3,7 +3,7 @@ services:
     image: "ghcr.io/csmith/centauri"
     restart: "always"
     volumes:
-      - "./ts-data:/home/nonroot/.config"
+      - "./ts-data:/data"
       - "./centauri.conf:/centauri.conf"
     environment:
       # Tell Centauri where to read its config file. This is the default value,
@@ -13,8 +13,9 @@ services:
       FRONTEND: "tailscale"
       # The hostname Centauri will use on the Tailscale network (i.e., what shows up in your dashboard).
       TAILSCALE_HOSTNAME: "centauri"
-      # The key to use to authenticate to Tailscale for the first time. Session data will be saved under
-      # /home/nonroot/.config/ once successfully connected to the tailnet.
+      # Session data will be saved under /data once successfully connected to the tailnet.
+      TAILSCALE_DIR: "/data"
+      # The key to use to authenticate to Tailscale for the first time.
       TAILSCALE_KEY: "abc1234"
       # As Tailscale provides an encrypted tunnel, we can safely serve content over plain HTTP instead of
       # requiring HTTPS. This also means we don't have to worry about generating certificates.

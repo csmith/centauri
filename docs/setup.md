@@ -21,7 +21,8 @@ You can configure the location for certificates using the
 setting, and for ACME details with the
 [`USER_DATA`](#user_data) setting.
 
-Tailscale will store its data under `/home/nonroot/.config`.
+Tailscale will store its data under `/home/nonroot/.config` unless configured
+otherwise with [`TAILSCALE_DIR`](#tailscale_dir).
 
 ## General configuration options
 
@@ -167,6 +168,17 @@ How to serve traffic on Tailscale. By default, traffic will be served
 over plain HTTP with no certificates (as the connection over Tailscale
 will be encrypted anyway). If set to `https`, Centauri will obtain
 certificates as normal and accept HTTPS traffic over tailscale.
+
+### `TAILSCALE_DIR`
+
+- **Default**: -
+
+The directory to store Tailscale's state in. This is required to reconnect
+to the tailnet when Centauri is restarted (unless you provide a reusable
+[key](#tailscale_key)).
+
+If not specified, Tailscale will create a dir under the user config directory.
+In the docker image this will be under `/home/nonroot/.config`.
 
 ## Lego options
 

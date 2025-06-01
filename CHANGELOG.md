@@ -8,6 +8,17 @@
     - define a route with no upstreams, or
     - define a route with no domains.
 
+### Features
+
+- Added `TAILSCALE_DIR` setting to specify where Tailscale stores its
+  state. If not set, uses the previous behaviour of a folder underneath
+  the user config directory.
+- Centauri now uses structured logging. This allows you to filter logs by
+  level (using the `LOG_LEVEL` setting), change the output format to JSON
+  (using the `LOG_FORMAT` setting). The default log level is `INFO`; a
+  lot of the more spammy day-to-day log lines are now `DEBUG` and hidden by
+  default.
+
 ### Other changes
 
 - The `FRONTEND` setting is now case-insensitive.
@@ -15,11 +26,6 @@
   client from querying DNS servers to make sure the challenge records
   have propagated. This shouldn't be needed in normal use, but is handy
   for testing.
-- Centauri now uses structured logging. This allows you to filter logs by
-  level (using the `LOG_LEVEL` setting), change the output format to JSON
-  (using the `LOG_FORMAT` setting). The default log level is `INFO`; a
-  lot of the more spammy day-to-day log lines are now `DEBUG` and hidden by
-  default.
 - Added `DEBUG_CPU_PROFILE` setting, which will write out a CPU profile
   to the given file. Shouldn't be used in production deployments!
 
