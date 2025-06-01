@@ -27,4 +27,4 @@ jobs:
           pre_command: "go run github.com/google/go-licenses@latest save ./... --save_path=notices"
           extra_files: LICENCE LICENCE.stdlib notices README.md
           md5sum: "false"
-          sha256sum: "true""
+          sha256sum: "true"
