@@ -16,6 +16,9 @@ import (
 
 const (
 	shutdownTimeout = time.Second * 5
+	readTimeout     = time.Second * 60
+	writeTimeout    = time.Second * 60
+	idleTimeout     = time.Second * 60 * 5
 )
 
 type frontend interface {
@@ -80,7 +83,12 @@ type server struct {
 // newServer creates a new server with the provided handler and error channel.
 func newServer(handler http.Handler, errChan chan<- error) *server {
 	return &server{
-		srv:     &http.Server{Handler: handler},
+		srv: &http.Server{
+			Handler:      handler,
+			ReadTimeout:  readTimeout,
+			WriteTimeout: writeTimeout,
+			IdleTimeout:  idleTimeout,
+		},
 		errChan: errChan,
 	}
 }

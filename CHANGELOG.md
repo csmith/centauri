@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Other changes
+
+- Centauri now enforces read, write and idle timeouts on incoming HTTP
+  connections. This reduces the potential effect of badly configured or
+  deliberately malicious clients.
+
 ## 2.0.0 - 2025-06-01
 
 ### Breaking changes
