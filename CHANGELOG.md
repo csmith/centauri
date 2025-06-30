@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Bug fixes
+
+- Fixed a rare issue when Centauri reloads its config several times in quick
+  succession while also renewing certificates. In these circumstances, Centauri
+  could stop answering requests until the certificate finished being renewed.
+
 ### Other changes
 
 - Centauri now enforces read, write and idle timeouts on incoming HTTP

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -18,8 +19,7 @@ type CertificateProvider interface {
 // certificates for those routes.
 type Manager struct {
 	provider CertificateProvider
-	routes   []*Route
-	domains  map[string]*Route
+	routes   routeMap
 	fallback *Route
 	lock     *sync.RWMutex
 }
@@ -30,7 +30,6 @@ type Manager struct {
 func NewManager(provider CertificateProvider) *Manager {
 	return &Manager{
 		provider: provider,
-		domains:  make(map[string]*Route),
 		lock:     &sync.RWMutex{},
 	}
 }
@@ -40,26 +39,15 @@ func NewManager(provider CertificateProvider) *Manager {
 //
 // If a fallback is specified, then that route will be used for any requests that don't otherwise a route.
 func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
-	newDomains := make(map[string]*Route)
-
 	for i := range newRoutes {
-		route := newRoutes[i]
-
-		for j := range route.Domains {
-			if !isDomainName(route.Domains[j]) {
-				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
-			}
-
-			newDomains[strings.ToLower(route.Domains[j])] = route
-			m.loadCertificate(route)
-		}
+		m.loadCertificate(newRoutes[i])
 	}
 
-	m.lock.Lock()
-	m.domains = newDomains
-	m.routes = newRoutes
+	if err := m.routes.Update(newRoutes); err != nil {
+		return err
+	}
+
 	m.fallback = fallback
-	m.lock.Unlock()
 	go m.CheckCertificates()
 	return nil
 }
@@ -119,21 +107,18 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 // routeFor looks up a route to be used for the given domain. If there is no direct match and a fallback
 // route is defined, that will be returned.
 func (m *Manager) routeFor(domain string) *Route {
-	m.lock.RLock()
-	match := m.domains[strings.ToLower(domain)]
-	m.lock.RUnlock()
-	if match == nil {
-		return m.fallback
+	if match := m.routes.Get(domain); match != nil {
+		return match
 	}
-	return match
+	return m.fallback
 }
 
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
 func (m *Manager) CheckCertificates() {
-	m.lock.RLock()
-	for i := range m.routes {
-		route := m.routes[i]
+	routes := m.routes.Routes()
+	for i := range routes {
+		route := routes[i]
 
 		if m.provider == nil {
 			route.certificateStatus = CertificateNotRequired
@@ -141,7 +126,6 @@ func (m *Manager) CheckCertificates() {
 			m.updateCert(route)
 		}
 	}
-	m.lock.RUnlock()
 }
 
 // updateCert updates the certificate for the given route.
@@ -155,4 +139,49 @@ func (m *Manager) updateCert(route *Route) {
 
 	route.certificate = cert
 	route.certificateStatus = CertificateGood
+}
+
+// routeMap maintains a map of domain names to routes, using copy-on-write
+// semantics.
+type routeMap struct {
+	domains atomic.Pointer[map[string]*Route]
+	routes  atomic.Pointer[[]*Route]
+}
+
+// Update replaces all known routes with the ones provided.
+func (r *routeMap) Update(routes []*Route) error {
+	newDomains := make(map[string]*Route)
+	newRoutes := make([]*Route, len(routes))
+	copy(newRoutes, routes)
+
+	for i := range routes {
+		route := routes[i]
+		for j := range route.Domains {
+			if !isDomainName(route.Domains[j]) {
+				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
+			}
+
+			newDomains[strings.ToLower(route.Domains[j])] = route
+		}
+	}
+
+	r.domains.Store(&newDomains)
+	r.routes.Store(&newRoutes)
+	return nil
+}
+
+// Get retrieves the route for the given domain, or nil if no such route exists.
+func (r *routeMap) Get(domain string) *Route {
+	if m := r.domains.Load(); m != nil {
+		return (*m)[strings.ToLower(domain)]
+	}
+	return nil
+}
+
+// Routes returns a snapshot of all registered routes.
+func (r *routeMap) Routes() []*Route {
+	if m := r.routes.Load(); m != nil {
+		return *m
+	}
+	return nil
 }
