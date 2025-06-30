@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.1 - 2025-06-30
 
 ### Bug fixes
 
@@ -15,6 +15,12 @@
   deliberately malicious clients.
 - Centauri now logs when it finishes obtaining a certificate or OCSP
   staple. Previously it just logged when starting the process.
+- If Centauri is sent a SIGHUP signal while it is in the process of (re)loading
+  its config, it will queue up another reload instead of executing them
+  concurrently. Any further HUPs will be ignored until the queued reload
+  executes. This may cause a slight delay in how quickly route changes are
+  applied (if, for example, the first config reload requires new certificates
+  to be obtained), but drastically increases stability.
 
 ## 2.0.0 - 2025-06-01
 

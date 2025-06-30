@@ -57,6 +57,10 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		defer pprof.StopCPUProfile()
 	}
 
+	updateChan := make(chan struct{}, 1)
+	stopUpdateChan := make(chan struct{}, 1)
+	errChan := make(chan error)
+
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {
 		return fmt.Errorf("invalid frontend specified: %v", err)
@@ -75,12 +79,12 @@ func run(args []string, signalChan <-chan os.Signal) error {
 
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager)
-	if err := updateRoutes(); err != nil {
-		return fmt.Errorf("failed to load initial configuration: %v", err)
-	}
+
+	go updateRoutes(updateChan, stopUpdateChan, errChan)
+	scheduleUpdate(updateChan)
+
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
-	errChan := make(chan error)
 	if err := f.Serve(&frontendContext{
 		manager:  proxyManager,
 		rewriter: rewriter,
@@ -101,19 +105,30 @@ func run(args []string, signalChan <-chan os.Signal) error {
 			switch sig {
 			case syscall.SIGHUP:
 				slog.Info("Received signal, updating routes...", "signal", sig)
-				if err := updateRoutes(); err != nil {
-					return fmt.Errorf("error updating routes: %v", err)
-				}
+				scheduleUpdate(updateChan)
 			case syscall.SIGINT, syscall.SIGTERM:
 				slog.Info("Received signal, stopping frontend...", "signal", sig)
 				metricsChan <- struct{}{}
+				stopUpdateChan <- struct{}{}
 				f.Stop(context.Background())
 				slog.Info("Frontend stopped. Goodbye!")
 				return nil
 			}
 		case err := <-errChan:
+			if f != nil {
+				f.Stop(context.Background())
+			}
 			return err
 		}
+	}
+}
+
+func scheduleUpdate(updateChan chan<- struct{}) {
+	select {
+	case updateChan <- struct{}{}:
+		slog.Info("Scheduled config update")
+	default:
+		slog.Info("A config update was already scheduled; ignoring...")
 	}
 }
 
@@ -138,27 +153,42 @@ func monitorCerts() {
 	}()
 }
 
-func updateRoutes() error {
-	slog.Debug("Reading config file", "path", *configPath)
+func updateRoutes(
+	updateChan <-chan struct{},
+	StopChan <-chan struct{},
+	errorChan chan<- error,
+) {
+	for {
+		select {
+		case <-StopChan:
+			return
+		case <-updateChan:
+			(func() {
+				slog.Debug("Reading config file", "path", *configPath)
 
-	configFile, err := os.Open(*configPath)
-	if err != nil {
-		return fmt.Errorf("failed to open config file: %w", err)
+				configFile, err := os.Open(*configPath)
+				if err != nil {
+					errorChan <- fmt.Errorf("failed to open config file: %w", err)
+					return
+				}
+				defer configFile.Close()
+
+				routes, fallback, err := config.Parse(configFile)
+				if err != nil {
+					errorChan <- fmt.Errorf("failed to parse config file: %w", err)
+					return
+				}
+
+				slog.Debug("Installing routes", "count", len(routes))
+				if err := proxyManager.SetRoutes(routes, fallback); err != nil {
+					errorChan <- fmt.Errorf("route manager error: %w", err)
+					return
+				}
+
+				slog.Debug("Finished installing routes", "count", len(routes))
+			})()
+		}
 	}
-	defer configFile.Close()
-
-	routes, fallback, err := config.Parse(configFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	slog.Debug("Installing routes", "count", len(routes))
-	if err := proxyManager.SetRoutes(routes, fallback); err != nil {
-		return fmt.Errorf("route manager error: %w", err)
-	}
-
-	slog.Debug("Finished installing routes", "count", len(routes))
-	return nil
 }
 
 func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errChan chan<- error) {
