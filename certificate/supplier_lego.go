@@ -175,6 +175,7 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 	if err != nil {
 		return nil, err
 	}
+	slog.Info("Successfully obtained certificate from ACME provider", "domain", subject, "altNames", altNames)
 
 	pem, err := certcrypto.ParsePEMCertificate(res.Certificate)
 	if err != nil {
@@ -191,9 +192,11 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 	}
 
 	if shouldStaple {
+		slog.Info("Updating OCSP staple for new certificate", "domain", subject, "altNames", altNames)
 		if err = s.UpdateStaple(details); err != nil {
 			return nil, fmt.Errorf("unable to get OCSP staple for certificate: %w", err)
 		}
+		slog.Info("Successfully updated OCSP staple for certificate", "domain", subject, "altNames", altNames)
 	}
 
 	return details, nil
@@ -213,6 +216,7 @@ func (s *LegoSupplier) UpdateStaple(cert *Details) error {
 
 	cert.OcspResponse = b
 	cert.NextOcspUpdate = response.NextUpdate
+	slog.Info("Successfully updated OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
 	return nil
 }
 

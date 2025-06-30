@@ -7,6 +7,8 @@
 - Centauri now enforces read, write and idle timeouts on incoming HTTP
   connections. This reduces the potential effect of badly configured or
   deliberately malicious clients.
+- Centauri now logs when it finishes obtaining a certificate or OCSP
+  staple. Previously it just logged when starting the process.
 
 ## 2.0.0 - 2025-06-01
 
