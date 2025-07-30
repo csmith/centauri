@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Added `-validate` flag (or `VALIDATE` env var) that simply validates
+  the config file and then exits.
+
 ## 2.0.1 - 2025-06-30
 
 ### Bug fixes

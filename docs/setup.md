@@ -162,6 +162,15 @@ Configures the amount of detail Centauri should output.
 
 Configures the output format for Centauri's logs.
 
+### `VALIDATE`
+
+- **Default**: `false`
+- **Options**: `true`, `false`
+
+If enabled, Centauri will validate the configuration file and exit without
+starting the server. This is useful for checking configuration syntax before
+deploying changes.
+
 ### `DEBUG_CPU_PROFILE`
 
 - **Default**: -

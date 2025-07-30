@@ -322,6 +322,85 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 	assert.Fail(t, "timeout exceeded")
 }
 
+func Test_Run_ValidateFlag_ExitsSuccessfullyWithValidConfig(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"VALIDATE", "true",
+		"CONFIG", testdata.Path("simple-proxy.conf"),
+	)
+
+	assert.NoError(t, err)
+}
+
+func Test_Run_ValidateFlag_ExitsWithErrorForMissingConfig(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"VALIDATE", "true",
+		"CONFIG", "/does/not/exist.conf",
+	)
+
+	assert.ErrorContains(t, err, "failed to open config file")
+}
+
+func Test_Run_ValidateFlag_ExitsWithErrorForInvalidConfig(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"VALIDATE", "true",
+		"CONFIG", testdata.Path("badly-formatted.conf"),
+	)
+
+	assert.ErrorContains(t, err, "failed to parse config file")
+}
+
+func Test_Run_ValidateFlag_DoesNotStartServer(t *testing.T) {
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"VALIDATE", "true",
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	select {
+	case <-doneChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Validation timed out - server may have started when it shouldn't have")
+	}
+}
+
+func Test_Run_ValidateFlag_WorksWithDifferentConfigPaths(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"VALIDATE", "true",
+		"CONFIG", testdata.Path("simple-proxy.conf"),
+	)
+	assert.NoError(t, err)
+
+	tempFile, err := os.CreateTemp("", "centauri-validate-test-*.conf")
+	assert.NoError(t, err)
+	defer os.Remove(tempFile.Name())
+
+	_, err = tempFile.WriteString("route test.example.com\n    upstream 127.0.0.1:8080\n")
+	assert.NoError(t, err)
+	tempFile.Close()
+
+	err = runTest(
+		make(chan os.Signal, 1),
+		"VALIDATE", "true",
+		"CONFIG", tempFile.Name(),
+	)
+	assert.NoError(t, err)
+}
+
 func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		if !strings.HasPrefix(f.Name, "test") {

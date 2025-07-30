@@ -149,10 +149,10 @@ route example.net
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(routes))
 	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
-	assert.Equal(t, []proxy.Upstream{{"localhost:8080"}}, routes[0].Upstreams)
+	assert.Equal(t, []proxy.Upstream{{Host: "localhost:8080"}}, routes[0].Upstreams)
 	assert.Equal(t, "p1", routes[0].Provider)
 	assert.Equal(t, []string{"example.net"}, routes[1].Domains)
-	assert.Equal(t, []proxy.Upstream{{"localhost:8081"}}, routes[1].Upstreams)
+	assert.Equal(t, []proxy.Upstream{{Host: "localhost:8081"}}, routes[1].Upstreams)
 	assert.Equal(t, "", routes[1].Provider)
 
 	// Check headers for the first route
@@ -196,10 +196,10 @@ rOuTe example.net
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(routes))
 	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
-	assert.Equal(t, []proxy.Upstream{{"localhost:8080"}}, routes[0].Upstreams)
+	assert.Equal(t, []proxy.Upstream{{Host: "localhost:8080"}}, routes[0].Upstreams)
 	assert.Equal(t, "p1", routes[0].Provider)
 	assert.Equal(t, []string{"example.net"}, routes[1].Domains)
-	assert.Equal(t, []proxy.Upstream{{"localhost:8081"}}, routes[1].Upstreams)
+	assert.Equal(t, []proxy.Upstream{{Host: "localhost:8081"}}, routes[1].Upstreams)
 
 	// Check headers for the first route
 	assert.Equal(t, 2, len(routes[0].Headers))
@@ -238,13 +238,13 @@ route example.net
 	assert.Equal(t, 2, len(routes))
 
 	assert.Equal(t, []proxy.Upstream{
-		{"localhost:8080"},
-		{"localhost:8081"},
-		{"localhost:8082"},
+		{Host: "localhost:8080"},
+		{Host: "localhost:8081"},
+		{Host: "localhost:8082"},
 	}, routes[0].Upstreams)
 
 	assert.Equal(t, []proxy.Upstream{
-		{"localhost:8089"},
+		{Host: "localhost:8089"},
 	}, routes[1].Upstreams)
 }
 
@@ -262,7 +262,7 @@ route example.net
 	assert.NotNil(t, fallback)
 
 	assert.Equal(t, []proxy.Upstream{
-		{"localhost:8080"},
+		{Host: "localhost:8080"},
 	}, fallback.Upstreams)
 
 	assert.Equal(t, []string{"example.com", "www.example.com"}, fallback.Domains)

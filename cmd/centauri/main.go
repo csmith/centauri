@@ -25,6 +25,7 @@ var (
 	selectedFrontend = flag.String("frontend", "tcp", "Frontend to listen on")
 	metricsPort      = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
 	debugCpuProfile  = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
+	validate         = flag.Bool("validate", false, "Validate config file and exit")
 )
 
 var proxyManager *proxy.Manager
@@ -42,6 +43,10 @@ func main() {
 func run(args []string, signalChan <-chan os.Signal) error {
 	envflag.Parse(envflag.WithArguments(args))
 	initLogging()
+
+	if *validate {
+		return validateConfig()
+	}
 
 	if *debugCpuProfile != "" {
 		slog.Warn("Running with CPU profiling. This will heavily impact performance.", "target", *debugCpuProfile)
@@ -209,4 +214,22 @@ func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errC
 		<-shutdownChan
 		s.stop(context.Background())
 	}()
+}
+
+func validateConfig() error {
+	slog.Debug("Validating config file", "path", *configPath)
+
+	configFile, err := os.Open(*configPath)
+	if err != nil {
+		return fmt.Errorf("failed to open config file: %w", err)
+	}
+	defer configFile.Close()
+
+	_, _, err = config.Parse(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	slog.Info("Config file is valid", "path", *configPath)
+	return nil
 }
