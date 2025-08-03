@@ -1,11 +1,17 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - 2025-08-03
 
 ### New features
 
 - Added `-validate` flag (or `VALIDATE` env var) that simply validates
   the config file and then exits.
+
+### Other changes
+
+- Tailscale log messages intended for the user (such as authentication links)
+  will now be shown as INFO level log messages, instead of DEBUG.
+- Dependency updates.
 
 ## 2.0.1 - 2025-06-30
 

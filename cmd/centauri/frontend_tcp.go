@@ -22,7 +22,7 @@ type tcpFrontend struct {
 }
 
 func (t *tcpFrontend) Serve(ctx *frontendContext) error {
-	slog.Info("Starting TCP server", "httpsPort", *httpsPort, "httpPort", *httpPort)
+	slog.Info("Starting TCP server", "httpsPort", *httpsPort, "httpPort", *httpPort, "frontend", "tcp")
 
 	tlsListener, err := tls.Listen("tcp", fmt.Sprintf(":%d", *httpsPort), ctx.createTLSConfig())
 	if err != nil {

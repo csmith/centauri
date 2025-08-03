@@ -31,7 +31,10 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 		Hostname: *tailscaleHostname,
 		AuthKey:  *tailscaleKey,
 		Logf:     func(format string, args ...any) {},
-		Dir:      *tailscaleDir,
+		UserLogf: func(format string, args ...any) {
+			slog.Info(fmt.Sprintf(format, args...), "frontend", "tailscale")
+		},
+		Dir: *tailscaleDir,
 	}
 
 	lc, err := t.tailscale.LocalClient()
@@ -41,13 +44,13 @@ func (t *tailscaleFrontend) Serve(ctx *frontendContext) error {
 	ctx.rewriter.AddDecorator(&tailscaleHeaderDecorator{localClient: lc})
 
 	if *tailscaleMode == "http" {
-		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "http")
+		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "http", "frontend", "tailscale")
 
 		if err := t.startHttpServer(ctx, ctx.createProxy()); err != nil {
 			return err
 		}
 	} else if *tailscaleMode == "https" {
-		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "https")
+		slog.Info("Starting tailscale server", "hostname", *tailscaleHostname, "protocol", "https", "frontend", "tailscale")
 
 		if err := t.startHttpServer(ctx, ctx.createRedirector()); err != nil {
 			return err
@@ -106,7 +109,7 @@ type tailscaleHeaderDecorator struct {
 func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {
 	res, err := t.localClient.WhoIs(req.Context(), req.RemoteAddr)
 	if err != nil {
-		slog.Warn("Unable to get tailscale client info; not passing headers to upstream", "error", err)
+		slog.Warn("Unable to get tailscale client info; not passing headers to upstream", "error", err, "frontend", "tailscale")
 		return
 	}
 
