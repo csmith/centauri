@@ -19,11 +19,11 @@ type Rewriter struct {
 }
 
 // NewRewriter creates a new Rewriter backed by the given route manager.
-func NewRewriter(manager *Manager) *Rewriter {
+func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet) *Rewriter {
 	return &Rewriter{
 		provider: manager,
 		decorators: []Decorator{
-			NewXForwardedForDecorator(),
+			NewXForwardedForDecorator(trustedDownstreams),
 			NewBannedHeaderDecorator(),
 			NewUserAgentDecorator(),
 		},
@@ -44,7 +44,7 @@ func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 	}
 
 	for i := range r.decorators {
-		r.decorators[i].Decorate(p.Out)
+		r.decorators[i].Decorate(p.In, p.Out)
 	}
 
 	p.Out.URL.Scheme = "http"

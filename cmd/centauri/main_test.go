@@ -7,8 +7,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/csmith/centauri/cmd/centauri/testdata"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"log/slog"
 	"net"
@@ -19,6 +17,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/csmith/centauri/cmd/centauri/testdata"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_Run_ErrorsIfFrontendUndefined(t *testing.T) {
@@ -113,6 +114,97 @@ func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 	assert.Contains(t, string(b), "X-Forwarded-For: 127.0.0.1\n")
 	assert.Contains(t, string(b), "X-Forwarded-Host: example.com\n")
 	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+			"TRUSTED_DOWNSTREAMS", "127.0.0.0/8",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com/test", nil)
+	assert.NoError(t, err)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	req.Header.Set("X-Forwarded-Host", "original.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	res, err := proxyDo(8703, req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+
+	assert.Contains(t, string(b), "X-Forwarded-For: 10.0.0.1, 127.0.0.1\n")
+	assert.Contains(t, string(b), "X-Forwarded-Host: original.example.com\n")
+	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+			"TRUSTED_DOWNSTREAMS", "192.168.1.0/24",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.com/test", nil)
+	assert.NoError(t, err)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	req.Header.Set("X-Forwarded-Host", "malicious.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	res, err := proxyDo(8703, req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+
+	assert.Contains(t, string(b), "X-Forwarded-For: 127.0.0.1\n")
+	assert.Contains(t, string(b), "X-Forwarded-Host: example.com\n")
+	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
+
+	assert.NotContains(t, string(b), "10.0.0.1")
+	assert.NotContains(t, string(b), "malicious.example.com")
 
 	signalChan <- os.Interrupt
 	<-doneChan

@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/csmith/centauri/metrics"
 	"log/slog"
 	"net"
 	"net/http"
@@ -16,16 +15,18 @@ import (
 	"time"
 
 	"github.com/csmith/centauri/config"
+	"github.com/csmith/centauri/metrics"
 	"github.com/csmith/centauri/proxy"
 	"github.com/csmith/envflag/v2"
 )
 
 var (
-	configPath       = flag.String("config", "centauri.conf", "Path to config")
-	selectedFrontend = flag.String("frontend", "tcp", "Frontend to listen on")
-	metricsPort      = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
-	debugCpuProfile  = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
-	validate         = flag.Bool("validate", false, "Validate config file and exit")
+	configPath         = flag.String("config", "centauri.conf", "Path to config")
+	selectedFrontend   = flag.String("frontend", "tcp", "Frontend to listen on")
+	trustedDownstreams = flag.String("trusted-downstreams", "", "Comma-separated list of CIDR ranges to trust X-Forwarded-For headers from")
+	metricsPort        = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
+	debugCpuProfile    = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
+	validate           = flag.Bool("validate", false, "Validate config file and exit")
 )
 
 var proxyManager *proxy.Manager
@@ -82,8 +83,13 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		monitorCerts()
 	}
 
+	downstreams, err := parseDownstreams(*trustedDownstreams)
+	if err != nil {
+		return fmt.Errorf("could not parse trusted downstreams: %w", err)
+	}
+
 	proxyManager = proxy.NewManager(provider)
-	rewriter := proxy.NewRewriter(proxyManager)
+	rewriter := proxy.NewRewriter(proxyManager, downstreams)
 
 	go updateRoutes(updateChan, stopUpdateChan, errChan)
 	scheduleUpdate(updateChan)
@@ -232,4 +238,20 @@ func validateConfig() error {
 
 	slog.Info("Config file is valid", "path", *configPath)
 	return nil
+}
+
+func parseDownstreams(downstreams string) ([]net.IPNet, error) {
+	var res []net.IPNet
+	parts := strings.Split(downstreams, ",")
+	for i := range parts {
+		v := strings.TrimSpace(parts[i])
+		if v != "" {
+			_, ipNet, err := net.ParseCIDR(v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse trusted downstream CIDR '%q': %w", v, err)
+			}
+			res = append(res, *ipNet)
+		}
+	}
+	return res, nil
 }

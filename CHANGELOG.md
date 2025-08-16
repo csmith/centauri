@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Added `-trusted-downstreams` flag (`TRUSTED_DOWNSTREAMS` env var) for trusting
+  `X-Forwarded-*` headers from certain clients (useful when Centauri is behind
+  another proxy).
+
 ## 2.1.0 - 2025-08-03
 
 ### New features

@@ -1,13 +1,15 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 )
 
 // Decorator modifies a HTTP request in some way before it is proxied.
+// The original, unmodified request is provided in the `in` parameter.
 type Decorator interface {
-	Decorate(req *http.Request)
+	Decorate(in, out *http.Request)
 }
 
 type bannedHeaderDecorator struct {
@@ -31,29 +33,60 @@ func NewBannedHeaderDecorator() Decorator {
 	}
 }
 
-func (b *bannedHeaderDecorator) Decorate(req *http.Request) {
+func (b *bannedHeaderDecorator) Decorate(_, out *http.Request) {
 	for i := range b.headers {
-		req.Header.Del(b.headers[i])
+		out.Header.Del(b.headers[i])
 	}
 }
 
-type xForwardedForDecorator struct{}
+type xForwardedForDecorator struct {
+	trustedDownstreams []net.IPNet
+}
 
 // NewXForwardedForDecorator creates a decorator that sets the X-Forwarded-For and X-Forward-Proto headers
 // based on the downstream request.
-func NewXForwardedForDecorator() Decorator {
-	return &xForwardedForDecorator{}
+func NewXForwardedForDecorator(trustedDownstreams []net.IPNet) Decorator {
+	return &xForwardedForDecorator{trustedDownstreams: trustedDownstreams}
 }
 
-func (x *xForwardedForDecorator) Decorate(req *http.Request) {
-	ip, _, _ := net.SplitHostPort(req.RemoteAddr)
-	req.Header.Set("X-Forwarded-For", ip)
-	req.Header.Set("X-Forwarded-Host", req.Host)
-	if req.TLS == nil {
-		req.Header.Set("X-Forwarded-Proto", "http")
+func (x *xForwardedForDecorator) Decorate(in, out *http.Request) {
+	ip, _, _ := net.SplitHostPort(out.RemoteAddr)
+	trusted := x.trusted(ip)
+
+	if h := in.Header.Get("X-Forwarded-For"); !trusted || h == "" {
+		out.Header.Set("X-Forwarded-For", ip)
 	} else {
-		req.Header.Set("X-Forwarded-Proto", "https")
+		out.Header.Set("X-Forwarded-For", fmt.Sprintf("%s, %s", h, ip))
 	}
+
+	if h := in.Header.Get("X-Forwarded-Host"); !trusted || h == "" {
+		out.Header.Set("X-Forwarded-Host", out.Host)
+	} else {
+		out.Header.Set("X-Forwarded-Host", h)
+	}
+
+	if h := in.Header.Get("X-Forwarded-Proto"); !trusted || h == "" {
+		if out.TLS == nil {
+			out.Header.Set("X-Forwarded-Proto", "http")
+		} else {
+			out.Header.Set("X-Forwarded-Proto", "https")
+		}
+	} else {
+		out.Header.Set("X-Forwarded-Proto", h)
+	}
+}
+
+func (x *xForwardedForDecorator) trusted(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for i := range x.trustedDownstreams {
+		if x.trustedDownstreams[i].Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 type userAgentDecorator struct{}
@@ -64,9 +97,9 @@ func NewUserAgentDecorator() Decorator {
 	return &userAgentDecorator{}
 }
 
-func (u *userAgentDecorator) Decorate(req *http.Request) {
-	if _, ok := req.Header["User-Agent"]; !ok {
+func (u *userAgentDecorator) Decorate(_, out *http.Request) {
+	if _, ok := out.Header["User-Agent"]; !ok {
 		// explicitly disable User-Agent so it's not set to default value
-		req.Header.Set("User-Agent", "")
+		out.Header.Set("User-Agent", "")
 	}
 }

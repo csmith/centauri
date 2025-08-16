@@ -162,6 +162,18 @@ Configures the amount of detail Centauri should output.
 
 Configures the output format for Centauri's logs.
 
+### `TRUSTED_DOWNSTREAMS`
+
+- **Default**: -
+
+A comma-separated list of CIDR ranges to trust X-Forwarded-For, X-Forwarded-Host, 
+and X-Forwarded-Proto headers from. When a request comes from a trusted downstream,
+existing X-Forwarded-* headers will be preserved and the current connection's IP
+will be appended to X-Forwarded-For. When a request comes from an untrusted source,
+all X-Forwarded-* headers will be replaced with values based on the current connection.
+
+Example: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` to trust RFC 1918 private networks.
+
 ### `VALIDATE`
 
 - **Default**: `false`

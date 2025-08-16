@@ -39,7 +39,7 @@ func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -56,7 +56,7 @@ func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -73,7 +73,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttps(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
@@ -90,7 +90,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttps(t *testing.T) 
 
 func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("http://proxy/foo/bar")
 	request := &http.Request{
@@ -106,7 +106,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
@@ -124,7 +124,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
 	provider := &fakeProvider{route: &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}}
-	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator()}}
+	rewriter := &Rewriter{provider: provider, decorators: []Decorator{NewXForwardedForDecorator(nil)}}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{

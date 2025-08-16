@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
@@ -106,14 +107,14 @@ type tailscaleHeaderDecorator struct {
 	localClient *local.Client
 }
 
-func (t *tailscaleHeaderDecorator) Decorate(req *http.Request) {
-	res, err := t.localClient.WhoIs(req.Context(), req.RemoteAddr)
+func (t *tailscaleHeaderDecorator) Decorate(_, out *http.Request) {
+	res, err := t.localClient.WhoIs(out.Context(), out.RemoteAddr)
 	if err != nil {
 		slog.Warn("Unable to get tailscale client info; not passing headers to upstream", "error", err, "frontend", "tailscale")
 		return
 	}
 
-	req.Header.Set("Tailscale-User-Login", res.UserProfile.LoginName)
-	req.Header.Set("Tailscale-User-Name", res.UserProfile.DisplayName)
-	req.Header.Set("Tailscale-User-Profile-Pic", res.UserProfile.ProfilePicURL)
+	out.Header.Set("Tailscale-User-Login", res.UserProfile.LoginName)
+	out.Header.Set("Tailscale-User-Name", res.UserProfile.DisplayName)
+	out.Header.Set("Tailscale-User-Profile-Pic", res.UserProfile.ProfilePicURL)
 }
