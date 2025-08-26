@@ -8,7 +8,7 @@ require (
 	github.com/csmith/slogflags v1.1.0
 	github.com/go-acme/lego/v4 v4.23.1
 	github.com/prometheus/client_golang v1.23.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	golang.org/x/crypto v0.41.0
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
 	golang.org/x/sys v0.35.0
