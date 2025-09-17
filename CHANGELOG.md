@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+## 2.1.1 - 2025-09-17
+
 ### New features
 
 - Added `-trusted-downstreams` flag (`TRUSTED_DOWNSTREAMS` env var) for trusting
   `X-Forwarded-*` headers from certain clients (useful when Centauri is behind
   another proxy).
+
+### Other changes
+
+- Reverted changes to write and idle timeouts from `2.0.1`. These were
+  interfering with upstream services that expect clients to stay connected
+  for a long time (e.g. long polling).
 
 ## 2.1.0 - 2025-08-03
 

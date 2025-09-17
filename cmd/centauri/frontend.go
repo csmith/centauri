@@ -4,21 +4,23 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/csmith/centauri/metrics"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"sync"
 	"time"
 
+	"github.com/csmith/centauri/metrics"
+
 	"github.com/csmith/centauri/proxy"
 )
 
 const (
-	shutdownTimeout = time.Second * 5
-	readTimeout     = time.Second * 60
-	writeTimeout    = time.Second * 60
-	idleTimeout     = time.Second * 60 * 5
+	shutdownTimeout   = time.Second * 5
+	readHeaderTimeout = time.Second * 5
+	readTimeout       = time.Duration(0)
+	writeTimeout      = time.Duration(0)
+	idleTimeout       = time.Duration(0)
 )
 
 type frontend interface {
@@ -84,10 +86,11 @@ type server struct {
 func newServer(handler http.Handler, errChan chan<- error) *server {
 	return &server{
 		srv: &http.Server{
-			Handler:      handler,
-			ReadTimeout:  readTimeout,
-			WriteTimeout: writeTimeout,
-			IdleTimeout:  idleTimeout,
+			Handler:           handler,
+			ReadHeaderTimeout: readHeaderTimeout,
+			ReadTimeout:       readTimeout,
+			WriteTimeout:      writeTimeout,
+			IdleTimeout:       idleTimeout,
 		},
 		errChan: errChan,
 	}
