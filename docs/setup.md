@@ -22,7 +22,10 @@ You can configure the individual paths to these files using the settings:
     - [`TAILSCALE_DIR`](#tailscale_dir)
 
 When using Docker, these default to paths under `/data/`, so you can simply
-mount a volume there to persist all of Centauri's data.
+mount a volume there to persist all of Centauri's data. Centauri runs as
+UID `65532`; if you are bind mounting a folder you will need to `chown` or
+`chmod` it appropriately so Centauri can write. If you mount a Docker volume
+at `/data` it should inherit these automatically.
 
 ## Simple example using docker-compose
 
