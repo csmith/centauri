@@ -408,6 +408,9 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
 		assert.True(t, strings.Contains(res.TLS.PeerCertificates[0].Issuer.CommonName, "Pebble Intermediate CA"))
+
+		signalChan <- os.Interrupt
+		<-doneChan
 		return
 	}
 
@@ -493,6 +496,94 @@ func Test_Run_ValidateFlag_WorksWithDifferentConfigPaths(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func Test_Run_RedirectsToPrimaryDomain(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("domain-redirect.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	// Test HTTPS redirect from www.example.com to example.com
+	res, err := proxyGet(8703, "https://www.example.com/test?param=value")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
+	assert.Equal(t, "https://example.com/test?param=value", res.Header.Get("Location"))
+
+	// Test that requests to primary domain (example.com) are not redirected
+	res, err = proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "This is the upstream on port 8701")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_RedirectsHttpToHttps(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	// Test HTTP to HTTPS redirect
+	res, err := getClientProxy(8702).Get("http://example.com/test?param=value")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
+	assert.Equal(t, "https://example.com/test?param=value", res.Header.Get("Location"))
+
+	// Test HTTP to HTTPS redirect strips port
+	res, err = getClientProxy(8702).Get("http://example.com:80/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
+	assert.Equal(t, "https://example.com/test", res.Header.Get("Location"))
+
+	// Test that invalid host header returns 400
+	req, err := http.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	assert.NoError(t, err)
+	req.Host = "invalid..domain"
+
+	res, err = getClientProxy(8702).Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
 func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		if !strings.HasPrefix(f.Name, "test") {
@@ -559,6 +650,9 @@ func getClientProxy(realPort int) *http.Client {
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
 	}
 }

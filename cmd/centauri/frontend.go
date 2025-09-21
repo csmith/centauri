@@ -38,23 +38,25 @@ type frontendContext struct {
 
 // createProxy creates a reverse proxy backed by the context's rewriter.
 func (fc *frontendContext) createProxy() http.Handler {
-	return &httputil.ReverseProxy{
-		Rewrite:        fc.rewriter.RewriteRequest,
-		ModifyResponse: fc.recorder.TrackResponse(fc.rewriter.RewriteResponse),
-		ErrorHandler:   fc.recorder.TrackBadGateway(fc.rewriter.RewriteError(handleError)),
-		BufferPool:     newBufferPool(),
-		Transport: &http.Transport{
-			ForceAttemptHTTP2:   false,
-			DisableCompression:  true,
-			MaxIdleConnsPerHost: 100,
-			IdleConnTimeout:     90 * time.Second,
-		},
-	}
+	return proxy.NewDomainRedirector(
+		fc.manager,
+		&httputil.ReverseProxy{
+			Rewrite:        fc.rewriter.RewriteRequest,
+			ModifyResponse: fc.recorder.TrackResponse(fc.rewriter.RewriteResponse),
+			ErrorHandler:   fc.recorder.TrackBadGateway(fc.rewriter.RewriteError(handleError)),
+			BufferPool:     newBufferPool(),
+			Transport: &http.Transport{
+				ForceAttemptHTTP2:   false,
+				DisableCompression:  true,
+				MaxIdleConnsPerHost: 100,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		})
 }
 
 // createRedirector creates a http.Handler that redirects all requests to HTTPS.
 func (fc *frontendContext) createRedirector() http.Handler {
-	return &proxy.Redirector{}
+	return &proxy.HttpRedirector{}
 }
 
 // createTLSConfig creates a new tls.Config following the Mozilla intermediate configuration, and using

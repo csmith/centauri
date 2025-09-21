@@ -61,6 +61,17 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				return nil, nil, fmt.Errorf("multiple fallback routes specified: %s and %s", route.Domains, fallback.Domains)
 			}
 			fallback = route
+		case "redirect-to-primary":
+			if route == nil {
+				return nil, nil, fmt.Errorf("redirect-to-primary without route: %s", line)
+			}
+			if route.RedirectToPrimary {
+				return nil, nil, fmt.Errorf("multiple redirect-to-primary options specified in route %s", route.Domains)
+			}
+			if len(route.Domains) < 2 {
+				return nil, nil, fmt.Errorf("redirect-to-primary specified with only a single domain in route %s", route.Domains)
+			}
+			route.RedirectToPrimary = true
 		case "#":
 			// Ignore comments
 		default:

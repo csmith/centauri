@@ -287,3 +287,43 @@ route example.net
 
 	assert.ErrorContains(t, err, "multiple fallback routes specified")
 }
+
+func Test_Parse_RedirectToPrimary_OutsideRoute(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`redirect-to-primary`)))
+
+	assert.ErrorContains(t, err, "redirect-to-primary without route")
+}
+
+func Test_Parse_RedirectToPrimary_MultipleDomains(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com www.example.com
+	upstream localhost:8080
+	redirect-to-primary
+`)))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, routes)
+
+	assert.True(t, routes[0].RedirectToPrimary)
+}
+
+func Test_Parse_RedirectToPrimary_SingleDomain(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	redirect-to-primary
+`)))
+
+	assert.ErrorContains(t, err, "redirect-to-primary specified with only a single domain")
+}
+
+func Test_Parse_RedirectToPrimary_Repeated(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com example.net
+	redirect-to-primary
+	upstream localhost:8080
+	redirect-to-primary
+`)))
+
+	assert.ErrorContains(t, err, "multiple redirect-to-primary options specified")
+}

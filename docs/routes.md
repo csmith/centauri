@@ -96,6 +96,15 @@ This may only be specified on one route. Centauri's normal behaviour is
 to close connections for non-matching requests, as it won't be able to
 provide a valid certificate for that connection.
 
+### `redirect-to-primary`
+
+```
+redirect-to-primary
+```
+
+When applied to routes with multiple domains, redirects any requests from
+the secondary domains to the primary. The primary domain is the first listed.
+
 ## Comments and whitespace
 
 Lines that are empty or start with a `#` character are ignored, as is
@@ -134,4 +143,12 @@ route placeholder.example.com
     upstream server1:8082
     upstream server1:8083
     fallback
+
+# This route will answer requests made to `example.org`, `www.example.org` and
+# `www1.example.org`. Requests to `example.org` will be proxied to
+# `server1:8084`. Requests to the other domains will be redirected to
+# `example.org`
+route example.org www.example.org www1.example.org
+    upstream server1:8084
+    redirect-to-primary
 ```

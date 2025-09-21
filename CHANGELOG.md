@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2.2.0 - 2025-09-21
+
+### New features
+
+- Routes with multiple domains can now have a `redirect-to-primary` directive,
+  which will redirect all requests to the primary (first listed) domain.
+  ([issue #205](https://github.com/csmith/centauri/issues/205))
+
 ## 2.1.1 - 2025-09-17
 
 ### New features
