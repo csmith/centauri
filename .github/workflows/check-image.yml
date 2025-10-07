@@ -1,0 +1,6 @@
+name: check container build
+on:
+  pull_request:
+jobs:
+  build:
+    uses: csmith/github-workflows/.github/workflows/container-test.yml@master
