@@ -11,7 +11,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.43.0
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
-	golang.org/x/sys v0.37.0
+	golang.org/x/sys v0.38.0
 	tailscale.com v1.90.6
 )
 
