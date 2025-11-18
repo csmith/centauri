@@ -5,7 +5,14 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     set -eux; \
     CGO_ENABLED=0 GO111MODULE=on go install ./cmd/centauri; \
-    go run github.com/google/go-licenses@latest save ./... --save_path=/notices; \
+    go run github.com/google/go-licenses@latest save ./... --save_path=/notices \
+        --ignore github.com/go-acme/tencentclouddnspod/v20210323 \
+        --ignore github.com/go-acme/tencentedgdeone/v20220901 \
+        --ignore github.com/nrdcg/oci-go-sdk/common/v1065 \
+        --ignore github.com/nrdcg/oci-go-sdk/common/v1065/auth \
+        --ignore github.com/nrdcg/oci-go-sdk/common/v1065/utils \
+        --ignore github.com/nrdcg/oci-go-sdk/dns/v1065 \
+    ; \
     mkdir -p /mounts/data;
 
 FROM ghcr.io/greboid/dockerbase/nonroot:1.20250803.0
