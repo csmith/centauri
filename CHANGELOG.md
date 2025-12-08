@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.3.0 - 2025-12-08
+
 ### New features
 
 - Support for the ACME Renewal Information (ARI) standard. Centauri will now
