@@ -163,6 +163,19 @@ func Test_Supplier_GetCertificate_passesDetailsToCertifier(t *testing.T) {
 	assert.True(t, c.request.MustStaple)
 }
 
+func Test_Supplier_GetCertificate_passesProfileToCertifier(t *testing.T) {
+	c := &fakeCertifier{
+		obtainErr: fmt.Errorf("denied"),
+	}
+	s := &LegoSupplier{
+		certifier: c,
+		profile:   "shortlived",
+	}
+
+	_, _ = s.GetCertificate("example.com", nil, false)
+	assert.Equal(t, "shortlived", c.request.Profile)
+}
+
 func Test_Supplier_GetCertificate_returnsErrorIfObtainFails(t *testing.T) {
 	c := &fakeCertifier{
 		obtainErr: fmt.Errorf("denied"),

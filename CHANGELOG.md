@@ -9,6 +9,10 @@
   the ACME server doesn't support ARI then the existing behaviour is preserved
   (renewing 30 days before expiry). This helps to recover if a certificate is
   revoked, and makes it easier to deal with shorter-lived certificates.
+- Support for passing a profile when requesting a certificate. This can be used
+  to opt in to different certificate configurations offered by the ACME service
+  (e.g. adopting shorter-lived certificates before it's mandatory). Set using
+  the `-acme-profile` flag or `ACME_PROFILE` env var.
 
 ## 2.2.0 - 2025-09-21
 

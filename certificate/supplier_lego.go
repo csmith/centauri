@@ -113,6 +113,7 @@ func (a *acmeUser) registerAndSave(registrar registrar, path string) error {
 type LegoSupplier struct {
 	user      *acmeUser
 	certifier certifier
+	profile   string
 }
 
 // LegoSupplierConfig contains the configuration used to create a new LegoSupplier.
@@ -123,6 +124,8 @@ type LegoSupplierConfig struct {
 	Email string
 	// DirUrl is the URL of the ACME endpoint.
 	DirUrl string
+	// Profile is the name of the profile to use when requesting a certificate.
+	Profile string
 	// KeyType is the type of key to use when generating a certificate.
 	KeyType certcrypto.KeyType
 	// DnsProvider is the DNS-01 challenge provider that will verify domain ownership.
@@ -163,6 +166,7 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 	s := &LegoSupplier{
 		user:      user,
 		certifier: client.Certificate,
+		profile:   config.Profile,
 	}
 
 	return s, nil
@@ -175,6 +179,7 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 		Domains:    append([]string{subject}, altNames...),
 		Bundle:     true,
 		MustStaple: shouldStaple,
+		Profile:    s.profile,
 	})
 	if err != nil {
 		return nil, err

@@ -25,6 +25,7 @@ var (
 	dnsProviderName        = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
 	acmeEmail              = flag.String("acme-email", "", "Email address for ACME account")
 	acmeDirectory          = flag.String("acme-directory", lego.LEDirectoryProduction, "ACME directory to use")
+	acmeProfile            = flag.String("acme-profile", "", "Profile to use when requesting a certificate")
 	acmeDisablePropagation = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
 	wildcardDomains        = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 	useStaples             = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
@@ -74,6 +75,7 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 		KeyType:                 certcrypto.EC384,
 		DnsProvider:             dnsProvider,
 		DisablePropagationCheck: *acmeDisablePropagation,
+		Profile:                 *acmeProfile,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("certificate supplier error: %v", err)

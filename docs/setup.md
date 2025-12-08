@@ -309,3 +309,11 @@ which has more generous rate limits: `https://acme-staging-v02.api.letsencrypt.o
 If set, stops the ACME client from checking that its DNS records
 have propagated before requesting a certificate. This might be useful
 if your local DNS setup doesn't reflect how the ACME server will see it.
+
+### `ACME_PROFILE`
+
+- **Default**: -
+
+The profile to use when requesting a certificate. The valid options depend
+on the ACME server being used. See, e.g., 
+[the documentation for Let's Encrypt](https://letsencrypt.org/docs/profiles/).
