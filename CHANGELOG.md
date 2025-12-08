@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### New features
+
+- Support for the ACME Renewal Information (ARI) standard. Centauri will now
+  automatically poll ARI to decide when a certificate should be renewed. If
+  the ACME server doesn't support ARI then the existing behaviour is preserved
+  (renewing 30 days before expiry). This helps to recover if a certificate is
+  revoked, and makes it easier to deal with shorter-lived certificates.
+
 ## 2.2.0 - 2025-09-21
 
 ### New features

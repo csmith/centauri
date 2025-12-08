@@ -48,11 +48,12 @@ func (f *fakeStore) UnlockCertificate(subject string, altNames []string) {
 }
 
 type fakeSupplier struct {
-	certificate  *Details
-	subject      string
-	altNames     []string
-	shouldStaple bool
-	err          error
+	certificate     *Details
+	renewalInfoCert *Details
+	subject         string
+	altNames        []string
+	shouldStaple    bool
+	err             error
 }
 
 func (f *fakeSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
@@ -64,6 +65,11 @@ func (f *fakeSupplier) GetCertificate(subject string, altNames []string, shouldS
 
 func (f *fakeSupplier) UpdateStaple(cert *Details) error {
 	f.certificate = cert
+	return f.err
+}
+
+func (f *fakeSupplier) UpdateRenewalInfo(cert *Details) error {
+	f.renewalInfoCert = cert
 	return f.err
 }
 
@@ -166,6 +172,7 @@ func Test_Manager_GetCertificate_ignoresStapleIfCertDoesntRequire(t *testing.T) 
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now(),
+		AriNextUpdate:  time.Now().Add(time.Hour),
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),
@@ -187,7 +194,7 @@ func Test_Manager_GetCertificate_ignoresStapleIfCertDoesntRequire(t *testing.T) 
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
-	assert.Nil(t, supplier.certificate, "should not pass certificate to supplier")
+	assert.Nil(t, supplier.certificate, "should not pass certificate to supplier for stapling")
 	assert.Equal(t, "example.com", store.subject)
 	assert.Equal(t, []string{"example.net"}, store.altNames)
 }
@@ -270,10 +277,93 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }
 
+func Test_Manager_GetCertificate_updatesARIWhenObtaining(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 2),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
+	}
+
+	store := &fakeStore{}
+	supplier := &fakeSupplier{certificate: cert}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		true,
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert, supplier.renewalInfoCert, "should call UpdateRenewalInfo with new certificate")
+}
+
 func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now(),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &tr,
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{certificate: cert}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		true,
+	)
+
+	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
+	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
+	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
+	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "example.com", supplier.subject)
+	assert.Equal(t, []string{"example.net"}, supplier.altNames)
+}
+
+func Test_Manager_GetCertificate_updatesARIIfStale(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		AriNextUpdate:  time.Now().Add(-time.Hour), // ARI is stale
+		Certificate:    certPem,
+		PrivateKey:     keyPem,
+		OcspResponse:   []byte(ocspResponse),
+		requiresStaple: &fs,
+	}
+
+	store := &fakeStore{certificate: cert}
+	supplier := &fakeSupplier{}
+
+	manager := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		true,
+	)
+
+	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Equal(t, cert, supplier.renewalInfoCert, "should call UpdateRenewalInfo with certificate")
+	assert.Equal(t, cert, store.savedCert, "should save certificate after ARI update")
+}
+
+func Test_Manager_GetCertificate_obtainsCertificateIfARISaysRenew(t *testing.T) {
+	cert := &Details{
+		NotAfter:       time.Now().Add(time.Hour * 36),
+		NextOcspUpdate: time.Now().Add(time.Hour * 2),
+		AriRenewalTime: time.Now().Add(-time.Hour), // ARI says renew now
 		Certificate:    certPem,
 		PrivateKey:     keyPem,
 		OcspResponse:   []byte(ocspResponse),

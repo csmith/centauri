@@ -22,12 +22,26 @@ type Details struct {
 
 	OcspResponse   []byte    `json:"ocspResponse"`
 	NextOcspUpdate time.Time `json:"nextOcspUpdate"`
-	requiresStaple *bool     `json:"-"`
+	requiresStaple *bool
+
+	AriNextUpdate  time.Time `json:"ariNextUpdate"`
+	AriRenewalTime time.Time `json:"ariRenewalTime"`
+	AriExplanation string    `json:"ariExplanation"`
 }
 
 // ValidFor indicates whether the certificate will be valid for the entirety of the given period.
 func (s *Details) ValidFor(period time.Duration) bool {
 	return s.NotAfter.After(time.Now().Add(period))
+}
+
+// ShouldRenew indicates whether we should renew the certificate, given the desired minimum validity period.
+// If the ACME server supports ARI we'll always defer to that for renewal state.
+func (s *Details) ShouldRenew(minimumValidity time.Duration) bool {
+	if s.AriRenewalTime.IsZero() {
+		return !s.ValidFor(minimumValidity)
+	} else {
+		return time.Now().After(s.AriRenewalTime)
+	}
 }
 
 // HasStapleFor indicates whether the OCSP staple covers the entirety of the given period.

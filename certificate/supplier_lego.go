@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-acme/lego/v4/challenge/dns01"
 	"log/slog"
+	mathrand "math/rand/v2"
 	"os"
 	"time"
+
+	"github.com/go-acme/lego/v4/acme/api"
+	"github.com/go-acme/lego/v4/challenge/dns01"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	legocert "github.com/go-acme/lego/v4/certificate"
@@ -30,6 +33,7 @@ type registrar interface {
 type certifier interface {
 	Obtain(request legocert.ObtainRequest) (*legocert.Resource, error)
 	GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error)
+	GetRenewalInfo(req legocert.RenewalInfoRequest) (*legocert.RenewalInfoResponse, error)
 }
 
 // acmeUser implements the User interface required by lego for account registration.
@@ -217,6 +221,39 @@ func (s *LegoSupplier) UpdateStaple(cert *Details) error {
 	cert.OcspResponse = b
 	cert.NextOcspUpdate = response.NextUpdate
 	slog.Info("Successfully updated OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
+	return nil
+}
+
+// UpdateRenewalInfo asks the ACME server when the certificate should be renewed.
+func (s *LegoSupplier) UpdateRenewalInfo(cert *Details) error {
+	x509Cert, err := certcrypto.ParsePEMCertificate([]byte(cert.Certificate))
+	if err != nil {
+		return fmt.Errorf("unable to parse certificate: %w", err)
+	}
+
+	response, err := s.certifier.GetRenewalInfo(legocert.RenewalInfoRequest{
+		Cert: x509Cert,
+	})
+
+	if err != nil {
+		if errors.Is(err, api.ErrNoARI) {
+			slog.Debug("ACME server does not support ARI", "domain", cert.Subject, "altNames", cert.AltNames)
+			cert.AriRenewalTime = time.Time{}
+			cert.AriNextUpdate = cert.NotAfter
+			cert.AriExplanation = "ARI not supported"
+			return nil
+		}
+
+		return err
+	}
+
+	window := response.SuggestedWindow
+	windowDuration := window.End.Sub(window.Start)
+	cert.AriRenewalTime = window.Start.Add(time.Duration(mathrand.Int64N(int64(windowDuration))))
+	cert.AriNextUpdate = time.Now().Add(response.RetryAfter)
+	cert.AriExplanation = response.ExplanationURL
+
+	slog.Info("Updated renewal information", "domain", cert.Subject, "altNames", cert.AltNames, "nextUpdate", cert.AriNextUpdate, "renewalTime", cert.AriRenewalTime, "explanation", response.ExplanationURL)
 	return nil
 }
 

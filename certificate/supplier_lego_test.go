@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-acme/lego/v4/acme"
+	"github.com/go-acme/lego/v4/acme/api"
 	"github.com/go-acme/lego/v4/certcrypto"
 	legocert "github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/registration"
@@ -120,13 +122,16 @@ func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 }
 
 type fakeCertifier struct {
-	request     legocert.ObtainRequest
-	resource    *legocert.Resource
-	bundle      []byte
-	rawResponse []byte
-	response    *ocsp.Response
-	ocspErr     error
-	obtainErr   error
+	request          legocert.ObtainRequest
+	resource         *legocert.Resource
+	bundle           []byte
+	rawResponse      []byte
+	response         *ocsp.Response
+	ocspErr          error
+	obtainErr        error
+	renewalInfoReq   legocert.RenewalInfoRequest
+	renewalInfoRes   *legocert.RenewalInfoResponse
+	renewalInfoErr   error
 }
 
 func (f *fakeCertifier) GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error) {
@@ -137,6 +142,11 @@ func (f *fakeCertifier) GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error) {
 func (f *fakeCertifier) Obtain(request legocert.ObtainRequest) (*legocert.Resource, error) {
 	f.request = request
 	return f.resource, f.obtainErr
+}
+
+func (f *fakeCertifier) GetRenewalInfo(req legocert.RenewalInfoRequest) (*legocert.RenewalInfoResponse, error) {
+	f.renewalInfoReq = req
+	return f.renewalInfoRes, f.renewalInfoErr
 }
 
 func Test_Supplier_GetCertificate_passesDetailsToCertifier(t *testing.T) {
@@ -295,4 +305,102 @@ func Test_Supplier_UpdateStaple_updatesOcspDetails(t *testing.T) {
 	require.NoError(t, s.UpdateStaple(cert))
 	assert.Equal(t, c.response.NextUpdate, cert.NextOcspUpdate)
 	assert.Equal(t, c.rawResponse, cert.OcspResponse)
+}
+
+func Test_Supplier_UpdateRenewalInfo_errorsIfCertificateCantBeParsed(t *testing.T) {
+	s := &LegoSupplier{
+		certifier: &fakeCertifier{},
+	}
+	err := s.UpdateRenewalInfo(&Details{Certificate: "not a pem"})
+	assert.Error(t, err)
+}
+
+func Test_Supplier_UpdateRenewalInfo_returnsNilIfServerDoesNotSupportARI(t *testing.T) {
+	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
+	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
+
+	c := &fakeCertifier{
+		renewalInfoErr: api.ErrNoARI,
+	}
+	s := &LegoSupplier{
+		certifier: c,
+	}
+
+	cert := &Details{Certificate: string(pemCert)}
+	err := s.UpdateRenewalInfo(cert)
+	assert.NoError(t, err)
+	assert.True(t, cert.AriRenewalTime.IsZero(), "should not set renewal time when ARI not supported")
+}
+
+func Test_Supplier_UpdateRenewalInfo_returnsErrorIfGetRenewalInfoFails(t *testing.T) {
+	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
+	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
+
+	c := &fakeCertifier{
+		renewalInfoErr: fmt.Errorf("some other error"),
+	}
+	s := &LegoSupplier{
+		certifier: c,
+	}
+
+	err := s.UpdateRenewalInfo(&Details{Certificate: string(pemCert)})
+	assert.Error(t, err)
+}
+
+func Test_Supplier_UpdateRenewalInfo_passesCertToCertifier(t *testing.T) {
+	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
+	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
+	expectedCert, _ := certcrypto.ParsePEMCertificate(pemCert)
+
+	c := &fakeCertifier{
+		renewalInfoRes: &legocert.RenewalInfoResponse{
+			RenewalInfoResponse: acme.RenewalInfoResponse{
+				SuggestedWindow: acme.Window{
+					Start: time.Now().Add(time.Hour),
+					End:   time.Now().Add(time.Hour * 2),
+				},
+			},
+			RetryAfter: time.Hour,
+		},
+	}
+	s := &LegoSupplier{
+		certifier: c,
+	}
+
+	_ = s.UpdateRenewalInfo(&Details{Certificate: string(pemCert)})
+	assert.Equal(t, expectedCert, c.renewalInfoReq.Cert)
+}
+
+func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
+	privateKey, _ := certcrypto.GeneratePrivateKey(certcrypto.RSA2048)
+	pemCert, _ := certcrypto.GeneratePemCert(privateKey.(*rsa.PrivateKey), "example.com", nil)
+
+	windowStart := time.Now().Add(time.Hour)
+	windowEnd := time.Now().Add(time.Hour * 2)
+
+	c := &fakeCertifier{
+		renewalInfoRes: &legocert.RenewalInfoResponse{
+			RenewalInfoResponse: acme.RenewalInfoResponse{
+				SuggestedWindow: acme.Window{
+					Start: windowStart,
+					End:   windowEnd,
+				},
+				ExplanationURL: "https://example.com/explanation",
+			},
+			RetryAfter: time.Hour * 6,
+		},
+	}
+	s := &LegoSupplier{
+		certifier: c,
+	}
+
+	cert := &Details{Certificate: string(pemCert)}
+	before := time.Now()
+	require.NoError(t, s.UpdateRenewalInfo(cert))
+
+	assert.Equal(t, "https://example.com/explanation", cert.AriExplanation)
+	assert.True(t, cert.AriNextUpdate.After(before.Add(time.Hour*6-time.Second)), "AriNextUpdate should be approximately now + RetryAfter")
+	assert.True(t, cert.AriNextUpdate.Before(before.Add(time.Hour*6+time.Second)), "AriNextUpdate should be approximately now + RetryAfter")
+	assert.True(t, !cert.AriRenewalTime.Before(windowStart), "AriRenewalTime should be >= window start")
+	assert.True(t, cert.AriRenewalTime.Before(windowEnd), "AriRenewalTime should be < window end")
 }

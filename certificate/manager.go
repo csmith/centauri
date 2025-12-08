@@ -19,6 +19,7 @@ type Store interface {
 type Supplier interface {
 	GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error)
 	UpdateStaple(cert *Details) error
+	UpdateRenewalInfo(cert *Details) error
 	MinCertificateValidity() time.Duration
 	MinStapleValidity() time.Duration
 }
@@ -53,18 +54,27 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	m.store.LockCertificate(subject, altNames)
 	defer m.store.UnlockCertificate(subject, altNames)
 
-	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
+	cert := m.store.GetCertificate(subject, altNames)
+	if cert == nil {
 		slog.Info("Obtaining new certificate", "domain", subject, "altNames", altNames)
 		return m.obtain(supplier, subject, altNames)
-	} else if !cert.ValidFor(supplier.MinCertificateValidity()) {
+	}
+
+	if cert.AriNextUpdate.Before(time.Now()) {
+		m.updateRenewalInfo(supplier, cert, true)
+	}
+
+	if cert.ShouldRenew(supplier.MinCertificateValidity()) {
 		slog.Info("Renewing certificate", "domain", subject, "altNames", altNames)
 		return m.obtain(supplier, subject, altNames)
-	} else if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
+	}
+
+	if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
 		slog.Info("Obtaining new OCSP staple", "domain", subject, "altNames", altNames)
 		return m.staple(supplier, cert)
-	} else {
-		return cert.keyPair()
 	}
+
+	return cert.keyPair()
 }
 
 // GetExistingCertificate returns a previously saved certificate with the given subject and alternate names if it is
@@ -82,7 +92,7 @@ func (m *Manager) GetExistingCertificate(preferredSupplier string, subject strin
 		return nil, true, fmt.Errorf("certificate has expired")
 	} else {
 		key, err := cert.keyPair()
-		needRenewal := !cert.ValidFor(supplier.MinCertificateValidity()) || (cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()))
+		needRenewal := cert.ShouldRenew(supplier.MinCertificateValidity()) || (cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()))
 		return key, needRenewal, err
 	}
 }
@@ -113,6 +123,8 @@ func (m *Manager) obtain(supplier Supplier, subject string, altNames []string) (
 		return nil, fmt.Errorf("failed to obtain certificate for %s: %w", subject, err)
 	}
 
+	m.updateRenewalInfo(supplier, cert, false)
+
 	if err := m.store.SaveCertificate(cert); err != nil {
 		return nil, fmt.Errorf("failed to save certificate for %s: %s", subject, err)
 	}
@@ -131,4 +143,19 @@ func (m *Manager) staple(supplier Supplier, cert *Details) (*tls.Certificate, er
 	}
 
 	return cert.keyPair()
+}
+
+// updateRenewalInfo fetches fresh ARI data and optionally saves it to the store.
+func (m *Manager) updateRenewalInfo(supplier Supplier, cert *Details, save bool) {
+	slog.Info("Updating ARI for certificate", "domain", cert.Subject, "altNames", cert.AltNames)
+	if err := supplier.UpdateRenewalInfo(cert); err != nil {
+		slog.Error("Failed to update renewal info", "error", err, "domain", cert.Subject, "altNames", cert.AltNames)
+		return
+	}
+
+	if save {
+		if err := m.store.SaveCertificate(cert); err != nil {
+			slog.Error("Failed to save certificate after ARI update", "error", err, "domain", cert.Subject, "altNames", cert.AltNames)
+		}
+	}
 }

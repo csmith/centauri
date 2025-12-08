@@ -61,6 +61,8 @@ func (s *SelfSignedSupplier) UpdateStaple(_ *Details) error {
 	return nil
 }
 
+func (s *SelfSignedSupplier) UpdateRenewalInfo(_ *Details) error { return nil }
+
 func (s *SelfSignedSupplier) MinCertificateValidity() time.Duration {
 	return time.Hour * 24 * 7
 }
