@@ -14,19 +14,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/csmith/centauri/config"
 	"github.com/csmith/centauri/metrics"
 	"github.com/csmith/centauri/proxy"
 	"github.com/csmith/envflag/v2"
 )
 
 var (
-	configPath         = flag.String("config", "centauri.conf", "Path to config")
-	selectedFrontend   = flag.String("frontend", "tcp", "Frontend to listen on")
-	trustedDownstreams = flag.String("trusted-downstreams", "", "Comma-separated list of CIDR ranges to trust X-Forwarded-For headers from")
-	metricsPort        = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
-	debugCpuProfile    = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
-	validate           = flag.Bool("validate", false, "Validate config file and exit")
+	selectedFrontend     = flag.String("frontend", "tcp", "Frontend to listen on")
+	selectedConfigSource = flag.String("config-source", "file", "Config source to use")
+	trustedDownstreams   = flag.String("trusted-downstreams", "", "Comma-separated list of CIDR ranges to trust X-Forwarded-For headers from")
+	metricsPort          = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
+	debugCpuProfile      = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
+	validate             = flag.Bool("validate", false, "Validate config file and exit")
 )
 
 var proxyManager *proxy.Manager
@@ -45,10 +44,6 @@ func run(args []string, signalChan <-chan os.Signal) error {
 	envflag.Parse(envflag.WithArguments(args))
 	initLogging()
 
-	if *validate {
-		return validateConfig()
-	}
-
 	if *debugCpuProfile != "" {
 		slog.Warn("Running with CPU profiling. This will heavily impact performance.", "target", *debugCpuProfile)
 		cpuFile, err := os.Create(*debugCpuProfile)
@@ -63,9 +58,16 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		defer pprof.StopCPUProfile()
 	}
 
-	updateChan := make(chan struct{}, 1)
-	stopUpdateChan := make(chan struct{}, 1)
 	errChan := make(chan error)
+
+	config, err := createConfigSource(*selectedConfigSource)
+	if err != nil {
+		return fmt.Errorf("invalid config source specified: %v", err)
+	}
+
+	if *validate {
+		return config.Validate()
+	}
 
 	f, err := createFrontend(*selectedFrontend)
 	if err != nil {
@@ -91,8 +93,9 @@ func run(args []string, signalChan <-chan os.Signal) error {
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager, downstreams)
 
-	go updateRoutes(updateChan, stopUpdateChan, errChan)
-	scheduleUpdate(updateChan)
+	if err := config.Start(proxyManager.SetRoutes, errChan); err != nil {
+		return fmt.Errorf("failed to start config source: %v", err)
+	}
 
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
@@ -115,12 +118,12 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		case sig := <-signalChan:
 			switch sig {
 			case syscall.SIGHUP:
-				slog.Info("Received signal, updating routes...", "signal", sig)
-				scheduleUpdate(updateChan)
+				slog.Info("Received signal, reloading config...", "signal", sig)
+				config.Reload()
 			case syscall.SIGINT, syscall.SIGTERM:
 				slog.Info("Received signal, stopping frontend...", "signal", sig)
 				metricsChan <- struct{}{}
-				stopUpdateChan <- struct{}{}
+				config.Stop(context.Background())
 				f.Stop(context.Background())
 				slog.Info("Frontend stopped. Goodbye!")
 				return nil
@@ -129,17 +132,11 @@ func run(args []string, signalChan <-chan os.Signal) error {
 			if f != nil {
 				f.Stop(context.Background())
 			}
+			if config != nil {
+				config.Stop(context.Background())
+			}
 			return err
 		}
-	}
-}
-
-func scheduleUpdate(updateChan chan<- struct{}) {
-	select {
-	case updateChan <- struct{}{}:
-		slog.Info("Scheduled config update")
-	default:
-		slog.Info("A config update was already scheduled; ignoring...")
 	}
 }
 
@@ -154,6 +151,17 @@ func createFrontend(name string) (frontend, error) {
 	}
 }
 
+func createConfigSource(name string) (configSource, error) {
+	switch strings.ToLower(name) {
+	case "file":
+		return newFileConfigSource(), nil
+	case "network":
+		return newNetworkConfigSource(), nil
+	default:
+		return nil, fmt.Errorf("unknown config source: %s", name)
+	}
+}
+
 func monitorCerts() {
 	go func() {
 		for {
@@ -162,44 +170,6 @@ func monitorCerts() {
 			proxyManager.CheckCertificates()
 		}
 	}()
-}
-
-func updateRoutes(
-	updateChan <-chan struct{},
-	StopChan <-chan struct{},
-	errorChan chan<- error,
-) {
-	for {
-		select {
-		case <-StopChan:
-			return
-		case <-updateChan:
-			(func() {
-				slog.Debug("Reading config file", "path", *configPath)
-
-				configFile, err := os.Open(*configPath)
-				if err != nil {
-					errorChan <- fmt.Errorf("failed to open config file: %w", err)
-					return
-				}
-				defer configFile.Close()
-
-				routes, fallback, err := config.Parse(configFile)
-				if err != nil {
-					errorChan <- fmt.Errorf("failed to parse config file: %w", err)
-					return
-				}
-
-				slog.Debug("Installing routes", "count", len(routes))
-				if err := proxyManager.SetRoutes(routes, fallback); err != nil {
-					errorChan <- fmt.Errorf("route manager error: %w", err)
-					return
-				}
-
-				slog.Debug("Finished installing routes", "count", len(routes))
-			})()
-		}
-	}
 }
 
 func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errChan chan<- error) {
@@ -220,24 +190,6 @@ func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errC
 		<-shutdownChan
 		s.stop(context.Background())
 	}()
-}
-
-func validateConfig() error {
-	slog.Debug("Validating config file", "path", *configPath)
-
-	configFile, err := os.Open(*configPath)
-	if err != nil {
-		return fmt.Errorf("failed to open config file: %w", err)
-	}
-	defer configFile.Close()
-
-	_, _, err = config.Parse(configFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
-	}
-
-	slog.Info("Config file is valid", "path", *configPath)
-	return nil
 }
 
 func parseDownstreams(downstreams string) ([]net.IPNet, error) {

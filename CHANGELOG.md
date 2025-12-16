@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.4.0 - 2025-12-16
+
+### New features
+
+- Support for network-based configuration. When `-config-source` / `CONFIG_SOURCE`
+  is set to `network`, Centauri will attempt to connect out to the address
+  specified in `-config-network-address` / `CONFIG_NETWORK_ADDRESS`. The initial
+  config must be provided within 10 seconds of connection, and then any future
+  updates can be pushed as needed. The protocol is documented in
+  [docs/network-config.md](docs/network-config.md).
+
 ## 2.3.0 - 2025-12-08
 
 ### New features

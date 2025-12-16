@@ -73,15 +73,37 @@ services:
 
 ## General configuration options
 
+### `CONFIG_SOURCE`
+
+- **Default**: `file`
+- **Options**: `file`, `network`
+
+The source to read the route configuration from.
+
+The `file` source reads configuration from a local file (see [`CONFIG`](#config)).
+
+The `network` source connects to a remote server and receives configuration updates over TCP.
+When using `network`, you must also specify [`CONFIG_NETWORK_ADDRESS`](#config_network_address).
+
 ### `CONFIG`
 
 - **Default (CLI)**: `centauri.conf`
 - **Default (Docker)**: `/centauri.conf`
 
-The path to read the [route configuration](routes.md) from.
+The path to read the [route configuration](routes.md) from when using the `file` config source.
 
 If the value is not absolute, it is treated as relative to the current working
 directory.
+
+### `CONFIG_NETWORK_ADDRESS`
+
+- **Default**: -
+
+The address (ip:port) to connect to for network-based configuration, when using the `network`
+config source. The server must implement Centauri's [network config protocol](network-config.md).
+Configuration updates are applied automatically as they are received from the server.
+
+Example: `192.168.1.100:9000`
 
 ### `FRONTEND`
 

@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/csmith/centauri/cmd/centauri/testdata"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Run_ErrorsIfFrontendUndefined(t *testing.T) {
@@ -29,6 +31,103 @@ func Test_Run_ErrorsIfFrontendUndefined(t *testing.T) {
 	)
 
 	assert.ErrorContains(t, err, "unknown frontend: not-good")
+}
+
+func Test_Run_ErrorsIfConfigSourceUndefined(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"CONFIG_SOURCE", "invalid",
+	)
+
+	assert.ErrorContains(t, err, "invalid config source specified")
+	assert.ErrorContains(t, err, "unknown config source: invalid")
+}
+
+func Test_Run_ErrorsIfNetworkConfigSourceWithoutAddress(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"CONFIG_SOURCE", "network",
+	)
+
+	assert.ErrorContains(t, err, "failed to start config source")
+	assert.ErrorContains(t, err, "address must be specified")
+}
+
+func Test_Run_NetworkConfigSource_AppliesUpdates(t *testing.T) {
+	upstream1 := startStaticServer(8701)
+	defer upstream1.stop(context.Background())
+
+	upstream2 := startStaticServer(8702)
+	defer upstream2.stop(context.Background())
+
+	configListener, err := net.Listen("tcp", "127.0.0.1:0")
+	assert.NoError(t, err)
+	defer configListener.Close()
+
+	configUpdateChan := make(chan []byte, 1)
+	configServerDone := make(chan struct{})
+	go func() {
+		defer close(configServerDone)
+		conn, err := configListener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		initialConfig := []byte("route example.com\n    upstream 127.0.0.1:8701\n")
+		require.NoError(t, sendNetworkConfig(conn, initialConfig))
+
+		newConfig := <-configUpdateChan
+		require.NoError(t, sendNetworkConfig(conn, newConfig))
+
+		<-configUpdateChan
+	}()
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG_SOURCE", "network",
+			"CONFIG_NETWORK_ADDRESS", configListener.Addr().String(),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8703",
+			"HTTPS_PORT", "8704",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8704, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	assert.Contains(t, string(b), "This is the upstream on port 8701")
+
+	updatedConfig := []byte("route example.com\n    upstream 127.0.0.1:8702\n")
+	configUpdateChan <- updatedConfig
+
+	time.Sleep(2 * time.Second)
+
+	res, err = proxyGet(8704, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	b, _ = io.ReadAll(res.Body)
+	res.Body.Close()
+	assert.Contains(t, string(b), "This is the upstream on port 8702")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+
+	close(configUpdateChan)
+	<-configServerDone
 }
 
 func Test_Run_ErrorsIfConfigNotFound(t *testing.T) {
@@ -620,6 +719,33 @@ func startStaticServer(port int) *server {
 	}
 	go srv.start(listener)
 	return srv
+}
+
+func sendNetworkConfig(conn net.Conn, config []byte) error {
+	// Send magic bytes
+	if _, err := conn.Write([]byte("CENTAURI")); err != nil {
+		return err
+	}
+
+	// Send version (4 bytes: 0x00 0x00 0x00 0x01)
+	version := []byte{0x00, 0x00, 0x00, 0x01}
+	if _, err := conn.Write(version); err != nil {
+		return err
+	}
+
+	// Send payload length (big-endian)
+	length := make([]byte, 4)
+	binary.BigEndian.PutUint32(length, uint32(len(config)))
+	if _, err := conn.Write(length); err != nil {
+		return err
+	}
+
+	// Send payload
+	if _, err := conn.Write(config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func proxyGet(realPort int, fakeUrl string) (*http.Response, error) {
