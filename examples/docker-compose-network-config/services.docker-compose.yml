@@ -1,0 +1,24 @@
+services:
+
+  mycontainer:
+    image: "nginx"
+    restart: "always"
+    networks:
+      - "centauri"
+    labels:
+      # The vhost label is used to define a new route in the Centauri config. This should be the external
+      # FQDN the content will be visible at.
+      com.chameth.vhost: "mycontainer.example.com"
+
+      # The proxy label defines which port should be used. If the image exposes a single port you can omit
+      # this label and the config generator will work it out, but it's good practice to specific explicitly
+      # in case the image changes.
+      com.chameth.proxy: "80"
+
+      # Any labels under com.chameth.headers.* will be used to add header replace directives to the route.
+      com.chameth.headers.example: "X-Clacks-Overhead: GNU Terry Pratchett"
+
+networks:
+  # Use the network created for Centauri in its own compose file.
+  centauri:
+    external: true

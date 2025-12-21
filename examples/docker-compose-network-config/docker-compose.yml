@@ -1,0 +1,49 @@
+services:
+  centauri:
+    container_name: "centauri"
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - "./data:/data"
+    networks:
+      - "centauri"
+      - "default"
+    depends_on:
+      - "confd"
+    environment:
+      CONFIG_SOURCE: "network"
+      CONFIG_NETWORK_ADDRESS: "confd:8080"
+      ACME_EMAIL: "you@example.com"
+
+      # Centauri uses DNS challenges to prove domain ownership. See the Lego docs for all available
+      # providers and their configuration: https://go-acme.github.io/lego/dns/
+      DNS_PROVIDER: "httpreq"
+      HTTPREQ_ENDPOINT: "https://api.mydnsprovider.example.com/httpreq"
+      HTTPREQ_USERNAME: "dns@example.com"
+      HTTPREQ_PASSWORD: "myp@ssw0rd"
+
+  # centauri-docker-confd monitors docker containers and then generates a config file for Centauri.
+  # This allows us to automatically proxy to containers based on their labels.
+  confd:
+    image: "ghcr.io/csmith/centauri-docker-confd"
+    restart: "always"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    # confd runs as a non-privileged user, so you may need to add a group so it can access the
+    # docker socket. e.g., if the docker group on the host has gid 999:
+    group_add:
+      - 999
+    environment:
+      # confd will add anything in ROUTE_EXTRAS to the generated routes, so you can e.g.
+      # modify headers for every route served by Centauri.
+      ROUTE_EXTRAS: |
+        header default My-Custom-Header Hello from confd
+        header remove Secret-Header
+
+networks:
+  # Create a network that other containers can be joined to expose them to Centauri.
+  centauri:
+    name: "centauri"

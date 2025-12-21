@@ -33,6 +33,7 @@ nav:
     - Metrics: metrics.md
     - Wildcard domains: wildcards.md
     - Build tags: buildtags.md
+    - Network config: network-config.md
 
 markdown_extensions:
   - admonition
