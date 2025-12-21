@@ -14,7 +14,7 @@ A Docker Compose file that uses [Dotege](https://github.com/csmith/dotege)
 to automatically generate a Centauri config based on containers that are
 running on the host.
 
-## [docker-compose-network-config](https://github.com/csmith/centauri/tree/master/examples/docker-compose-dotege)
+## [docker-compose-network-config](https://github.com/csmith/centauri/tree/master/examples/docker-compose-network-config)
 
 A Docker Compose file that uses [centauri-docker-confd](https://github.com/csmith/centauri-docker-confd)
 to automatically generate a Centauri config based on containers that are
