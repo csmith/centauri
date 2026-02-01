@@ -10,3 +10,5 @@ jobs:
   build:
     uses: meta/workflows/.forgejo/workflows/go-test.yml@master
     runs-on: docker
+    with:
+      tags: integration    
