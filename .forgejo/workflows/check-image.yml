@@ -8,4 +8,5 @@ permissions:
 
 jobs:
   build:
-    uses: csmith/github-workflows/.github/workflows/container-test.yml@master
+    uses: meta/workflows/.forgejo/workflows/image-test.yml@master
+    runs-on: docker

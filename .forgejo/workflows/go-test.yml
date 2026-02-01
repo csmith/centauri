@@ -1,0 +1,12 @@
+name: go test
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: meta/workflows/.forgejo/workflows/go-test.yml@master
+    runs-on: docker

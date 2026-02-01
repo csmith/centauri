@@ -12,5 +12,8 @@ permissions:
 
 jobs:
   build:
-    uses: csmith/github-workflows/.github/workflows/build-image.yml@master
+    uses: meta/workflows/.forgejo/workflows/image-build.yml@master
+    runs-on: docker
     secrets: inherit
+    with:
+      github: csmith/centauri
