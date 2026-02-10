@@ -1,0 +1,16 @@
+name: make GitHub release 
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    uses: meta/workflows/.forgejo/workflows/github-release.yml@master
+    runs-on: docker
+    secrets: inherit
+    with:
+      github: csmith/centauri
