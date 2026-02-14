@@ -66,7 +66,7 @@ services:
 
   configs:
     centauri.conf:
-      contents: |
+      content: |
         route subdomain.example.com
           upstream mycontainer:80
 ```
