@@ -16,7 +16,6 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 	// Start a simple config server
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
-	defer listener.Close()
 
 	serverDone := make(chan struct{})
 	go func() {
@@ -59,7 +58,16 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 	errChan := make(chan error, 1)
 	err = source.Start(updateRoutes, errChan)
 	assert.NoError(t, err)
-	defer source.Stop(nil)
+	defer func() {
+		// Close listener first so the background goroutine can't reconnect,
+		// then stop the source and wait for the goroutine to exit.
+		listener.Close()
+		source.Stop(nil)
+		select {
+		case <-errChan:
+		case <-time.After(500 * time.Millisecond):
+		}
+	}()
 
 	select {
 	case <-routesCalled:
