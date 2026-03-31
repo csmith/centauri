@@ -56,24 +56,24 @@ func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
 // immediately without waiting for certificate renewals.
 func (m *Manager) loadCertificate(route *Route) {
 	if m.provider == nil {
-		route.certificateStatus = CertificateNotRequired
+		route.setCertificateStatus(CertificateNotRequired)
 		return
 	}
 
 	cert, needsRenewal, err := m.provider.GetExistingCertificate(route.Provider, route.Domains[0], route.Domains[1:])
 	if err == nil {
-		route.certificate = cert
+		route.setCertificate(cert)
 		if needsRenewal {
 			slog.Debug("Existing certificate found but it expires soon", "route", route.Domains[0])
-			route.certificateStatus = CertificateExpiringSoon
+			route.setCertificateStatus(CertificateExpiringSoon)
 		} else {
 			slog.Debug("Existing certificate found", "route", route.Domains[0])
-			route.certificateStatus = CertificateGood
+			route.setCertificateStatus(CertificateGood)
 		}
 	} else {
 		slog.Info("No existing certificate found, route will not be served until cert is obtained", "route", route.Domains[0])
-		route.certificate = nil
-		route.certificateStatus = CertificateMissing
+		route.setCertificate(nil)
+		route.setCertificateStatus(CertificateMissing)
 	}
 }
 
@@ -82,7 +82,7 @@ func (m *Manager) loadCertificate(route *Route) {
 func (m *Manager) RouteForDomain(domain string) *Route {
 	route := m.routeFor(domain)
 
-	if route == nil || route.certificateStatus <= CertificateMissing {
+	if route == nil || route.CertificateStatus() <= CertificateMissing {
 		return nil
 	}
 
@@ -101,7 +101,7 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 	if route == nil {
 		return nil, nil
 	}
-	return route.certificate, nil
+	return route.Certificate(), nil
 }
 
 // routeFor looks up a route to be used for the given domain. If there is no direct match and a fallback
@@ -121,7 +121,7 @@ func (m *Manager) CheckCertificates() {
 		route := routes[i]
 
 		if m.provider == nil {
-			route.certificateStatus = CertificateNotRequired
+			route.setCertificateStatus(CertificateNotRequired)
 		} else {
 			m.updateCert(route)
 		}
@@ -137,8 +137,8 @@ func (m *Manager) updateCert(route *Route) {
 		return
 	}
 
-	route.certificate = cert
-	route.certificateStatus = CertificateGood
+	route.setCertificate(cert)
+	route.setCertificateStatus(CertificateGood)
 }
 
 // routeMap maintains a map of domain names to routes, using copy-on-write

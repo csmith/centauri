@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"crypto/tls"
+	"sync/atomic"
 )
 
 // Route describes one way that a request may be mapped from the original HTTP request to an upstream server.
@@ -12,8 +13,24 @@ type Route struct {
 	Provider          string
 	RedirectToPrimary bool
 
-	certificate       *tls.Certificate
-	certificateStatus CertificateStatus
+	certificate       atomic.Pointer[tls.Certificate]
+	certificateStatus atomic.Int32
+}
+
+func (r *Route) Certificate() *tls.Certificate {
+	return r.certificate.Load()
+}
+
+func (r *Route) setCertificate(cert *tls.Certificate) {
+	r.certificate.Store(cert)
+}
+
+func (r *Route) CertificateStatus() CertificateStatus {
+	return CertificateStatus(r.certificateStatus.Load())
+}
+
+func (r *Route) setCertificateStatus(status CertificateStatus) {
+	r.certificateStatus.Store(int32(status))
 }
 
 // Upstream represents a configured upstream server for a route.

@@ -53,7 +53,7 @@ func Test_Manager_SetRoutes_setsStatusIfNoCertificateFound(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateMissing, route.certificateStatus)
+		assert.Equal(t, CertificateMissing, route.CertificateStatus())
 	})
 }
 
@@ -75,7 +75,7 @@ func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andNotExpiring(t *te
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateGood, route.certificateStatus)
+		assert.Equal(t, CertificateGood, route.CertificateStatus())
 	})
 }
 
@@ -97,7 +97,7 @@ func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andExpiring(t *testi
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateExpiringSoon, route.certificateStatus)
+		assert.Equal(t, CertificateExpiringSoon, route.CertificateStatus())
 	})
 }
 
@@ -257,9 +257,9 @@ func Test_Manager_SetRoutes_setsCertificateOnRoutes(t *testing.T) {
 		synctest.Wait()
 		manager.CheckCertificates()
 
-		assert.Equal(t, dummyCert, manager.RouteForDomain("example.com").certificate)
-		assert.Equal(t, dummyCert, manager.RouteForDomain("test.example.com").certificate)
-		assert.Equal(t, dummyCert, manager.RouteForDomain("test.deep.example.com").certificate)
+		assert.Equal(t, dummyCert, manager.RouteForDomain("example.com").Certificate())
+		assert.Equal(t, dummyCert, manager.RouteForDomain("test.example.com").Certificate())
+		assert.Equal(t, dummyCert, manager.RouteForDomain("test.deep.example.com").Certificate())
 	})
 }
 
@@ -271,9 +271,9 @@ func Test_Manager_SetRoutes_ignoresCertificateIfProviderNotConfigured(t *testing
 		}}, nil)
 		synctest.Wait()
 
-		assert.Nil(t, manager.RouteForDomain("example.com").certificate)
-		assert.Nil(t, manager.RouteForDomain("test.example.com").certificate)
-		assert.Nil(t, manager.RouteForDomain("test.deep.example.com").certificate)
+		assert.Nil(t, manager.RouteForDomain("example.com").Certificate())
+		assert.Nil(t, manager.RouteForDomain("test.example.com").Certificate())
+		assert.Nil(t, manager.RouteForDomain("test.deep.example.com").Certificate())
 	})
 }
 
@@ -311,11 +311,11 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andNoPreviou
 		_ = manager.SetRoutes([]*Route{route}, nil)
 		synctest.Wait()
 
-		route.certificate = nil
+		route.setCertificate(nil)
 		certManager.err = fmt.Errorf("ruh roh")
 		certManager.existingErr = fmt.Errorf("ruh roh")
 		manager.CheckCertificates()
-		assert.Equal(t, CertificateMissing, route.certificateStatus)
+		assert.Equal(t, CertificateMissing, route.CertificateStatus())
 	})
 }
 
@@ -337,7 +337,7 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andPreviousC
 
 		certManager.err = fmt.Errorf("ruh roh")
 		manager.CheckCertificates()
-		assert.Equal(t, CertificateExpiringSoon, route.certificateStatus)
+		assert.Equal(t, CertificateExpiringSoon, route.CertificateStatus())
 	})
 }
 
@@ -375,12 +375,12 @@ func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 		certManager.certificate = newCert
 		manager.CheckCertificates()
 
-		assert.Equal(t, newCert, manager.RouteForDomain("example.com").certificate)
-		assert.Equal(t, newCert, manager.RouteForDomain("test.example.com").certificate)
-		assert.Equal(t, newCert, manager.RouteForDomain("test.deep.example.com").certificate)
-		assert.Equal(t, newCert, manager.RouteForDomain("test.example.net").certificate)
-		assert.Equal(t, CertificateGood, manager.RouteForDomain("example.com").certificateStatus)
-		assert.Equal(t, CertificateGood, manager.RouteForDomain("test.example.com").certificateStatus)
+		assert.Equal(t, newCert, manager.RouteForDomain("example.com").Certificate())
+		assert.Equal(t, newCert, manager.RouteForDomain("test.example.com").Certificate())
+		assert.Equal(t, newCert, manager.RouteForDomain("test.deep.example.com").Certificate())
+		assert.Equal(t, newCert, manager.RouteForDomain("test.example.net").Certificate())
+		assert.Equal(t, CertificateGood, manager.RouteForDomain("example.com").CertificateStatus())
+		assert.Equal(t, CertificateGood, manager.RouteForDomain("test.example.com").CertificateStatus())
 	})
 }
 
@@ -395,7 +395,7 @@ func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
 		synctest.Wait()
 
 		manager.CheckCertificates()
-		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").certificateStatus)
-		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("test.example.com").certificateStatus)
+		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").CertificateStatus())
+		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("test.example.com").CertificateStatus())
 	})
 }
