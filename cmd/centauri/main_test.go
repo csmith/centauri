@@ -792,11 +792,10 @@ func startPebble() func() {
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "PEBBLE_VA_NOSLEEP=1", "PEBBLE_WFE_NONCEREJECT=0", "PEBBLE_AUTHZREUSE=0")
 
-	go func() {
-		if err := cmd.Run(); err != nil {
-			panic(err)
-		}
-	}()
+	if err := cmd.Start(); err != nil {
+		panic(err)
+	}
+	go cmd.Wait()
 
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	start := time.Now()
@@ -830,11 +829,10 @@ func startChallTestSrv() func() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	go func() {
-		if err := cmd.Run(); err != nil {
-			panic(err)
-		}
-	}()
+	if err := cmd.Start(); err != nil {
+		panic(err)
+	}
+	go cmd.Wait()
 
 	return func() {
 		if cmd.Process != nil {
