@@ -22,28 +22,28 @@ type legoLogger struct {
 	logger *slog.Logger
 }
 
-func (l *legoLogger) Fatal(args ...interface{}) {
+func (l *legoLogger) Fatal(args ...any) {
 	l.logger.Error(fmt.Sprint(args...))
 }
 
-func (l *legoLogger) Fatalln(args ...interface{}) {
+func (l *legoLogger) Fatalln(args ...any) {
 	l.logger.Error(fmt.Sprint(args...))
 }
 
-func (l *legoLogger) Fatalf(format string, args ...interface{}) {
+func (l *legoLogger) Fatalf(format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
 var domainRegex = regexp.MustCompile(`^\[[a-zA-Z0-9-.]+] `)
 
-func (l *legoLogger) Print(args ...interface{}) {
+func (l *legoLogger) Print(args ...any) {
 	message := fmt.Sprint(args...)
 	fn := l.logger.Debug
-	if strings.HasPrefix(message, "[WARN] ") {
-		message = strings.TrimPrefix(message, "[WARN] ")
+	if after, ok := strings.CutPrefix(message, "[WARN] "); ok {
+		message = after
 		fn = l.logger.Warn
-	} else if strings.HasPrefix(message, "[INFO] ") {
-		message = strings.TrimPrefix(message, "[INFO] ")
+	} else if after, ok := strings.CutPrefix(message, "[INFO] "); ok {
+		message = after
 		fn = l.logger.Info
 	}
 
@@ -57,11 +57,11 @@ func (l *legoLogger) Print(args ...interface{}) {
 	fn(message, ourArgs...)
 }
 
-func (l *legoLogger) Println(args ...interface{}) {
+func (l *legoLogger) Println(args ...any) {
 	l.Print(args...)
 }
 
-func (l *legoLogger) Printf(format string, args ...interface{}) {
+func (l *legoLogger) Printf(format string, args ...any) {
 	l.Print(fmt.Sprintf(format, args...))
 }
 

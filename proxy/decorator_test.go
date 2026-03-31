@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"github.com/stretchr/testify/assert"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -60,9 +61,7 @@ func Test_BannedHeaderDecorator_removesHeaders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reqIn := &http.Request{Header: tt.given}
 			reqOut := &http.Request{Header: make(http.Header)}
-			for k, v := range tt.given {
-				reqOut.Header[k] = v
-			}
+			maps.Copy(reqOut.Header, tt.given)
 			decorator.Decorate(reqIn, reqOut)
 			assert.Equal(t, tt.expected, reqOut.Header)
 		})
