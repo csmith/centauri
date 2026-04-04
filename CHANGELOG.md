@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.5.0 - 2026-04-04
+
+- Dependency updates
+- Fix a data race when updating routes. This should not have actually had
+  any effect, but was undefined behaviour per the go memory model.
+
 ## 2.4.0 - 2025-12-24
 
 ### New features
