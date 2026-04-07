@@ -1,6 +1,6 @@
 module github.com/csmith/centauri
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/csmith/envflag/v2 v2.0.0
@@ -12,7 +12,7 @@ require (
 	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b
 	golang.org/x/sys v0.42.0
-	tailscale.com v1.96.0
+	tailscale.com v1.96.1
 )
 
 require (
