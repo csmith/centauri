@@ -156,11 +156,7 @@ func (n *networkConfigSource) readAndApplyConfig(updateRoutes routeUpdater) erro
 	}
 
 	payloadLength := binary.BigEndian.Uint32(lengthBytes)
-	if payloadLength == 0 {
-		return fmt.Errorf("payload length is zero")
-	}
 
-	// Payload
 	payload := make([]byte, payloadLength)
 	if _, err := io.ReadFull(n.conn, payload); err != nil {
 		return fmt.Errorf("failed to read payload: %w", err)

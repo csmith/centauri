@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.6.0 - 2026-04-22
+
+- Centauri now accepts empty configs from the network config source
+- If Centauri doesn't have any routes to serve it will log a warning
+
 ## 2.5.0 - 2026-04-04
 
 - Dependency updates

@@ -39,6 +39,12 @@ func NewManager(provider CertificateProvider) *Manager {
 //
 // If a fallback is specified, then that route will be used for any requests that don't otherwise a route.
 func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
+	if len(newRoutes) == 0 {
+		slog.Warn("No routes configured, Centauri will not proxy anything")
+	} else {
+		slog.Debug("Configuring proxy manager", "routes", len(newRoutes), "fallback", fallback != nil)
+	}
+
 	for i := range newRoutes {
 		m.loadCertificate(newRoutes[i])
 	}
