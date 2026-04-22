@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/csmith/envflag/v2 v2.0.0
 	github.com/csmith/legotapas v1.8.0
-	github.com/csmith/slogflags v1.1.0
+	github.com/csmith/slogflags v1.2.0
 	github.com/go-acme/lego/v4 v4.33.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
