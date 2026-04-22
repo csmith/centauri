@@ -288,8 +288,8 @@ github.com/csmith/envflag/v2 v2.0.0 h1:jho28W/psEqJ02EdbUHmkmFpbc5HFhog6NzHRbgtI
 github.com/csmith/envflag/v2 v2.0.0/go.mod h1:GNzzXvZ2bC3z6tdoO45mTrs7l4Uht2WfBKaF1KQu0Pk=
 github.com/csmith/legotapas v1.8.0 h1:rNKMWPHLKwXlHYuuNullkGl48Tmev83LvFBE2EuFo4k=
 github.com/csmith/legotapas v1.8.0/go.mod h1:9jJuvyuX9GSrCIgpnpxrD9L9zHM+XNcXATrFqvliXcc=
-github.com/csmith/slogflags v1.1.0 h1:HHRIjCq8Oorh0IycjHbqBYECQ778Ay1OYNr+c/WQf8g=
-github.com/csmith/slogflags v1.1.0/go.mod h1:M8Q+BmnQItanz/rs2tO5J6bgt4lZZQJiu2EWTO2aEzA=
+github.com/csmith/slogflags v1.2.0 h1:NhDhmnZGI2qab9acWsXvaRin/YsQJB+JtyANKvIxEzw=
+github.com/csmith/slogflags v1.2.0/go.mod h1:bauVbR8CshU26FTB8K7XYqnkIV6iUKOxkNP76IdZkqk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
