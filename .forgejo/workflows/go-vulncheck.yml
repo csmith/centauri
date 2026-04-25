@@ -9,5 +9,5 @@ permissions:
 
 jobs:
   build:
-    uses: meta/workflows/.forgejo/workflows/image-test.yml@master
+    uses: meta/workflows/.forgejo/workflows/go-vulncheck.yml@master
     runs-on: docker
