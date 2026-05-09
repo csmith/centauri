@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.6.1 - 2026-05-09
+
+- Fix crash if the ACME server returns an ARI update window with
+  start >= end
+
 ## 2.6.0 - 2026-04-22
 
 - Centauri now accepts empty configs from the network config source

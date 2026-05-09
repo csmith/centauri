@@ -254,7 +254,12 @@ func (s *LegoSupplier) UpdateRenewalInfo(cert *Details) error {
 
 	window := response.SuggestedWindow
 	windowDuration := window.End.Sub(window.Start)
-	cert.AriRenewalTime = window.Start.Add(time.Duration(mathrand.Int64N(int64(windowDuration))))
+	slog.Debug("Got ARI information", "start", window.Start, "end", window.End)
+	if windowDuration >= time.Second {
+		cert.AriRenewalTime = window.Start.Add(time.Duration(mathrand.Int64N(int64(windowDuration))))
+	} else {
+		cert.AriRenewalTime = window.Start
+	}
 	cert.AriNextUpdate = time.Now().Add(response.RetryAfter)
 	cert.AriExplanation = response.ExplanationURL
 
