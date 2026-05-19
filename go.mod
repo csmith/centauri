@@ -148,7 +148,7 @@ require (
 	github.com/labbsr0x/goh v1.0.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/letsencrypt/challtestsrv v1.4.2 // indirect
-	github.com/letsencrypt/pebble/v2 v2.10.0 // indirect
+	github.com/letsencrypt/pebble/v2 v2.10.1 // indirect
 	github.com/linode/linodego v1.67.0 // indirect
 	github.com/liquidweb/liquidweb-cli v0.7.0 // indirect
 	github.com/liquidweb/liquidweb-go v1.6.4 // indirect
