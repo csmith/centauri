@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag/v2 v2.0.0
 	github.com/csmith/legotapas v1.8.0
 	github.com/csmith/slogflags v1.2.0
-	github.com/go-acme/lego/v4 v4.35.1
+	github.com/go-acme/lego/v4 v4.35.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.50.0
@@ -176,7 +176,7 @@ require (
 	github.com/nrdcg/namesilo v0.5.0 // indirect
 	github.com/nrdcg/nodion v0.1.0 // indirect
 	github.com/nrdcg/oci-go-sdk/common/v1065 v1065.113.0 // indirect
-	github.com/nrdcg/oci-go-sdk/dns/v1065 v1065.112.0 // indirect
+	github.com/nrdcg/oci-go-sdk/dns/v1065 v1065.113.0 // indirect
 	github.com/nrdcg/porkbun v0.4.0 // indirect
 	github.com/nrdcg/vegadns v0.3.0 // indirect
 	github.com/nzdjb/go-metaname v1.0.0 // indirect
