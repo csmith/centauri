@@ -13,8 +13,8 @@ import (
 	"github.com/csmith/centauri/certificate"
 	"github.com/csmith/centauri/proxy"
 	"github.com/csmith/legotapas"
-	"github.com/go-acme/lego/v4/certcrypto"
-	"github.com/go-acme/lego/v4/lego"
+	"github.com/go-acme/lego/v5/certcrypto"
+	"github.com/go-acme/lego/v5/lego"
 	"golang.org/x/sys/unix"
 )
 

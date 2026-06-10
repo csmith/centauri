@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/csmith/slogflags"
-	"github.com/go-acme/lego/v4/log"
+	"github.com/go-acme/lego/v5/log"
 	"log/slog"
 	"regexp"
 	"strings"

@@ -3,7 +3,7 @@ package certificate
 import (
 	"testing"
 
-	"github.com/go-acme/lego/v4/certcrypto"
+	"github.com/go-acme/lego/v5/certcrypto"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -10,7 +10,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/go-acme/lego/v4/certcrypto"
+	"github.com/go-acme/lego/v5/certcrypto"
 )
 
 type SelfSignedSupplier struct {

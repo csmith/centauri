@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-acme/lego/v4/acme"
-	"github.com/go-acme/lego/v4/acme/api"
-	"github.com/go-acme/lego/v4/certcrypto"
-	legocert "github.com/go-acme/lego/v4/certificate"
-	"github.com/go-acme/lego/v4/registration"
+	"github.com/go-acme/lego/v5/acme"
+	"github.com/go-acme/lego/v5/acme/api"
+	"github.com/go-acme/lego/v5/certcrypto"
+	legocert "github.com/go-acme/lego/v5/certificate"
+	"github.com/go-acme/lego/v5/registration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ocsp"
@@ -122,16 +122,16 @@ func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 }
 
 type fakeCertifier struct {
-	request          legocert.ObtainRequest
-	resource         *legocert.Resource
-	bundle           []byte
-	rawResponse      []byte
-	response         *ocsp.Response
-	ocspErr          error
-	obtainErr        error
-	renewalInfoReq   legocert.RenewalInfoRequest
-	renewalInfoRes   *legocert.RenewalInfoResponse
-	renewalInfoErr   error
+	request        legocert.ObtainRequest
+	resource       *legocert.Resource
+	bundle         []byte
+	rawResponse    []byte
+	response       *ocsp.Response
+	ocspErr        error
+	obtainErr      error
+	renewalInfoReq legocert.RenewalInfoRequest
+	renewalInfoRes *legocert.RenewalInfoResponse
+	renewalInfoErr error
 }
 
 func (f *fakeCertifier) GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error) {
