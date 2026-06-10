@@ -1,10 +1,12 @@
 package certificate
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,7 +28,6 @@ func Test_acmeUser_load_generatesKeyIfFileIsMissing(t *testing.T) {
 	user := &acmeUser{}
 	require.NoError(t, user.load(filepath.Join(t.TempDir(), "user.json")))
 	assert.NotNil(t, user.GetPrivateKey())
-	assert.NotEmptyf(t, user.Key, "expected key to be serialised")
 }
 
 func Test_acmeUser_load_errorsIfFileIsUnreadable(t *testing.T) {
@@ -66,16 +67,15 @@ func Test_acmeUser_load_restoresSavedKey(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, privateKey, user.key)
-	assert.EqualValues(t, encoded, user.Key)
 }
 
 type fakeRegistrar struct {
-	res  *registration.Resource
+	res  *acme.ExtendedAccount
 	err  error
 	opts registration.RegisterOptions
 }
 
-func (f *fakeRegistrar) Register(options registration.RegisterOptions) (*registration.Resource, error) {
+func (f *fakeRegistrar) Register(ctx context.Context, options registration.RegisterOptions) (*acme.ExtendedAccount, error) {
 	f.opts = options
 	return f.res, f.err
 }
@@ -85,36 +85,36 @@ func Test_acmeUser_registerAndSave_errorsIfRegistrarErrors(t *testing.T) {
 	r := &fakeRegistrar{
 		err: fmt.Errorf("denied"),
 	}
-	user := &acmeUser{}
-	assert.Error(t, user.registerAndSave(r, path))
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	user := &acmeUser{key: privateKey}
+	assert.Error(t, user.registerAndSave(t.Context(), r, path))
 	assert.True(t, r.opts.TermsOfServiceAgreed)
 }
 
 func Test_acmeUser_registerAndSave_updatesRegistrationResource(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "user.json")
 	r := &fakeRegistrar{
-		res: &registration.Resource{URI: "https://example.com/acme/reg/1"},
+		res: &acme.ExtendedAccount{Location: "https://example.com/acme/reg/1"},
 	}
-	user := &acmeUser{}
-	require.NoError(t, user.registerAndSave(r, path))
-	assert.NotNil(t, user.Registration)
-	assert.Equal(t, r.res.URI, user.GetRegistration().URI)
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	user := &acmeUser{key: privateKey}
+	require.NoError(t, user.registerAndSave(t.Context(), r, path))
+	assert.NotNil(t, user.account)
+	assert.Equal(t, r.res.Location, user.GetRegistration().Location)
 }
 
 func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "user.json")
 	r := &fakeRegistrar{
-		res: &registration.Resource{URI: "https://example.com/acme/reg/1"},
+		res: &acme.ExtendedAccount{Location: "https://example.com/acme/reg/1"},
 	}
 
 	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	encoded := certcrypto.PEMEncode(privateKey)
 	user := &acmeUser{
-		Email: "test@example.com",
+		email: "test@example.com",
 		key:   privateKey,
-		Key:   string(encoded),
 	}
-	require.NoError(t, user.registerAndSave(r, path))
+	require.NoError(t, user.registerAndSave(t.Context(), r, path))
 
 	newUser := &acmeUser{}
 	require.NoError(t, newUser.load(path))
@@ -122,30 +122,30 @@ func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 }
 
 type fakeCertifier struct {
-	request        legocert.ObtainRequest
-	resource       *legocert.Resource
-	bundle         []byte
-	rawResponse    []byte
-	response       *ocsp.Response
-	ocspErr        error
-	obtainErr      error
-	renewalInfoReq legocert.RenewalInfoRequest
-	renewalInfoRes *legocert.RenewalInfoResponse
-	renewalInfoErr error
+	request         legocert.ObtainRequest
+	resource        *legocert.Resource
+	bundle          []byte
+	rawResponse     []byte
+	response        *ocsp.Response
+	ocspErr         error
+	obtainErr       error
+	renewalInfoCert *x509.Certificate
+	renewalInfoRes  *legocert.RenewalInfo
+	renewalInfoErr  error
 }
 
-func (f *fakeCertifier) GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error) {
+func (f *fakeCertifier) GetOCSP(ctx context.Context, bundle []byte) ([]byte, *ocsp.Response, error) {
 	f.bundle = bundle
 	return f.rawResponse, f.response, f.ocspErr
 }
 
-func (f *fakeCertifier) Obtain(request legocert.ObtainRequest) (*legocert.Resource, error) {
+func (f *fakeCertifier) Obtain(ctx context.Context, request legocert.ObtainRequest) (*legocert.Resource, error) {
 	f.request = request
 	return f.resource, f.obtainErr
 }
 
-func (f *fakeCertifier) GetRenewalInfo(req legocert.RenewalInfoRequest) (*legocert.RenewalInfoResponse, error) {
-	f.renewalInfoReq = req
+func (f *fakeCertifier) GetRenewalInfo(ctx context.Context, cert *x509.Certificate) (*legocert.RenewalInfo, error) {
+	f.renewalInfoCert = cert
 	return f.renewalInfoRes, f.renewalInfoErr
 }
 
@@ -155,12 +155,14 @@ func Test_Supplier_GetCertificate_passesDetailsToCertifier(t *testing.T) {
 	}
 	s := &LegoSupplier{
 		certifier: c,
+		keyType:   certcrypto.EC384,
 	}
 
-	_, _ = s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
+	_, _ = s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Equal(t, c.request.Domains, []string{"example.com", "alt.example.com", "example.net"})
 	assert.True(t, c.request.Bundle)
 	assert.True(t, c.request.MustStaple)
+	assert.Equal(t, certcrypto.EC384, c.request.KeyType)
 }
 
 func Test_Supplier_GetCertificate_passesProfileToCertifier(t *testing.T) {
@@ -170,9 +172,10 @@ func Test_Supplier_GetCertificate_passesProfileToCertifier(t *testing.T) {
 	s := &LegoSupplier{
 		certifier: c,
 		profile:   "shortlived",
+		keyType:   certcrypto.EC384,
 	}
 
-	_, _ = s.GetCertificate("example.com", nil, false)
+	_, _ = s.GetCertificate(t.Context(), "example.com", nil, false)
 	assert.Equal(t, "shortlived", c.request.Profile)
 }
 
@@ -184,7 +187,7 @@ func Test_Supplier_GetCertificate_returnsErrorIfObtainFails(t *testing.T) {
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
+	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
 }
 
@@ -196,7 +199,7 @@ func Test_Supplier_GetCertificate_returnsErrorIfCertificateCantBeParsed(t *testi
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
+	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
 }
 
@@ -212,7 +215,7 @@ func Test_Supplier_GetCertificate_returnsErrorIfStaplingFailsWhenEnabled(t *test
 		certifier: c,
 	}
 
-	_, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
+	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.Error(t, err)
 }
 
@@ -228,7 +231,7 @@ func Test_Supplier_GetCertificate_doesNotTryToStapleIfDisabled(t *testing.T) {
 		certifier: c,
 	}
 
-	cert, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, false)
+	cert, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, false)
 	assert.NoError(t, err)
 	assert.EqualValues(t, cert.Certificate, pemCert)
 }
@@ -254,7 +257,7 @@ func Test_Supplier_GetCertificate_returnsCertificateDetails(t *testing.T) {
 		certifier: c,
 	}
 
-	cert, err := s.GetCertificate("example.com", []string{"alt.example.com", "example.net"}, true)
+	cert, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
 	assert.NoError(t, err)
 	assert.EqualValues(t, cert.Certificate, pemCert)
 	assert.Equal(t, cert.Issuer, "issuer")
@@ -272,7 +275,7 @@ func Test_Supplier_UpdateStaple_errorsIfStaplerErrors(t *testing.T) {
 			ocspErr: fmt.Errorf("denied"),
 		},
 	}
-	assert.Error(t, s.UpdateStaple(&Details{Certificate: "cert"}))
+	assert.Error(t, s.UpdateStaple(t.Context(), &Details{Certificate: "cert"}))
 }
 
 func Test_Supplier_UpdateStaple_errorsIfStaplerReturnsNil(t *testing.T) {
@@ -281,7 +284,7 @@ func Test_Supplier_UpdateStaple_errorsIfStaplerReturnsNil(t *testing.T) {
 			response: nil,
 		},
 	}
-	assert.Error(t, s.UpdateStaple(&Details{Certificate: "cert"}))
+	assert.Error(t, s.UpdateStaple(t.Context(), &Details{Certificate: "cert"}))
 }
 
 func Test_Supplier_UpdateStaple_errorsIfStaplerReturnStatusOtherTHanGood(t *testing.T) {
@@ -290,7 +293,7 @@ func Test_Supplier_UpdateStaple_errorsIfStaplerReturnStatusOtherTHanGood(t *test
 			response: &ocsp.Response{Status: ocsp.Revoked},
 		},
 	}
-	assert.Error(t, s.UpdateStaple(&Details{Certificate: "cert"}))
+	assert.Error(t, s.UpdateStaple(t.Context(), &Details{Certificate: "cert"}))
 }
 
 func Test_Supplier_UpdateStaple_passesCertToStapler(t *testing.T) {
@@ -298,7 +301,7 @@ func Test_Supplier_UpdateStaple_passesCertToStapler(t *testing.T) {
 	s := &LegoSupplier{
 		certifier: c,
 	}
-	_ = s.UpdateStaple(&Details{Certificate: "cert"})
+	_ = s.UpdateStaple(t.Context(), &Details{Certificate: "cert"})
 	assert.EqualValues(t, "cert", c.bundle)
 }
 
@@ -315,7 +318,7 @@ func Test_Supplier_UpdateStaple_updatesOcspDetails(t *testing.T) {
 	}
 
 	cert := &Details{Certificate: "cert"}
-	require.NoError(t, s.UpdateStaple(cert))
+	require.NoError(t, s.UpdateStaple(t.Context(), cert))
 	assert.Equal(t, c.response.NextUpdate, cert.NextOcspUpdate)
 	assert.Equal(t, c.rawResponse, cert.OcspResponse)
 }
@@ -324,7 +327,7 @@ func Test_Supplier_UpdateRenewalInfo_errorsIfCertificateCantBeParsed(t *testing.
 	s := &LegoSupplier{
 		certifier: &fakeCertifier{},
 	}
-	err := s.UpdateRenewalInfo(&Details{Certificate: "not a pem"})
+	err := s.UpdateRenewalInfo(t.Context(), &Details{Certificate: "not a pem"})
 	assert.Error(t, err)
 }
 
@@ -340,7 +343,7 @@ func Test_Supplier_UpdateRenewalInfo_returnsNilIfServerDoesNotSupportARI(t *test
 	}
 
 	cert := &Details{Certificate: string(pemCert)}
-	err := s.UpdateRenewalInfo(cert)
+	err := s.UpdateRenewalInfo(t.Context(), cert)
 	assert.NoError(t, err)
 	assert.True(t, cert.AriRenewalTime.IsZero(), "should not set renewal time when ARI not supported")
 }
@@ -356,7 +359,7 @@ func Test_Supplier_UpdateRenewalInfo_returnsErrorIfGetRenewalInfoFails(t *testin
 		certifier: c,
 	}
 
-	err := s.UpdateRenewalInfo(&Details{Certificate: string(pemCert)})
+	err := s.UpdateRenewalInfo(t.Context(), &Details{Certificate: string(pemCert)})
 	assert.Error(t, err)
 }
 
@@ -366,22 +369,23 @@ func Test_Supplier_UpdateRenewalInfo_passesCertToCertifier(t *testing.T) {
 	expectedCert, _ := certcrypto.ParsePEMCertificate(pemCert)
 
 	c := &fakeCertifier{
-		renewalInfoRes: &legocert.RenewalInfoResponse{
-			RenewalInfoResponse: acme.RenewalInfoResponse{
-				SuggestedWindow: acme.Window{
-					Start: time.Now().Add(time.Hour),
-					End:   time.Now().Add(time.Hour * 2),
+		renewalInfoRes: &legocert.RenewalInfo{
+			ExtendedRenewalInfo: &acme.ExtendedRenewalInfo{
+				RenewalInfo: acme.RenewalInfo{
+					SuggestedWindow: acme.Window{
+						Start: time.Now().Add(time.Hour),
+						End:   time.Now().Add(time.Hour * 2),
+					},
 				},
 			},
-			RetryAfter: time.Hour,
 		},
 	}
 	s := &LegoSupplier{
 		certifier: c,
 	}
 
-	_ = s.UpdateRenewalInfo(&Details{Certificate: string(pemCert)})
-	assert.Equal(t, expectedCert, c.renewalInfoReq.Cert)
+	_ = s.UpdateRenewalInfo(t.Context(), &Details{Certificate: string(pemCert)})
+	assert.Equal(t, expectedCert, c.renewalInfoCert)
 }
 
 func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
@@ -392,15 +396,17 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 	windowEnd := time.Now().Add(time.Hour * 2)
 
 	c := &fakeCertifier{
-		renewalInfoRes: &legocert.RenewalInfoResponse{
-			RenewalInfoResponse: acme.RenewalInfoResponse{
-				SuggestedWindow: acme.Window{
-					Start: windowStart,
-					End:   windowEnd,
+		renewalInfoRes: &legocert.RenewalInfo{
+			ExtendedRenewalInfo: &acme.ExtendedRenewalInfo{
+				RenewalInfo: acme.RenewalInfo{
+					SuggestedWindow: acme.Window{
+						Start: windowStart,
+						End:   windowEnd,
+					},
+					ExplanationURL: "https://example.com/explanation",
 				},
-				ExplanationURL: "https://example.com/explanation",
+				RetryAfter: time.Hour * 6,
 			},
-			RetryAfter: time.Hour * 6,
 		},
 	}
 	s := &LegoSupplier{
@@ -409,7 +415,7 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 
 	cert := &Details{Certificate: string(pemCert)}
 	before := time.Now()
-	require.NoError(t, s.UpdateRenewalInfo(cert))
+	require.NoError(t, s.UpdateRenewalInfo(t.Context(), cert))
 
 	assert.Equal(t, "https://example.com/explanation", cert.AriExplanation)
 	assert.True(t, cert.AriNextUpdate.After(before.Add(time.Hour*6-time.Second)), "AriNextUpdate should be approximately now + RetryAfter")

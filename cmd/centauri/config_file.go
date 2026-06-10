@@ -26,8 +26,8 @@ func newFileConfigSource() *fileConfigSource {
 	}
 }
 
-func (f *fileConfigSource) Start(updateRoutes routeUpdater, errChan chan<- error) error {
-	go f.run(updateRoutes, errChan)
+func (f *fileConfigSource) Start(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) error {
+	go f.run(ctx, updateRoutes, errChan)
 	f.Reload()
 	return nil
 }
@@ -63,7 +63,7 @@ func (f *fileConfigSource) Validate() error {
 	return nil
 }
 
-func (f *fileConfigSource) run(updateRoutes routeUpdater, errChan chan<- error) {
+func (f *fileConfigSource) run(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) {
 	for {
 		select {
 		case <-f.stopChan:
@@ -86,7 +86,7 @@ func (f *fileConfigSource) run(updateRoutes routeUpdater, errChan chan<- error) 
 				}
 
 				slog.Debug("Installing routes", "count", len(routes))
-				if err := updateRoutes(routes, fallback); err != nil {
+				if err := updateRoutes(ctx, routes, fallback); err != nil {
 					errChan <- fmt.Errorf("route manager error: %w", err)
 					return
 				}

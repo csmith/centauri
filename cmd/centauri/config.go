@@ -6,10 +6,10 @@ import (
 	"github.com/csmith/centauri/proxy"
 )
 
-type routeUpdater func([]*proxy.Route, *proxy.Route) error
+type routeUpdater func(context.Context, []*proxy.Route, *proxy.Route) error
 
 type configSource interface {
-	Start(updateRoutes routeUpdater, errChan chan<- error) error
+	Start(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) error
 	Stop(ctx context.Context)
 	Reload()
 	Validate() error

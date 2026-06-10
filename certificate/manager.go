@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
@@ -17,9 +18,9 @@ type Store interface {
 
 // Supplier provides new certificates and OCSP staples.
 type Supplier interface {
-	GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error)
-	UpdateStaple(cert *Details) error
-	UpdateRenewalInfo(cert *Details) error
+	GetCertificate(ctx context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error)
+	UpdateStaple(ctx context.Context, cert *Details) error
+	UpdateRenewalInfo(ctx context.Context, cert *Details) error
 	MinCertificateValidity() time.Duration
 	MinStapleValidity() time.Duration
 }
@@ -45,7 +46,7 @@ func NewManager(store Store, suppliers map[string]Supplier, supplierPreference [
 
 // GetCertificate returns a certificate for the given subject and alternate names. This may take some time if a new
 // certificate needs to be obtained, or the OCSP staple needs to be updated.
-func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
+func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
 	supplier, err := m.supplier(preferredSupplier)
 	if err != nil {
 		return nil, err
@@ -57,21 +58,21 @@ func (m *Manager) GetCertificate(preferredSupplier string, subject string, altNa
 	cert := m.store.GetCertificate(subject, altNames)
 	if cert == nil {
 		slog.Info("Obtaining new certificate", "domain", subject, "altNames", altNames)
-		return m.obtain(supplier, subject, altNames)
+		return m.obtain(ctx, supplier, subject, altNames)
 	}
 
 	if cert.AriNextUpdate.Before(time.Now()) {
-		m.updateRenewalInfo(supplier, cert, true)
+		m.updateRenewalInfo(ctx, supplier, cert, true)
 	}
 
 	if cert.ShouldRenew(supplier.MinCertificateValidity()) {
 		slog.Info("Renewing certificate", "domain", subject, "altNames", altNames)
-		return m.obtain(supplier, subject, altNames)
+		return m.obtain(ctx, supplier, subject, altNames)
 	}
 
 	if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
 		slog.Info("Obtaining new OCSP staple", "domain", subject, "altNames", altNames)
-		return m.staple(supplier, cert)
+		return m.staple(ctx, supplier, cert)
 	}
 
 	return cert.keyPair()
@@ -117,13 +118,13 @@ func (m *Manager) supplier(preferred string) (Supplier, error) {
 }
 
 // obtain gets a new certificate and saves it to the store.
-func (m *Manager) obtain(supplier Supplier, subject string, altNames []string) (*tls.Certificate, error) {
-	cert, err := supplier.GetCertificate(subject, altNames, m.shouldStaple)
+func (m *Manager) obtain(ctx context.Context, supplier Supplier, subject string, altNames []string) (*tls.Certificate, error) {
+	cert, err := supplier.GetCertificate(ctx, subject, altNames, m.shouldStaple)
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain certificate for %s: %w", subject, err)
 	}
 
-	m.updateRenewalInfo(supplier, cert, false)
+	m.updateRenewalInfo(ctx, supplier, cert, false)
 
 	if err := m.store.SaveCertificate(cert); err != nil {
 		return nil, fmt.Errorf("failed to save certificate for %s: %s", subject, err)
@@ -133,8 +134,8 @@ func (m *Manager) obtain(supplier Supplier, subject string, altNames []string) (
 }
 
 // staple updates the OCSP staple for the cert and saves it in the store.
-func (m *Manager) staple(supplier Supplier, cert *Details) (*tls.Certificate, error) {
-	if err := supplier.UpdateStaple(cert); err != nil {
+func (m *Manager) staple(ctx context.Context, supplier Supplier, cert *Details) (*tls.Certificate, error) {
+	if err := supplier.UpdateStaple(ctx, cert); err != nil {
 		return nil, fmt.Errorf("failed to obtain OCSP staple for %s: %w", cert.Subject, err)
 	}
 
@@ -146,9 +147,9 @@ func (m *Manager) staple(supplier Supplier, cert *Details) (*tls.Certificate, er
 }
 
 // updateRenewalInfo fetches fresh ARI data and optionally saves it to the store.
-func (m *Manager) updateRenewalInfo(supplier Supplier, cert *Details, save bool) {
+func (m *Manager) updateRenewalInfo(ctx context.Context, supplier Supplier, cert *Details, save bool) {
 	slog.Info("Updating ARI for certificate", "domain", cert.Subject, "altNames", cert.AltNames)
-	if err := supplier.UpdateRenewalInfo(cert); err != nil {
+	if err := supplier.UpdateRenewalInfo(ctx, cert); err != nil {
 		slog.Error("Failed to update renewal info", "error", err, "domain", cert.Subject, "altNames", cert.AltNames)
 		return
 	}

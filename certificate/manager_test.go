@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -56,19 +57,19 @@ type fakeSupplier struct {
 	err             error
 }
 
-func (f *fakeSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
+func (f *fakeSupplier) GetCertificate(_ context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	f.subject = subject
 	f.altNames = altNames
 	f.shouldStaple = shouldStaple
 	return f.certificate, f.err
 }
 
-func (f *fakeSupplier) UpdateStaple(cert *Details) error {
+func (f *fakeSupplier) UpdateStaple(_ context.Context, cert *Details) error {
 	f.certificate = cert
 	return f.err
 }
 
-func (f *fakeSupplier) UpdateRenewalInfo(cert *Details) error {
+func (f *fakeSupplier) UpdateRenewalInfo(_ context.Context, cert *Details) error {
 	f.renewalInfoCert = cert
 	return f.err
 }
@@ -94,11 +95,11 @@ Wf86aX6PepsntZv2GYlA5UpabfT2EZICICpJ5h/iI+i341gBmLiAFQOyTDT+/wQc
 6MF9+Yw1Yy0t
 -----END CERTIFICATE-----
 `
-	keyPem = `-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIIrYSSNQFaA2Hwf1duRSxKtLYX5CB04fSeQ6tF1aY/PuoAoGCCqGSM49
-AwEHoUQDQgAEPR3tU2Fta9ktY+6P9G0cWO+0kETA6SFs38GecTyudlHz6xvCdz8q
-EKTcWGekdmdDPsHloRNtsiCa697B2O9IFA==
------END EC PRIVATE KEY-----
+	keyPem = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgithJI1AVoDYfB/V2
+5FLEq0thfkIHTh9J5Dq0XVpj8+6hRANCAAQ9He1TYW1r2S1j7o/0bRxY77SQRMDp
+IWzfwZ5xPK52UfPrG8J3PyoQpNxYZ6R2Z0M+weWhE22yIJrr3sHY70gU
+-----END PRIVATE KEY-----
 `
 	ocspResponse = "Yay it worked. This is not really OCSP."
 )
@@ -128,7 +129,7 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -157,7 +158,7 @@ func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -189,7 +190,7 @@ func Test_Manager_GetCertificate_ignoresStapleIfCertDoesntRequire(t *testing.T) 
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -219,7 +220,7 @@ func Test_Manager_GetCertificate_returnsErrorIfStaplingFails(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -243,7 +244,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingAfterStaplingFails(t *testi
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -267,7 +268,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -297,7 +298,7 @@ func Test_Manager_GetCertificate_updatesARIWhenObtaining(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert, supplier.renewalInfoCert, "should call UpdateRenewalInfo with new certificate")
 }
@@ -322,7 +323,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfValidityTooShort(t *testing
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -353,7 +354,7 @@ func Test_Manager_GetCertificate_updatesARIIfStale(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert, supplier.renewalInfoCert, "should call UpdateRenewalInfo with certificate")
 	assert.Equal(t, cert, store.savedCert, "should save certificate after ARI update")
@@ -380,7 +381,7 @@ func Test_Manager_GetCertificate_obtainsCertificateIfARISaysRenew(t *testing.T) 
 		true,
 	)
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -401,7 +402,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSupplierFails(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -425,7 +426,7 @@ func Test_Manager_GetCertificate_returnsErrorIfSavingNewCertFails(t *testing.T) 
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -449,7 +450,7 @@ func Test_Manager_GetCertificate_usesPreferredSupplierIfSpecified(t *testing.T) 
 		true,
 	)
 
-	c, err := manager.GetCertificate("test", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "test", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -467,7 +468,7 @@ func Test_Manager_GetCertificate_errorsIfPreferredSupplierNotFound(t *testing.T)
 		true,
 	)
 
-	_, err := manager.GetCertificate("another", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "another", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -479,7 +480,7 @@ func Test_Manager_GetCertificate_errorsIfNoSuppliersFound(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.Error(t, err)
 }
 
@@ -502,7 +503,7 @@ func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpe
 		supplierPreference: []string{"missing", "rubbish", "test", "other"},
 	}
 
-	c, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
@@ -532,7 +533,7 @@ func Test_Manager_GetCertificate_acquiresLockWhenGettingCert(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.True(t, store.lockedOnGet)
 }
@@ -557,7 +558,7 @@ func Test_Manager_GetCertificate_releasesLockOnCompletion(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.False(t, store.locked)
 }
@@ -584,7 +585,7 @@ func Test_Manager_GetCertificate_holdsLockWhenSaving(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.True(t, store.lockedOnSave)
 }

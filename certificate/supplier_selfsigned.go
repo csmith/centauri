@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -20,7 +21,7 @@ func NewSelfSignedSupplier() *SelfSignedSupplier {
 	return &SelfSignedSupplier{}
 }
 
-func (s *SelfSignedSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
+func (s *SelfSignedSupplier) GetCertificate(_ context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
@@ -56,12 +57,12 @@ func (s *SelfSignedSupplier) GetCertificate(subject string, altNames []string, s
 	}, nil
 }
 
-func (s *SelfSignedSupplier) UpdateStaple(_ *Details) error {
+func (s *SelfSignedSupplier) UpdateStaple(_ context.Context, _ *Details) error {
 	// Shouldn't be called - self-signed certs aren't stapled
 	return nil
 }
 
-func (s *SelfSignedSupplier) UpdateRenewalInfo(_ *Details) error { return nil }
+func (s *SelfSignedSupplier) UpdateRenewalInfo(_ context.Context, _ *Details) error { return nil }
 
 func (s *SelfSignedSupplier) MinCertificateValidity() time.Duration {
 	return time.Hour * 24 * 7
