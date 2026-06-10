@@ -37,7 +37,7 @@ func newNetworkConfigSource() *networkConfigSource {
 	}
 }
 
-func (n *networkConfigSource) Start(updateRoutes routeUpdater, errChan chan<- error) error {
+func (n *networkConfigSource) Start(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) error {
 	if *configNetworkAddress == "" {
 		return fmt.Errorf("address must be specified when using network config source")
 	}
@@ -48,7 +48,7 @@ func (n *networkConfigSource) Start(updateRoutes routeUpdater, errChan chan<- er
 		return fmt.Errorf("failed to connect to config server: %w", err)
 	}
 
-	go n.run(updateRoutes, errChan)
+	go n.run(ctx, updateRoutes, errChan)
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (n *networkConfigSource) Validate() error {
 	return fmt.Errorf("validation is not supported for network config source")
 }
 
-func (n *networkConfigSource) run(updateRoutes routeUpdater, errChan chan<- error) {
+func (n *networkConfigSource) run(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) {
 	secondChance := false
 	for {
 		select {
@@ -81,7 +81,7 @@ func (n *networkConfigSource) run(updateRoutes routeUpdater, errChan chan<- erro
 				}
 			}
 
-			if err := n.readAndApplyConfig(updateRoutes); err != nil {
+			if err := n.readAndApplyConfig(ctx, updateRoutes); err != nil {
 				slog.Warn("Error reading config from network", "error", err)
 
 				if secondChance {
@@ -126,7 +126,7 @@ func (n *networkConfigSource) reconnect() error {
 	return nil
 }
 
-func (n *networkConfigSource) readAndApplyConfig(updateRoutes routeUpdater) error {
+func (n *networkConfigSource) readAndApplyConfig(ctx context.Context, updateRoutes routeUpdater) error {
 	// Magic header (8 bytes)
 	magic := make([]byte, 8)
 	if _, err := io.ReadFull(n.conn, magic); err != nil {
@@ -170,7 +170,7 @@ func (n *networkConfigSource) readAndApplyConfig(updateRoutes routeUpdater) erro
 	}
 
 	slog.Debug("Installing routes from network config", "count", len(routes))
-	if err := updateRoutes(routes, fallback); err != nil {
+	if err := updateRoutes(ctx, routes, fallback); err != nil {
 		return fmt.Errorf("route manager error: %w", err)
 	}
 

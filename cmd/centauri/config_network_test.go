@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"net"
 	"testing"
@@ -48,7 +49,7 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 	*configNetworkAddress = listener.Addr().String()
 
 	routesCalled := make(chan struct{})
-	updateRoutes := func(routes []*proxy.Route, fallback *proxy.Route) error {
+	updateRoutes := func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		assert.Len(t, routes, 1)
 		assert.Equal(t, "example.com", routes[0].Domains[0])
 		close(routesCalled)
@@ -56,7 +57,7 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 	}
 
 	errChan := make(chan error, 1)
-	err = source.Start(updateRoutes, errChan)
+	err = source.Start(t.Context(), updateRoutes, errChan)
 	assert.NoError(t, err)
 	defer func() {
 		// Close listener first so the background goroutine can't reconnect,
@@ -103,7 +104,7 @@ func Test_NetworkConfigSource_ErrorsOnInvalidMagicBytes(t *testing.T) {
 	*configNetworkAddress = listener.Addr().String()
 
 	errChan := make(chan error, 1)
-	err = source.Start(func(routes []*proxy.Route, fallback *proxy.Route) error {
+	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		return nil
 	}, errChan)
 	assert.NoError(t, err)
@@ -143,7 +144,7 @@ func Test_NetworkConfigSource_ErrorsOnUnsupportedVersion(t *testing.T) {
 	*configNetworkAddress = listener.Addr().String()
 
 	errChan := make(chan error, 1)
-	err = source.Start(func(routes []*proxy.Route, fallback *proxy.Route) error {
+	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		return nil
 	}, errChan)
 	assert.NoError(t, err)
@@ -161,7 +162,7 @@ func Test_NetworkConfigSource_RequiresAddress(t *testing.T) {
 	source := newNetworkConfigSource()
 	*configNetworkAddress = ""
 
-	err := source.Start(func(routes []*proxy.Route, fallback *proxy.Route) error {
+	err := source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		return nil
 	}, make(chan error))
 
@@ -203,7 +204,7 @@ func Test_NetworkConfigSource_InitialConfigTimeout(t *testing.T) {
 	*configNetworkAddress = listener.Addr().String()
 
 	errChan := make(chan error, 1)
-	err = source.Start(func(routes []*proxy.Route, fallback *proxy.Route) error {
+	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		return nil
 	}, errChan)
 	assert.NoError(t, err)

@@ -82,7 +82,7 @@ func run(args []string, signalChan <-chan os.Signal) error {
 			return fmt.Errorf("error creating certificate providers: %v", err)
 		}
 
-		monitorCerts()
+		monitorCerts(context.Background())
 	}
 
 	downstreams, err := parseDownstreams(*trustedDownstreams)
@@ -93,7 +93,7 @@ func run(args []string, signalChan <-chan os.Signal) error {
 	proxyManager = proxy.NewManager(provider)
 	rewriter := proxy.NewRewriter(proxyManager, downstreams)
 
-	if err := config.Start(proxyManager.SetRoutes, errChan); err != nil {
+	if err := config.Start(context.Background(), proxyManager.SetRoutes, errChan); err != nil {
 		return fmt.Errorf("failed to start config source: %v", err)
 	}
 
@@ -162,12 +162,17 @@ func createConfigSource(name string) (configSource, error) {
 	}
 }
 
-func monitorCerts() {
+func monitorCerts(ctx context.Context) {
 	go func() {
+		ticker := time.Tick(12 * time.Hour)
 		for {
-			time.Sleep(12 * time.Hour)
-			slog.Info("Checking for certificate validity...")
-			proxyManager.CheckCertificates()
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker:
+				slog.Info("Checking for certificate validity...")
+				proxyManager.CheckCertificates(context.Background())
+			}
 		}
 	}()
 }

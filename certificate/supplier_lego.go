@@ -1,10 +1,12 @@
 package certificate
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,49 +15,59 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-acme/lego/v4/acme/api"
-	"github.com/go-acme/lego/v4/challenge/dns01"
+	"github.com/go-acme/lego/v5/acme"
+	"github.com/go-acme/lego/v5/acme/api"
+	"github.com/go-acme/lego/v5/challenge/dns01"
 
-	"github.com/go-acme/lego/v4/certcrypto"
-	legocert "github.com/go-acme/lego/v4/certificate"
-	"github.com/go-acme/lego/v4/challenge"
-	"github.com/go-acme/lego/v4/lego"
-	"github.com/go-acme/lego/v4/registration"
+	"github.com/go-acme/lego/v5/certcrypto"
+	legocert "github.com/go-acme/lego/v5/certificate"
+	"github.com/go-acme/lego/v5/challenge"
+	"github.com/go-acme/lego/v5/lego"
+	"github.com/go-acme/lego/v5/registration"
 	"golang.org/x/crypto/ocsp"
 )
 
 // registrar is the surface we use to interact with lego's account registration API.
 type registrar interface {
-	Register(options registration.RegisterOptions) (*registration.Resource, error)
+	Register(ctx context.Context, options registration.RegisterOptions) (*acme.ExtendedAccount, error)
 }
 
 // certifier is the surface we use to interact with lego's certificate issuance API.
 type certifier interface {
-	Obtain(request legocert.ObtainRequest) (*legocert.Resource, error)
-	GetOCSP(bundle []byte) ([]byte, *ocsp.Response, error)
-	GetRenewalInfo(req legocert.RenewalInfoRequest) (*legocert.RenewalInfoResponse, error)
+	Obtain(ctx context.Context, request legocert.ObtainRequest) (*legocert.Resource, error)
+	GetOCSP(ctx context.Context, bundle []byte) ([]byte, *ocsp.Response, error)
+	GetRenewalInfo(ctx context.Context, cert *x509.Certificate) (*legocert.RenewalInfo, error)
 }
 
 // acmeUser implements the User interface required by lego for account registration.
 type acmeUser struct {
-	Email        string                 `json:"email"`
-	Registration *registration.Resource `json:"registration"`
-	Key          string                 `json:"key"`
-	key          crypto.PrivateKey
+	email   string
+	account *acme.ExtendedAccount
+	key     crypto.Signer
+}
+
+// savedUser is the on-disk representation of an acmeUser, compatible with the legacy lego v4 format.
+type savedUser struct {
+	Email        string `json:"email"`
+	Registration struct {
+		Body acme.Account `json:"body"`
+		URI  string       `json:"uri,omitempty"`
+	} `json:"registration"`
+	Key string `json:"key"`
 }
 
 // GetEmail returns the email address of the account.
 func (a *acmeUser) GetEmail() string {
-	return a.Email
+	return a.email
 }
 
 // GetRegistration returns the registration resource of the account.
-func (a *acmeUser) GetRegistration() *registration.Resource {
-	return a.Registration
+func (a *acmeUser) GetRegistration() *acme.ExtendedAccount {
+	return a.account
 }
 
 // GetPrivateKey returns the private key of the account.
-func (a *acmeUser) GetPrivateKey() crypto.PrivateKey {
+func (a *acmeUser) GetPrivateKey() crypto.Signer {
 	return a.key
 }
 
@@ -72,36 +84,51 @@ func (a *acmeUser) load(path string) error {
 		}
 
 		a.key = privateKey
-		a.Key = string(certcrypto.PEMEncode(privateKey))
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("unable to read saved user data from '%s': %w", path, err)
 	}
 
-	if err = json.Unmarshal(b, &a); err != nil {
+	var saved savedUser
+	if err = json.Unmarshal(b, &saved); err != nil {
 		return fmt.Errorf("unable to parse saved user data from '%s': %w", path, err)
 	}
 
-	key, err := certcrypto.ParsePEMPrivateKey([]byte(a.Key))
+	key, err := certcrypto.ParsePEMPrivateKey([]byte(saved.Key))
 	if err != nil {
 		return fmt.Errorf("unable to decode saved user private key: %w", err)
 	}
 
+	a.email = saved.Email
+	a.account = &acme.ExtendedAccount{
+		Account:  saved.Registration.Body,
+		Location: saved.Registration.URI,
+	}
 	a.key = key
 	return nil
 }
 
 // registerAndSave registers the user with the given ACME registration service, and on successful registration
 // serialises the user information to disk at the specified path.
-func (a *acmeUser) registerAndSave(registrar registrar, path string) error {
-	slog.Info("Registering user", "email", a.Email)
-	reg, err := registrar.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, path string) error {
+	slog.Info("Registering user", "email", a.email)
+	reg, err := registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
 		return fmt.Errorf("unable to register new account: %w", err)
 	}
-	a.Registration = reg
+	a.account = reg
 
-	b, err := json.Marshal(a)
+	b, err := json.Marshal(savedUser{
+		Email: a.email,
+		Registration: struct {
+			Body acme.Account "json:\"body\""
+			URI  string       "json:\"uri,omitempty\""
+		}{
+			Body: reg.Account,
+			URI:  reg.Location,
+		},
+		Key: string(certcrypto.PEMEncode(a.key)),
+	})
 	if err != nil {
 		return fmt.Errorf("unable to serialize user data: %w", err)
 	}
@@ -114,6 +141,7 @@ type LegoSupplier struct {
 	user      *acmeUser
 	certifier certifier
 	profile   string
+	keyType   certcrypto.KeyType
 }
 
 // LegoSupplierConfig contains the configuration used to create a new LegoSupplier.
@@ -135,15 +163,14 @@ type LegoSupplierConfig struct {
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
-func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
-	user := &acmeUser{Email: config.Email}
+func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupplier, error) {
+	user := &acmeUser{email: config.Email}
 	if err := user.load(config.Path); err != nil {
 		return nil, err
 	}
 
 	legoConfig := lego.NewConfig(user)
 	legoConfig.CADirURL = config.DirUrl
-	legoConfig.Certificate.KeyType = config.KeyType
 
 	client, err := lego.NewClient(legoConfig)
 	if err != nil {
@@ -152,13 +179,13 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 
 	if err = client.Challenge.SetDNS01Provider(
 		config.DnsProvider,
-		dns01.CondOption(config.DisablePropagationCheck, dns01.DisableAuthoritativeNssPropagationRequirement()),
+		dns01.CondOptions(config.DisablePropagationCheck, dns01.PropagationWait(0, true)),
 	); err != nil {
 		return nil, err
 	}
 
-	if user.Registration == nil {
-		if err = user.registerAndSave(client.Registration, config.Path); err != nil {
+	if user.account == nil {
+		if err = user.registerAndSave(ctx, client.Registration, config.Path); err != nil {
 			return nil, err
 		}
 	}
@@ -167,19 +194,21 @@ func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 		user:      user,
 		certifier: client.Certificate,
 		profile:   config.Profile,
+		keyType:   config.KeyType,
 	}
 
 	return s, nil
 }
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
-func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldStaple bool) (*Details, error) {
+func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
 	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames)
-	res, err := s.certifier.Obtain(legocert.ObtainRequest{
+	res, err := s.certifier.Obtain(ctx, legocert.ObtainRequest{
 		Domains:    append([]string{subject}, altNames...),
 		Bundle:     true,
 		MustStaple: shouldStaple,
 		Profile:    s.profile,
+		KeyType:    s.keyType,
 	})
 	if err != nil {
 		return nil, err
@@ -202,7 +231,7 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 
 	if shouldStaple {
 		slog.Info("Updating OCSP staple for new certificate", "domain", subject, "altNames", altNames)
-		if err = s.UpdateStaple(details); err != nil {
+		if err = s.UpdateStaple(ctx, details); err != nil {
 			return nil, fmt.Errorf("unable to get OCSP staple for certificate: %w", err)
 		}
 		slog.Info("Successfully updated OCSP staple for certificate", "domain", subject, "altNames", altNames)
@@ -212,9 +241,9 @@ func (s *LegoSupplier) GetCertificate(subject string, altNames []string, shouldS
 }
 
 // UpdateStaple requests a new OCSP staple for the given certificate.
-func (s *LegoSupplier) UpdateStaple(cert *Details) error {
+func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
 	slog.Info("Updating OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
-	b, response, err := s.certifier.GetOCSP([]byte(cert.Certificate))
+	b, response, err := s.certifier.GetOCSP(ctx, []byte(cert.Certificate))
 	if err != nil {
 		return err
 	}
@@ -230,15 +259,13 @@ func (s *LegoSupplier) UpdateStaple(cert *Details) error {
 }
 
 // UpdateRenewalInfo asks the ACME server when the certificate should be renewed.
-func (s *LegoSupplier) UpdateRenewalInfo(cert *Details) error {
+func (s *LegoSupplier) UpdateRenewalInfo(ctx context.Context, cert *Details) error {
 	x509Cert, err := certcrypto.ParsePEMCertificate([]byte(cert.Certificate))
 	if err != nil {
 		return fmt.Errorf("unable to parse certificate: %w", err)
 	}
 
-	response, err := s.certifier.GetRenewalInfo(legocert.RenewalInfoRequest{
-		Cert: x509Cert,
-	})
+	response, err := s.certifier.GetRenewalInfo(ctx, x509Cert)
 
 	if err != nil {
 		if errors.Is(err, api.ErrNoARI) {

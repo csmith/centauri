@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
@@ -11,7 +12,7 @@ import (
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
 type CertificateProvider interface {
-	GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
+	GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
 }
 
@@ -38,7 +39,7 @@ func NewManager(provider CertificateProvider) *Manager {
 // certificates are obtained; during this time the old routes will continue to be served to avoid too much disruption.
 //
 // If a fallback is specified, then that route will be used for any requests that don't otherwise a route.
-func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
+func (m *Manager) SetRoutes(ctx context.Context, newRoutes []*Route, fallback *Route) error {
 	if len(newRoutes) == 0 {
 		slog.Warn("No routes configured, Centauri will not proxy anything")
 	} else {
@@ -54,7 +55,7 @@ func (m *Manager) SetRoutes(newRoutes []*Route, fallback *Route) error {
 	}
 
 	m.fallback = fallback
-	go m.CheckCertificates()
+	go m.CheckCertificates(ctx)
 	return nil
 }
 
@@ -121,7 +122,7 @@ func (m *Manager) routeFor(domain string) *Route {
 
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
-func (m *Manager) CheckCertificates() {
+func (m *Manager) CheckCertificates(ctx context.Context) {
 	routes := m.routes.Routes()
 	for i := range routes {
 		route := routes[i]
@@ -129,14 +130,14 @@ func (m *Manager) CheckCertificates() {
 		if m.provider == nil {
 			route.setCertificateStatus(CertificateNotRequired)
 		} else {
-			m.updateCert(route)
+			m.updateCert(ctx, route)
 		}
 	}
 }
 
 // updateCert updates the certificate for the given route.
-func (m *Manager) updateCert(route *Route) {
-	cert, err := m.provider.GetCertificate(route.Provider, route.Domains[0], route.Domains[1:])
+func (m *Manager) updateCert(ctx context.Context, route *Route) {
+	cert, err := m.provider.GetCertificate(ctx, route.Provider, route.Domains[0], route.Domains[1:])
 	if err != nil {
 		slog.Error("Failed to update certificate", "route", route.Domains[0], "error", err)
 		m.loadCertificate(route)

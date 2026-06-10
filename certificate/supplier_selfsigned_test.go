@@ -3,13 +3,13 @@ package certificate
 import (
 	"testing"
 
-	"github.com/go-acme/lego/v4/certcrypto"
+	"github.com/go-acme/lego/v5/certcrypto"
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_SelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testing.T) {
 	supplier := &SelfSignedSupplier{}
-	details, err := supplier.GetCertificate("subject.example.com", []string{"alt1.example.com", "alt2.example.com"}, false)
+	details, err := supplier.GetCertificate(t.Context(), "subject.example.com", []string{"alt1.example.com", "alt2.example.com"}, false)
 
 	assert.Nil(t, err)
 

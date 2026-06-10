@@ -1,6 +1,7 @@
 package certificate
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"strings"
@@ -8,7 +9,7 @@ import (
 
 // Provider defines the interface for providing certificates to a WildcardResolver.
 type Provider interface {
-	GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
+	GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
 }
 
@@ -43,8 +44,8 @@ func NewWildcardResolver(upstream Provider, domains []string) *WildcardResolver 
 
 // GetCertificate returns a certificate from the upstream provider that will cover the
 // given subject and altNames, taking into account the configured wildcard domains.
-func (w *WildcardResolver) GetCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
-	return w.upstream.GetCertificate(preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
+func (w *WildcardResolver) GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
+	return w.upstream.GetCertificate(ctx, preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
 }
 
 // GetExistingCertificate returns an existing, saved certificate from the upstream provider that will cover the
