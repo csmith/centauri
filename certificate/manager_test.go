@@ -13,6 +13,7 @@ import (
 )
 
 type fakeStore struct {
+	provider     string
 	subject      string
 	altNames     []string
 	certificate  *Details
@@ -23,8 +24,9 @@ type fakeStore struct {
 	lockedOnGet  bool
 }
 
-func (f *fakeStore) GetCertificate(subject string, altNames []string) *Details {
+func (f *fakeStore) GetCertificate(provider string, subject string, altNames []string) *Details {
 	f.lockedOnGet = f.locked && subject == f.subject && slices.Equal(altNames, f.altNames)
+	f.provider = provider
 	f.subject = subject
 	f.altNames = altNames
 	return f.certificate
@@ -274,6 +276,8 @@ func Test_Manager_GetCertificate_obtainsCertificateIfMissing(t *testing.T) {
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "test", store.savedCert.Provider, "should set provider on saved cert")
+	assert.Equal(t, "test", store.provider, "should pass resolved provider to store")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }
@@ -456,6 +460,7 @@ func Test_Manager_GetCertificate_usesPreferredSupplierIfSpecified(t *testing.T) 
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "test", store.savedCert.Provider, "should set provider on saved cert")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }
@@ -509,6 +514,7 @@ func Test_Manager_GetCertificate_usesSupplierPreferenceIfPreferredSupplierNotSpe
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, cert, store.savedCert, "should save new cert")
+	assert.Equal(t, "test", store.savedCert.Provider, "should set resolved provider on saved cert")
 	assert.Equal(t, "example.com", supplier.subject)
 	assert.Equal(t, []string{"example.net"}, supplier.altNames)
 }

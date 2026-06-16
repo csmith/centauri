@@ -47,7 +47,7 @@ func Test_Store_LoadSaveGet(t *testing.T) {
 	newStore, err := NewStore(path)
 	require.NoError(t, err, "second store should load")
 
-	newCert := newStore.GetCertificate(cert.Subject, cert.AltNames)
+	newCert := newStore.GetCertificate("", cert.Subject, cert.AltNames)
 	assert.Equal(t, cert, newCert, "certificates should match")
 }
 
@@ -85,7 +85,7 @@ func Test_Store_saveCertificate_prunesExpiredCerts(t *testing.T) {
 
 	for i := range certs {
 		t.Run(certs[i].Subject, func(t *testing.T) {
-			hasCert := store.GetCertificate(certs[i].Subject, certs[i].AltNames) != nil
+			hasCert := store.GetCertificate("", certs[i].Subject, certs[i].AltNames) != nil
 			expectedCert := strings.Contains(certs[i].Subject, "-valid")
 			assert.Equal(t, expectedCert, hasCert)
 		})
@@ -128,4 +128,107 @@ func Test_Store_saveCertificate_removesDuplicates(t *testing.T) {
 	}
 
 	assert.Equal(t, 3, len(store.certificates))
+}
+
+func Test_Store_GetCertificate_returnsCertWithMatchingProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "store.json")
+	store, err := NewStore(path)
+	require.NoError(t, err, "store should load")
+
+	acmeCert := &Details{
+		Provider: "acme",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+	selfSignedCert := &Details{
+		Provider: "selfsigned",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+
+	require.NoError(t, store.SaveCertificate(acmeCert))
+	require.NoError(t, store.SaveCertificate(selfSignedCert))
+
+	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
+	assert.Equal(t, selfSignedCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+}
+
+func Test_Store_GetCertificate_returnsLegacyCertAsFallback(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "store.json")
+	store, err := NewStore(path)
+	require.NoError(t, err, "store should load")
+
+	legacyCert := &Details{
+		Provider: "",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+
+	require.NoError(t, store.SaveCertificate(legacyCert))
+
+	assert.Equal(t, legacyCert, store.GetCertificate("acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+}
+
+func Test_Store_GetCertificate_prefersExactProviderMatchOverLegacy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "store.json")
+	store, err := NewStore(path)
+	require.NoError(t, err, "store should load")
+
+	legacyCert := &Details{
+		Provider: "",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+	acmeCert := &Details{
+		Provider: "acme",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+
+	require.NoError(t, store.SaveCertificate(legacyCert))
+	require.NoError(t, store.SaveCertificate(acmeCert))
+
+	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+}
+
+func Test_Store_GetCertificate_returnsNilIfNoMatchingProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "store.json")
+	store, err := NewStore(path)
+	require.NoError(t, err, "store should load")
+
+	acmeCert := &Details{
+		Provider: "acme",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+
+	require.NoError(t, store.SaveCertificate(acmeCert))
+
+	assert.Nil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
+}
+
+func Test_Store_SaveCertificate_doesNotEvictCertsFromOtherProviders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "store.json")
+	store, err := NewStore(path)
+	require.NoError(t, err, "store should load")
+
+	selfSignedCert := &Details{
+		Provider: "selfsigned",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+	acmeCert := &Details{
+		Provider: "acme",
+		Subject:  "*.example.com",
+		NotAfter: time.Now().Add(time.Hour),
+	}
+
+	require.NoError(t, store.SaveCertificate(selfSignedCert))
+	require.NoError(t, store.SaveCertificate(acmeCert))
+
+	assert.Equal(t, 2, len(store.certificates))
+	assert.NotNil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.NotNil(t, store.GetCertificate("acme", "*.example.com", nil))
 }

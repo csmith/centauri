@@ -12,7 +12,9 @@ import (
 
 // Details contains the details of a certificate we've previously obtained and saved for future use.
 type Details struct {
-	Issuer      string `json:"issuer"`
+	Provider string `json:"provider"`
+	Issuer   string `json:"issuer"`
+
 	PrivateKey  string `json:"privateKey"`
 	Certificate string `json:"certificate"`
 

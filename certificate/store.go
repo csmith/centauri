@@ -54,17 +54,31 @@ func (j *JsonStore) save() error {
 	return os.WriteFile(j.path, b, 0600)
 }
 
-// GetCertificate returns a previously stored certificate with the given subject and alt names, or `nil` if none exists.
+// GetCertificate returns a previously stored certificate for the given provider, subject and alt names, or `nil` if
+// none exists.
+//
+// A certificate with an empty provider (i.e. one loaded from a store created before providers were tracked) is
+// treated as a legacy fallback: it will be returned for any provider. This allows existing certificates to continue
+// to be served until they naturally expire and are replaced with provider-specific certificates on the next renewal.
 //
 // Returned certificates are not guaranteed to be valid.
-func (j *JsonStore) GetCertificate(subjectName string, altNames []string) *Details {
+func (j *JsonStore) GetCertificate(provider string, subjectName string, altNames []string) *Details {
+	var legacy *Details
 	for i := range j.certificates {
-		if j.certificates[i].IsFor(subjectName, altNames) {
+		if !j.certificates[i].IsFor(subjectName, altNames) {
+			continue
+		}
+
+		if j.certificates[i].Provider == provider {
 			return j.certificates[i]
+		}
+
+		if j.certificates[i].Provider == "" {
+			legacy = j.certificates[i]
 		}
 	}
 
-	return nil
+	return legacy
 }
 
 // LockCertificate acquires a lock over the writing of the given certificate. All calls to LockCertificate should
@@ -91,10 +105,11 @@ func (j *JsonStore) lockFor(subjectName string, altNames []string) *sync.Mutex {
 	}
 }
 
-// removeCertificate removes any previously stored certificate with the given subject and alt names.
-func (j *JsonStore) removeCertificate(subjectName string, altNames []string) {
+// removeCertificate removes any previously stored certificate for the given provider, subject and alt names.
+// Certificates with a different provider (including legacy certificates with no provider) are left untouched.
+func (j *JsonStore) removeCertificate(provider string, subjectName string, altNames []string) {
 	for i := range j.certificates {
-		if j.certificates[i].IsFor(subjectName, altNames) {
+		if j.certificates[i].IsFor(subjectName, altNames) && j.certificates[i].Provider == provider {
 			j.certificates = append(j.certificates[:i], j.certificates[i+1:]...)
 			return
 		}
@@ -112,12 +127,12 @@ func (j *JsonStore) pruneCertificates() {
 	j.certificates = savedCerts
 }
 
-// SaveCertificate adds the given certificate to the store. Any previously saved certificates for the same subject
-// and alt names will be removed. The store will be saved to disk after the certificate is added.
+// SaveCertificate adds the given certificate to the store. Any previously saved certificate for the same provider,
+// subject and alt names will be removed. The store will be saved to disk after the certificate is added.
 //
 // Callers should acquire a lock on the certificate by calling LockCertificate before saving it.
 func (j *JsonStore) SaveCertificate(certificate *Details) error {
-	j.removeCertificate(certificate.Subject, certificate.AltNames)
+	j.removeCertificate(certificate.Provider, certificate.Subject, certificate.AltNames)
 	j.certificates = append(j.certificates, certificate)
 	return j.save()
 }

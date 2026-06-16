@@ -10,7 +10,7 @@ import (
 
 // Store provides functions to get and store certificates.
 type Store interface {
-	GetCertificate(subject string, altNames []string) *Details
+	GetCertificate(provider string, subject string, altNames []string) *Details
 	SaveCertificate(cert *Details) error
 	LockCertificate(subjectName string, altNames []string)
 	UnlockCertificate(subjectName string, altNames []string)
@@ -47,7 +47,7 @@ func NewManager(store Store, suppliers map[string]Supplier, supplierPreference [
 // GetCertificate returns a certificate for the given subject and alternate names. This may take some time if a new
 // certificate needs to be obtained, or the OCSP staple needs to be updated.
 func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
-	supplier, err := m.supplier(preferredSupplier)
+	supplier, supplierName, err := m.supplier(preferredSupplier)
 	if err != nil {
 		return nil, err
 	}
@@ -55,10 +55,10 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 	m.store.LockCertificate(subject, altNames)
 	defer m.store.UnlockCertificate(subject, altNames)
 
-	cert := m.store.GetCertificate(subject, altNames)
+	cert := m.store.GetCertificate(supplierName, subject, altNames)
 	if cert == nil {
 		slog.Info("Obtaining new certificate", "domain", subject, "altNames", altNames)
-		return m.obtain(ctx, supplier, subject, altNames)
+		return m.obtain(ctx, supplier, supplierName, subject, altNames)
 	}
 
 	if cert.AriNextUpdate.Before(time.Now()) {
@@ -67,7 +67,7 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 
 	if cert.ShouldRenew(supplier.MinCertificateValidity()) {
 		slog.Info("Renewing certificate", "domain", subject, "altNames", altNames)
-		return m.obtain(ctx, supplier, subject, altNames)
+		return m.obtain(ctx, supplier, supplierName, subject, altNames)
 	}
 
 	if cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()) {
@@ -82,12 +82,12 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 // still valid. It also indicates whether the certificate is in need of renewal or not. Certificates should be renewed
 // by calling GetCertificate, which will block and return the new certificate.
 func (m *Manager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
-	supplier, err := m.supplier(preferredSupplier)
+	supplier, supplierName, err := m.supplier(preferredSupplier)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if cert := m.store.GetCertificate(subject, altNames); cert == nil {
+	if cert := m.store.GetCertificate(supplierName, subject, altNames); cert == nil {
 		return nil, true, fmt.Errorf("no stored certificate found")
 	} else if !cert.ValidFor(0) || (cert.RequiresStaple() && !cert.HasStapleFor(0)) {
 		return nil, true, fmt.Errorf("certificate has expired")
@@ -98,31 +98,32 @@ func (m *Manager) GetExistingCertificate(preferredSupplier string, subject strin
 	}
 }
 
-func (m *Manager) supplier(preferred string) (Supplier, error) {
+func (m *Manager) supplier(preferred string) (Supplier, string, error) {
 	if preferred != "" {
 		s, ok := m.suppliers[preferred]
 		if !ok {
-			return nil, fmt.Errorf("requested supplier not found: %v", preferred)
+			return nil, "", fmt.Errorf("requested supplier not found: %v", preferred)
 		}
-		return s, nil
+		return s, preferred, nil
 	}
 
 	for i := range m.supplierPreference {
-		s, ok := m.suppliers[m.supplierPreference[i]]
-		if ok {
-			return s, nil
+		if s, ok := m.suppliers[m.supplierPreference[i]]; ok {
+			return s, m.supplierPreference[i], nil
 		}
 	}
 
-	return nil, fmt.Errorf("no suppliers found for preference: %v", m.supplierPreference)
+	return nil, "", fmt.Errorf("no suppliers found for preference: %v", m.supplierPreference)
 }
 
 // obtain gets a new certificate and saves it to the store.
-func (m *Manager) obtain(ctx context.Context, supplier Supplier, subject string, altNames []string) (*tls.Certificate, error) {
+func (m *Manager) obtain(ctx context.Context, supplier Supplier, supplierName string, subject string, altNames []string) (*tls.Certificate, error) {
 	cert, err := supplier.GetCertificate(ctx, subject, altNames, m.shouldStaple)
 	if err != nil {
 		return nil, fmt.Errorf("failed to obtain certificate for %s: %w", subject, err)
 	}
+
+	cert.Provider = supplierName
 
 	m.updateRenewalInfo(ctx, supplier, cert, false)
 

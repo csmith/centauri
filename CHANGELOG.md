@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Centauri will now ensure that newly issued certificates are only
+  used for routes with the same provider. Existing certificates will
+  continue to be used until they are naturally replaced. This addresses
+  an issue in niche cases where multiple routes use the same name due
+  to the `WILDCARD_DOMAINS` setting, but have different configured providers.
+  Previously, the first route to generate a certificate would "win",
+  and all matching routes would use that certificate until renewal,
+  even if they were configured to use a different provider.
+
 ## 2.6.1 - 2026-05-09
 
 - Fix crash if the ACME server returns an ARI update window with
