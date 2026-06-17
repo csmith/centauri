@@ -30,6 +30,7 @@ import (
 // registrar is the surface we use to interact with lego's account registration API.
 type registrar interface {
 	Register(ctx context.Context, options registration.RegisterOptions) (*acme.ExtendedAccount, error)
+	RegisterWithExternalAccountBinding(ctx context.Context, options registration.RegisterEABOptions) (*acme.ExtendedAccount, error)
 }
 
 // certifier is the surface we use to interact with lego's certificate issuance API.
@@ -44,6 +45,10 @@ type acmeUser struct {
 	email   string
 	account *acme.ExtendedAccount
 	key     crypto.Signer
+	// eabKid and eabHmac hold optional External Account Binding credentials. They are only used at
+	// registration time and are deliberately not persisted to disk.
+	eabKid  string
+	eabHmac string
 }
 
 // savedUser is the on-disk representation of an acmeUser, compatible with the legacy lego v4 format.
@@ -109,10 +114,27 @@ func (a *acmeUser) load(path string) error {
 }
 
 // registerAndSave registers the user with the given ACME registration service, and on successful registration
-// serialises the user information to disk at the specified path.
+// serialises the user information to disk at the specified path. If the user has both EAB credentials set, the
+// account is registered using External Account Binding, as required by some ACME providers (e.g. ZeroSSL).
 func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, path string) error {
-	slog.Info("Registering user", "email", a.email)
-	reg, err := registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
+	var reg *acme.ExtendedAccount
+	var err error
+
+	switch {
+	case a.eabKid != "" && a.eabHmac != "":
+		slog.Info("Registering user with external account binding", "email", a.email)
+		reg, err = registrar.RegisterWithExternalAccountBinding(ctx, registration.RegisterEABOptions{
+			TermsOfServiceAgreed: true,
+			Kid:                  a.eabKid,
+			HmacEncoded:          a.eabHmac,
+		})
+	case a.eabKid != "" || a.eabHmac != "":
+		return fmt.Errorf("external account binding requires both a key ID and an HMAC key")
+	default:
+		slog.Info("Registering user", "email", a.email)
+		reg, err = registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
+	}
+
 	if err != nil {
 		return fmt.Errorf("unable to register new account: %w", err)
 	}
@@ -160,11 +182,15 @@ type LegoSupplierConfig struct {
 	DnsProvider challenge.Provider
 	// DisablePropagationCheck instructs the lego client to not bother checking for DNS propagation.
 	DisablePropagationCheck bool
+	// EabKid is the key ID for External Account Binding, required by some ACME providers (e.g. ZeroSSL).
+	EabKid string
+	// EabHmac is the base64url-encoded HMAC key for External Account Binding.
+	EabHmac string
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
 func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupplier, error) {
-	user := &acmeUser{email: config.Email}
+	user := &acmeUser{email: config.Email, eabKid: config.EabKid, eabHmac: config.EabHmac}
 	if err := user.load(config.Path); err != nil {
 		return nil, err
 	}

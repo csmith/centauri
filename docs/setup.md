@@ -323,6 +323,23 @@ The URL of the ACME directory to obtain certificates from.
 For testing, change to the Let's Encrypt staging environment,
 which has more generous rate limits: `https://acme-staging-v02.api.letsencrypt.org/directory`.
 
+### `ACME_EAB_KID`
+
+- **Default**: -
+
+The key ID to use for External Account Binding. Some ACME providers (such as
+ZeroSSL) require accounts to be bound to an existing account at the provider,
+and will reject registration with an `externalAccountRequired` error unless
+this is supplied. Must be set together with `ACME_EAB_HMAC`.
+
+### `ACME_EAB_HMAC`
+
+- **Default**: -
+
+The base64url-encoded HMAC key to use for External Account Binding. Must be
+set together with `ACME_EAB_KID`. See your ACME provider's documentation for
+how to obtain these credentials.
+
 ### `ACME_DISABLE_PROPAGATION_CHECK`
 
 - **Default**: `false`

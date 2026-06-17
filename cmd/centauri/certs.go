@@ -27,6 +27,8 @@ var (
 	acmeEmail              = flag.String("acme-email", "", "Email address for ACME account")
 	acmeDirectory          = flag.String("acme-directory", lego.DirectoryURLLetsEncrypt, "ACME directory to use")
 	acmeProfile            = flag.String("acme-profile", "", "Profile to use when requesting a certificate")
+	acmeEabKid             = flag.String("acme-eab-kid", "", "Key ID for ACME External Account Binding (required by some providers, e.g. ZeroSSL)")
+	acmeEabHmac            = flag.String("acme-eab-hmac", "", "Base64url-encoded HMAC key for ACME External Account Binding")
 	acmeDisablePropagation = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
 	wildcardDomains        = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 	useStaples             = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
@@ -79,6 +81,8 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 			DnsProvider:             dnsProvider,
 			DisablePropagationCheck: *acmeDisablePropagation,
 			Profile:                 *acmeProfile,
+			EabKid:                  *acmeEabKid,
+			EabHmac:                 *acmeEabHmac,
 		},
 	)
 	if err != nil {

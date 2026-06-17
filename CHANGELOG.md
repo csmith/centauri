@@ -10,6 +10,10 @@
   Previously, the first route to generate a certificate would "win",
   and all matching routes would use that certificate until renewal,
   even if they were configured to use a different provider.
+- Added support for ACME External Account Binding via the `ACME_EAB_KID`
+  and `ACME_EAB_HMAC` settings. This allows Centauri to use providers
+  (such as ZeroSSL) that require accounts to be bound to existing
+  credentials at the provider.
 
 ## 2.6.1 - 2026-05-09
 
@@ -346,7 +350,7 @@ version bump._
 
 ### Other changes
 
-- Fixed issue with build process. No code changes. 
+- Fixed issue with build process. No code changes.
 
 ## 0.4.0 - 2023-08-28
 
@@ -384,7 +388,7 @@ version bump._
 - Lego updated to v4.12.0
 - Tailscale updated to v1.42.0
 
-## 0.2.0 - 2023-01-26 
+## 0.2.0 - 2023-01-26
 
 ### Features
 
