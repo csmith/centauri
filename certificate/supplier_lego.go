@@ -91,7 +91,7 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 
 	if err = client.Challenge.SetDNS01Provider(
 		config.DnsProvider,
-		dns01.CondOptions(config.DisablePropagationCheck, dns01.PropagationWait(0, true)),
+		dns01.CondOptions(config.DisablePropagationCheck, dns01.DisableAuthoritativeNssPropagationRequirement(), dns01.DisableRecursiveNSsPropagationRequirement()),
 	); err != nil {
 		return nil, err
 	}
