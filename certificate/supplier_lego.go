@@ -91,7 +91,13 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 
 	if err = client.Challenge.SetDNS01Provider(
 		config.DnsProvider,
-		dns01.CondOptions(config.DisablePropagationCheck, dns01.DisableAuthoritativeNssPropagationRequirement(), dns01.DisableRecursiveNSsPropagationRequirement()),
+		dns01.CondOptions(
+			config.DisablePropagationCheck,
+			dns01.WrapPreCheck(func(ctx context.Context, domain, fqdn, value string, check dns01.PreCheckFunc) (bool, error) {
+				slog.Info("Propagation check disabled, not checking DNS at all", "domain", domain)
+				return true, nil
+			}),
+		),
 	); err != nil {
 		return nil, err
 	}
