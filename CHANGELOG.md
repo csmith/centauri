@@ -10,6 +10,9 @@
   Previously, the first route to generate a certificate would "win",
   and all matching routes would use that certificate until renewal,
   even if they were configured to use a different provider.
+- Added support for external account binding when registering with an
+  ACME server. Setting `ACME_EXTERNAL_KID` and `ACME_EXTERNAL_HMAC` will
+  enable. See [docs/setup.md](docs/setup.md) for more details.
 
 ## 2.6.1 - 2026-05-09
 

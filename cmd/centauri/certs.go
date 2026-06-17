@@ -20,16 +20,18 @@ import (
 )
 
 var (
-	userDataPath           = flag.String("user-data", "user.pem", "Path to user data")
-	certificateStorePath   = flag.String("certificate-store", "certs.json", "Path to certificate store")
-	certificateProviders   = flag.String("certificate-providers", "lego selfsigned", "Space separated list of certificate providers to use by default in order of preference")
-	dnsProviderName        = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
-	acmeEmail              = flag.String("acme-email", "", "Email address for ACME account")
-	acmeDirectory          = flag.String("acme-directory", lego.DirectoryURLLetsEncrypt, "ACME directory to use")
-	acmeProfile            = flag.String("acme-profile", "", "Profile to use when requesting a certificate")
-	acmeDisablePropagation = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
-	wildcardDomains        = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
-	useStaples             = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
+	userDataPath            = flag.String("user-data", "user.pem", "Path to user data")
+	certificateStorePath    = flag.String("certificate-store", "certs.json", "Path to certificate store")
+	certificateProviders    = flag.String("certificate-providers", "lego selfsigned", "Space separated list of certificate providers to use by default in order of preference")
+	dnsProviderName         = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
+	acmeEmail               = flag.String("acme-email", "", "Email address for ACME account")
+	acmeExternalAccountKid  = flag.String("acme-external-kid", "", "Key ID for ACME external account binding")
+	acmeExternalAccountHmac = flag.String("acme-external-hmac", "", "Base64-url-encoded HMAC for ACME external account binding")
+	acmeDirectory           = flag.String("acme-directory", lego.DirectoryURLLetsEncrypt, "ACME directory to use")
+	acmeProfile             = flag.String("acme-profile", "", "Profile to use when requesting a certificate")
+	acmeDisablePropagation  = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
+	wildcardDomains         = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
+	useStaples              = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
 )
 
 func certProvider() (proxy.CertificateProvider, error) {
@@ -79,6 +81,8 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 			DnsProvider:             dnsProvider,
 			DisablePropagationCheck: *acmeDisablePropagation,
 			Profile:                 *acmeProfile,
+			ExternalAccountKid:      *acmeExternalAccountKid,
+			ExternalAccountHmac:     *acmeExternalAccountHmac,
 		},
 	)
 	if err != nil {

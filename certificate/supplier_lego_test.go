@@ -70,13 +70,19 @@ func Test_acmeUser_load_restoresSavedKey(t *testing.T) {
 }
 
 type fakeRegistrar struct {
-	res  *acme.ExtendedAccount
-	err  error
-	opts registration.RegisterOptions
+	res     *acme.ExtendedAccount
+	err     error
+	opts    registration.RegisterOptions
+	eabOpts registration.RegisterEABOptions
 }
 
 func (f *fakeRegistrar) Register(ctx context.Context, options registration.RegisterOptions) (*acme.ExtendedAccount, error) {
 	f.opts = options
+	return f.res, f.err
+}
+
+func (f *fakeRegistrar) RegisterWithExternalAccountBinding(ctx context.Context, options registration.RegisterEABOptions) (*acme.ExtendedAccount, error) {
+	f.eabOpts = options
 	return f.res, f.err
 }
 
@@ -119,6 +125,42 @@ func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 	newUser := &acmeUser{}
 	require.NoError(t, newUser.load(path))
 	assert.Equal(t, user, newUser)
+}
+
+func Test_acmeUser_registerAndSave_callsRegisterWithEabBindingWhenEabCredentialsConfigured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "user.json")
+	r := &fakeRegistrar{
+		res: &acme.ExtendedAccount{Location: "https://example.com/acme/reg/1"},
+	}
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	user := &acmeUser{
+		key:     privateKey,
+		eabKid:  "kid",
+		eabHmac: "hmac",
+	}
+	require.NoError(t, user.registerAndSave(t.Context(), r, path))
+	assert.NotNil(t, user.account)
+	assert.True(t, r.eabOpts.TermsOfServiceAgreed)
+	assert.Equal(t, "kid", r.eabOpts.Kid)
+	assert.Equal(t, "hmac", r.eabOpts.HmacEncoded)
+	assert.Empty(t, r.opts.TermsOfServiceAgreed)
+}
+
+func Test_acmeUser_registerAndSave_returnsErrorIfEabRegisterFailsWithEabCredentialsConfigured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "user.json")
+	r := &fakeRegistrar{
+		err: fmt.Errorf("denied"),
+	}
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	user := &acmeUser{
+		key:     privateKey,
+		eabKid:  "kid",
+		eabHmac: "hmac",
+	}
+	assert.Error(t, user.registerAndSave(t.Context(), r, path))
+	assert.True(t, r.eabOpts.TermsOfServiceAgreed)
+	assert.Equal(t, "kid", r.eabOpts.Kid)
+	assert.Empty(t, r.opts.TermsOfServiceAgreed)
 }
 
 type fakeCertifier struct {

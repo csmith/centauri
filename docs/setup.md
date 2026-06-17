@@ -339,3 +339,18 @@ if your local DNS setup doesn't reflect how the ACME server will see it.
 The profile to use when requesting a certificate. The valid options depend
 on the ACME server being used. See, e.g., 
 [the documentation for Let's Encrypt](https://letsencrypt.org/docs/profiles/).
+
+### `ACME_EXTERNAL_KID`
+
+- **Default**: -
+
+The key ID to use when registering an ACME account using external account
+binding. If set, `ACME_EXTERNAL_HMAC` must also be provided.
+
+### `ACME_EXTERNAL_HMAC`
+
+- **Default**: -
+
+The url-safe-base64 encoded HMAC key to use when registering an ACME account
+using external account binding. If set, `ACME_EXTERNAL_KID` must also be
+provided.

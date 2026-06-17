@@ -30,6 +30,7 @@ import (
 // registrar is the surface we use to interact with lego's account registration API.
 type registrar interface {
 	Register(ctx context.Context, options registration.RegisterOptions) (*acme.ExtendedAccount, error)
+	RegisterWithExternalAccountBinding(ctx context.Context, options registration.RegisterEABOptions) (*acme.ExtendedAccount, error)
 }
 
 // certifier is the surface we use to interact with lego's certificate issuance API.
@@ -37,103 +38,6 @@ type certifier interface {
 	Obtain(ctx context.Context, request legocert.ObtainRequest) (*legocert.Resource, error)
 	GetOCSP(ctx context.Context, bundle []byte) ([]byte, *ocsp.Response, error)
 	GetRenewalInfo(ctx context.Context, cert *x509.Certificate) (*legocert.RenewalInfo, error)
-}
-
-// acmeUser implements the User interface required by lego for account registration.
-type acmeUser struct {
-	email   string
-	account *acme.ExtendedAccount
-	key     crypto.Signer
-}
-
-// savedUser is the on-disk representation of an acmeUser, compatible with the legacy lego v4 format.
-type savedUser struct {
-	Email        string `json:"email"`
-	Registration struct {
-		Body acme.Account `json:"body"`
-		URI  string       `json:"uri,omitempty"`
-	} `json:"registration"`
-	Key string `json:"key"`
-}
-
-// GetEmail returns the email address of the account.
-func (a *acmeUser) GetEmail() string {
-	return a.email
-}
-
-// GetRegistration returns the registration resource of the account.
-func (a *acmeUser) GetRegistration() *acme.ExtendedAccount {
-	return a.account
-}
-
-// GetPrivateKey returns the private key of the account.
-func (a *acmeUser) GetPrivateKey() crypto.Signer {
-	return a.key
-}
-
-// load attempts to read the cached user details from disk.
-// If the user details do not exist, a new private key is created.
-func (a *acmeUser) load(path string) error {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		// No saved data, let's just create a new private key
-		slog.Info("No saved user details found, creating a new private key")
-		privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-		if err != nil {
-			return fmt.Errorf("unable to generate private key: %w", err)
-		}
-
-		a.key = privateKey
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("unable to read saved user data from '%s': %w", path, err)
-	}
-
-	var saved savedUser
-	if err = json.Unmarshal(b, &saved); err != nil {
-		return fmt.Errorf("unable to parse saved user data from '%s': %w", path, err)
-	}
-
-	key, err := certcrypto.ParsePEMPrivateKey([]byte(saved.Key))
-	if err != nil {
-		return fmt.Errorf("unable to decode saved user private key: %w", err)
-	}
-
-	a.email = saved.Email
-	a.account = &acme.ExtendedAccount{
-		Account:  saved.Registration.Body,
-		Location: saved.Registration.URI,
-	}
-	a.key = key
-	return nil
-}
-
-// registerAndSave registers the user with the given ACME registration service, and on successful registration
-// serialises the user information to disk at the specified path.
-func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, path string) error {
-	slog.Info("Registering user", "email", a.email)
-	reg, err := registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
-	if err != nil {
-		return fmt.Errorf("unable to register new account: %w", err)
-	}
-	a.account = reg
-
-	b, err := json.Marshal(savedUser{
-		Email: a.email,
-		Registration: struct {
-			Body acme.Account "json:\"body\""
-			URI  string       "json:\"uri,omitempty\""
-		}{
-			Body: reg.Account,
-			URI:  reg.Location,
-		},
-		Key: string(certcrypto.PEMEncode(a.key)),
-	})
-	if err != nil {
-		return fmt.Errorf("unable to serialize user data: %w", err)
-	}
-
-	return os.WriteFile(path, b, 0600)
 }
 
 // LegoSupplier uses a lego client to obtain certificates from an ACME endpoint.
@@ -160,11 +64,19 @@ type LegoSupplierConfig struct {
 	DnsProvider challenge.Provider
 	// DisablePropagationCheck instructs the lego client to not bother checking for DNS propagation.
 	DisablePropagationCheck bool
+	// ExternalAccountKid is the key ID for an externally bound account.
+	ExternalAccountKid string
+	// ExternalAccountHmac is the base64-url encoded HMAC key for an externally bound account.
+	ExternalAccountHmac string
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
 func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupplier, error) {
-	user := &acmeUser{email: config.Email}
+	user := &acmeUser{
+		email:   config.Email,
+		eabKid:  config.ExternalAccountKid,
+		eabHmac: config.ExternalAccountHmac,
+	}
 	if err := user.load(config.Path); err != nil {
 		return nil, err
 	}
@@ -300,4 +212,118 @@ func (s *LegoSupplier) MinCertificateValidity() time.Duration {
 
 func (s *LegoSupplier) MinStapleValidity() time.Duration {
 	return time.Hour * 24
+}
+
+// acmeUser implements the User interface required by lego for account registration.
+type acmeUser struct {
+	email   string
+	account *acme.ExtendedAccount
+	key     crypto.Signer
+	eabKid  string
+	eabHmac string
+}
+
+// savedUser is the on-disk representation of an acmeUser, compatible with the legacy lego v4 format.
+type savedUser struct {
+	Email        string `json:"email"`
+	Registration struct {
+		Body acme.Account `json:"body"`
+		URI  string       `json:"uri,omitempty"`
+	} `json:"registration"`
+	Key string `json:"key"`
+}
+
+// GetEmail returns the email address of the account.
+func (a *acmeUser) GetEmail() string {
+	return a.email
+}
+
+// GetRegistration returns the registration resource of the account.
+func (a *acmeUser) GetRegistration() *acme.ExtendedAccount {
+	return a.account
+}
+
+// GetPrivateKey returns the private key of the account.
+func (a *acmeUser) GetPrivateKey() crypto.Signer {
+	return a.key
+}
+
+// load attempts to read the cached user details from disk.
+// If the user details do not exist, a new private key is created.
+func (a *acmeUser) load(path string) error {
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// No saved data, let's just create a new private key
+		slog.Info("No saved user details found, creating a new private key")
+		privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		if err != nil {
+			return fmt.Errorf("unable to generate private key: %w", err)
+		}
+
+		a.key = privateKey
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("unable to read saved user data from '%s': %w", path, err)
+	}
+
+	var saved savedUser
+	if err = json.Unmarshal(b, &saved); err != nil {
+		return fmt.Errorf("unable to parse saved user data from '%s': %w", path, err)
+	}
+
+	key, err := certcrypto.ParsePEMPrivateKey([]byte(saved.Key))
+	if err != nil {
+		return fmt.Errorf("unable to decode saved user private key: %w", err)
+	}
+
+	a.email = saved.Email
+	a.account = &acme.ExtendedAccount{
+		Account:  saved.Registration.Body,
+		Location: saved.Registration.URI,
+	}
+	a.key = key
+	return nil
+}
+
+// registerAndSave registers the user with the given ACME registration service, and on successful registration
+// serialises the user information to disk at the specified path.
+func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, path string) error {
+	var err error
+	if a.eabHmac != "" && a.eabKid != "" {
+		slog.Info("Registering user", "email", a.email, "eab", "enabled", "kid", a.eabKid)
+		a.account, err = registrar.RegisterWithExternalAccountBinding(
+			ctx,
+			registration.RegisterEABOptions{
+				TermsOfServiceAgreed: true,
+				Kid:                  a.eabKid,
+				HmacEncoded:          a.eabHmac,
+			})
+	} else {
+		if a.eabHmac != "" || a.eabKid != "" {
+			slog.Warn("Incomplete external account binding configuration. Proceeding without EAB.", "hmac_present", a.eabHmac != "", "kid_present", a.eabKid != "")
+		}
+		slog.Info("Registering user", "email", a.email, "eab", "disabled")
+		a.account, err = registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
+	}
+
+	if err != nil {
+		return fmt.Errorf("unable to register new account: %w", err)
+	}
+
+	b, err := json.Marshal(savedUser{
+		Email: a.email,
+		Registration: struct {
+			Body acme.Account "json:\"body\""
+			URI  string       "json:\"uri,omitempty\""
+		}{
+			Body: a.account.Account,
+			URI:  a.account.Location,
+		},
+		Key: string(certcrypto.PEMEncode(a.key)),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to serialize user data: %w", err)
+	}
+
+	return os.WriteFile(path, b, 0600)
 }
