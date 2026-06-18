@@ -332,6 +332,28 @@ If set, stops the ACME client from checking that its DNS records
 have propagated before requesting a certificate. This might be useful
 if your local DNS setup doesn't reflect how the ACME server will see it.
 
+### `ACME_PROPAGATION_DELAY`
+
+- **Default**: `10s`
+
+The length of time to wait to allow DNS propagation if
+`ACME_DISABLE_PROPAGATION_CHECK` is enabled. Has no effect otherwise.
+
+### `ACME_OVERALL_REQUEST_LIMIT`
+
+- **Default**: `18`
+
+The maximum number of requests that should be sent to the ACME server
+per second. Should be set to slightly less than the provider's rate
+limit. Let's Encrypt has a rate limit of 20rps.
+
+### `ACME_RESOLVERS`
+
+- **Default**: -
+
+A comma-separated list of DNS resolvers to use, in host:port format.
+If not set the system resolvers will be used.
+
 ### `ACME_PROFILE`
 
 - **Default**: -

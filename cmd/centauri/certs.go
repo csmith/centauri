@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/csmith/centauri/certificate"
 	"github.com/csmith/centauri/proxy"
@@ -30,6 +31,9 @@ var (
 	acmeDirectory           = flag.String("acme-directory", lego.DirectoryURLLetsEncrypt, "ACME directory to use")
 	acmeProfile             = flag.String("acme-profile", "", "Profile to use when requesting a certificate")
 	acmeDisablePropagation  = flag.Bool("acme-disable-propagation-check", false, "Prevents the ACME client from checking that DNS propagation was successful")
+	acmePropagationDelay    = flag.Duration("acme-propagation-delay", 10*time.Second, "Length of time to wait for propagation if ACME_DISABLE_PROPAGATION_CHECK is enabled")
+	acmeResolvers           = flag.String("acme-resolvers", "", "Comma separated list of nameservers to use for DNS checks. Each should be specified as a host:port pair")
+	acmeOverallLimit        = flag.Int("acme-overall-request-limit", 18, "Maximum number of requests to send to the ACME server per second")
 	wildcardDomains         = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 	useStaples              = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
 )
@@ -80,9 +84,12 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 			KeyType:                 certcrypto.EC384,
 			DnsProvider:             dnsProvider,
 			DisablePropagationCheck: *acmeDisablePropagation,
+			PropagationDelay:        *acmePropagationDelay,
 			Profile:                 *acmeProfile,
 			ExternalAccountKid:      *acmeExternalAccountKid,
 			ExternalAccountHmac:     *acmeExternalAccountHmac,
+			OverallRequestLimit:     *acmeOverallLimit,
+			Resolvers:               parseResolvers(*acmeResolvers),
 		},
 	)
 	if err != nil {
@@ -98,4 +105,15 @@ func canWriteToDataPath() error {
 	} else {
 		return unix.Access(*userDataPath, unix.W_OK)
 	}
+}
+
+func parseResolvers(input string) []string {
+	var res []string
+	parts := strings.Split(input, ",")
+	for i := range parts {
+		if p := strings.TrimSpace(parts[i]); p != "" {
+			res = append(res, p)
+		}
+	}
+	return res
 }

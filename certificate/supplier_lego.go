@@ -52,7 +52,7 @@ type LegoSupplier struct {
 type LegoSupplierConfig struct {
 	// Path is the path to a file on disk where registration data may be cached.
 	Path string
-	// Email is the contact address to supply to the ACME endpoint
+	// Email is the contact address to supply to the ACME endpoint.
 	Email string
 	// DirUrl is the URL of the ACME endpoint.
 	DirUrl string
@@ -64,10 +64,16 @@ type LegoSupplierConfig struct {
 	DnsProvider challenge.Provider
 	// DisablePropagationCheck instructs the lego client to not bother checking for DNS propagation.
 	DisablePropagationCheck bool
+	// PropagationDelay is the duration to sleep for if the propagation check is disabled.
+	PropagationDelay time.Duration
 	// ExternalAccountKid is the key ID for an externally bound account.
 	ExternalAccountKid string
 	// ExternalAccountHmac is the base64-url encoded HMAC key for an externally bound account.
 	ExternalAccountHmac string
+	// OverallRequestLimit is the maximum number of ACME requests to send per second.
+	OverallRequestLimit int
+	// Resolvers defines the DNS resolvers to use in place of the system resolvers.
+	Resolvers []string
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
@@ -83,10 +89,17 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 
 	legoConfig := lego.NewConfig(user)
 	legoConfig.CADirURL = config.DirUrl
+	legoConfig.Certificate.OverallRequestLimit = config.OverallRequestLimit
 
 	client, err := lego.NewClient(legoConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(config.Resolvers) > 0 {
+		dns01.SetDefaultClient(dns01.NewClient(&dns01.Options{
+			RecursiveNameservers: config.Resolvers,
+		}))
 	}
 
 	if err = client.Challenge.SetDNS01Provider(
@@ -94,7 +107,14 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 		dns01.CondOptions(
 			config.DisablePropagationCheck,
 			dns01.WrapPreCheck(func(ctx context.Context, domain, fqdn, value string, check dns01.PreCheckFunc) (bool, error) {
-				slog.Info("Propagation check disabled, not checking DNS at all", "domain", domain)
+				slog.Info("Propagation check disabled, not checking DNS at all", "domain", domain, "wait", config.PropagationDelay)
+
+				select {
+				case <-time.After(config.PropagationDelay):
+				case <-ctx.Done():
+					return false, ctx.Err()
+				}
+
 				return true, nil
 			}),
 		),

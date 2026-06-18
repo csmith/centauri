@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## New features
+
+- Added support for external account binding when registering with an
+  ACME server. Setting `ACME_EXTERNAL_KID` and `ACME_EXTERNAL_HMAC` will
+  enable. See [docs/setup.md](docs/setup.md) for more details.
+- Added `ACME_PROPAGATION_DELAY` setting to control how long the ACME
+  client waits for DNS propagation if `ACME_DISABLE_PROPAGATION_CHECK` is
+  enabled.
+- Added `ACME_OVERALL_REQUEST_LIMIT` to limit the number of requests
+  sent to the ACME server per second. This was previously always set to
+  18, but that is too high for some providers.
+- Added `ACME_RESOLVERS` to explicitly set DNS resolvers for use in
+  DNS challenges.
+
+## Behaviour changes
 
 - Centauri will now ensure that newly issued certificates are only
   used for routes with the same provider. Existing certificates will
@@ -10,9 +24,8 @@
   Previously, the first route to generate a certificate would "win",
   and all matching routes would use that certificate until renewal,
   even if they were configured to use a different provider.
-- Added support for external account binding when registering with an
-  ACME server. Setting `ACME_EXTERNAL_KID` and `ACME_EXTERNAL_HMAC` will
-  enable. See [docs/setup.md](docs/setup.md) for more details.
+- Disabling propagation checks will now avoid querying DNS at all,
+  and show an appropriate log message.
 
 ## 2.6.1 - 2026-05-09
 
