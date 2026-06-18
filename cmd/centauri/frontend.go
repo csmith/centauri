@@ -120,16 +120,16 @@ func newBufferPool() *bufferPool {
 	return &bufferPool{
 		pool: sync.Pool{
 			New: func() any {
-				return make([]byte, 32*1024)
+				return new(make([]byte, 32*1024))
 			},
 		},
 	}
 }
 
 func (b *bufferPool) Get() []byte {
-	return b.pool.Get().([]byte)
+	return *b.pool.Get().(*[]byte)
 }
 
 func (b *bufferPool) Put(bytes []byte) {
-	b.pool.Put(bytes)
+	b.pool.Put(&bytes)
 }
