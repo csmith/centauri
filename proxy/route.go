@@ -9,6 +9,7 @@ import (
 type Route struct {
 	Domains           []string
 	Upstreams         []Upstream
+	Subject           []string
 	Headers           []Header
 	Provider          string
 	RedirectToPrimary bool
@@ -31,6 +32,13 @@ func (r *Route) CertificateStatus() CertificateStatus {
 
 func (r *Route) setCertificateStatus(status CertificateStatus) {
 	r.certificateStatus.Store(int32(status))
+}
+
+func (r *Route) CertificateNames() (string, []string) {
+	if len(r.Subject) > 0 {
+		return r.Subject[0], r.Subject[1:]
+	}
+	return r.Domains[0], r.Domains[1:]
 }
 
 // Upstream represents a configured upstream server for a route.

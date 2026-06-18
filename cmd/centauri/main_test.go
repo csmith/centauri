@@ -703,6 +703,45 @@ func Test_Run_RedirectsToPrimaryDomain(t *testing.T) {
 	<-doneChan
 }
 
+func Test_Run_UsesSubjectForCertificateNames(t *testing.T) {
+	upstream := startStaticServer(8701)
+	defer upstream.stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("subject.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+
+	cert := res.TLS.PeerCertificates[0]
+	assert.Equal(t, "example.com", cert.Subject.CommonName)
+	assert.Equal(t, []string{"example.com", "*.example.com"}, cert.DNSNames)
+	assert.NotContains(t, cert.DNSNames, "www.example.com")
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "This is the upstream on port 8701")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
 func Test_Run_RedirectsHttpToHttps(t *testing.T) {
 	upstream := startStaticServer(8701)
 	defer upstream.stop(context.Background())

@@ -13,6 +13,8 @@
   18, but that is too high for some providers.
 - Added `ACME_RESOLVERS` to explicitly set DNS resolvers for use in
   DNS challenges.
+- Added `subject` directive to allow routes to specify the exact
+  certificate subject they want requested.
 
 ## Behaviour changes
 

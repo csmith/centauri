@@ -72,6 +72,14 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				return nil, nil, fmt.Errorf("redirect-to-primary specified with only a single domain in route %s", route.Domains)
 			}
 			route.RedirectToPrimary = true
+		case "subject":
+			if route == nil {
+				return nil, nil, fmt.Errorf("subject without route: %s", line)
+			}
+			if args == "" {
+				return nil, nil, fmt.Errorf("no domains specified for subject in route %s", route.Domains)
+			}
+			route.Subject = append(route.Subject, strings.Split(args, " ")...)
 		case "#":
 			// Ignore comments
 		default:

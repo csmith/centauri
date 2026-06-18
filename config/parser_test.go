@@ -327,3 +327,53 @@ route example.com example.net
 
 	assert.ErrorContains(t, err, "multiple redirect-to-primary options specified")
 }
+
+func Test_Parse_Subject_OutsideRoute(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`subject foo`)))
+
+	assert.ErrorContains(t, err, "subject without route")
+}
+
+func Test_Parse_Subject_Empty(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	subject
+`)))
+
+	assert.ErrorContains(t, err, "no domains specified for subject")
+}
+
+func Test_Parse_Subject_Single(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	subject foo
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"foo"}, routes[0].Subject)
+}
+
+func Test_Parse_Subject_MultipleOnOneLine(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	subject foo bar baz
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"foo", "bar", "baz"}, routes[0].Subject)
+}
+
+func Test_Parse_Subject_MultipleLines(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	subject foo
+	subject bar
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"foo", "bar"}, routes[0].Subject)
+}

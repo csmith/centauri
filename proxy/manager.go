@@ -67,7 +67,8 @@ func (m *Manager) loadCertificate(route *Route) {
 		return
 	}
 
-	cert, needsRenewal, err := m.provider.GetExistingCertificate(route.Provider, route.Domains[0], route.Domains[1:])
+	primary, alts := route.CertificateNames()
+	cert, needsRenewal, err := m.provider.GetExistingCertificate(route.Provider, primary, alts)
 	if err == nil {
 		route.setCertificate(cert)
 		if needsRenewal {
@@ -137,7 +138,8 @@ func (m *Manager) CheckCertificates(ctx context.Context) {
 
 // updateCert updates the certificate for the given route.
 func (m *Manager) updateCert(ctx context.Context, route *Route) {
-	cert, err := m.provider.GetCertificate(ctx, route.Provider, route.Domains[0], route.Domains[1:])
+	primary, alts := route.CertificateNames()
+	cert, err := m.provider.GetCertificate(ctx, route.Provider, primary, alts)
 	if err != nil {
 		slog.Error("Failed to update certificate", "route", route.Domains[0], "error", err)
 		m.loadCertificate(route)

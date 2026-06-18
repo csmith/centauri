@@ -378,6 +378,45 @@ func Test_Manager_CheckCertificates_passesSupplierSpecifiedByRoute(t *testing.T)
 	})
 }
 
+func Test_Manager_SetRoutes_usesSubjectWhenSet(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certManager := &fakeCertManager{}
+
+		manager := NewManager(certManager)
+		_ = manager.SetRoutes(
+			t.Context(),
+			[]*Route{{
+				Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+				Subject: []string{"example.com", "*.example.com"},
+			}},
+			nil,
+		)
+		synctest.Wait()
+
+		assert.Equal(t, "example.com", certManager.subject)
+		assert.Equal(t, []string{"*.example.com"}, certManager.altNames)
+	})
+}
+
+func Test_Manager_SetRoutes_fallsBackToDomainsWhenSubjectNotSet(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certManager := &fakeCertManager{}
+
+		manager := NewManager(certManager)
+		_ = manager.SetRoutes(
+			t.Context(),
+			[]*Route{{
+				Domains: []string{"test.deep.example.com", "test.example.com", "example.com"},
+			}},
+			nil,
+		)
+		synctest.Wait()
+
+		assert.Equal(t, "test.deep.example.com", certManager.subject)
+		assert.Equal(t, []string{"test.example.com", "example.com"}, certManager.altNames)
+	})
+}
+
 func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{

@@ -23,8 +23,9 @@ route example.com example.net www.example.com
 Defines a route with a list of domain names that will be accepted from clients
 
 Routes must have at least one domain name (even if they're the [fallback](#fallback) route).
+
 The first domain will be used as the subject for the certificate, while others will
-be used as alternate names.
+be used as alternate names. This can be changed using the [`subject`](#subject) directive.
 
 Routes are the only "top level" directive. Everything else is a per-route
 setting, and applies to most recently defined route.
@@ -105,6 +106,19 @@ redirect-to-primary
 When applied to routes with multiple domains, redirects any requests from
 the secondary domains to the primary. The primary domain is the first listed.
 
+### `subject`
+
+```
+subject *.example.com *.dev.example.com
+```
+
+Sets the subject that should be used for the certificate for the route.
+If not specified, the certificate is issued to the domain names specified
+in the `route` directive, subject to [wildcard resolution](wildcards.md).
+
+Multiple names can be space-separated, or supplied as separate `subject`
+directives.
+
 ## Comments and whitespace
 
 Lines that are empty or start with a `#` character are ignored, as is
@@ -151,4 +165,11 @@ route placeholder.example.com
 route example.org www.example.org www1.example.org
     upstream server1:8084
     redirect-to-primary
+
+# This route will answer requests made to `example.co.uk` and
+# `secret.example.co.uk`. The certificate will be issued for
+# `example.co.uk` and `*.example.co.uk`.
+route example.co.uk secret.example.co.uk
+    upstream server1:8085
+    subject example.co.uk *.example.co.uk
 ```
