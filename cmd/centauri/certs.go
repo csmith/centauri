@@ -34,6 +34,7 @@ var (
 	acmePropagationDelay    = flag.Duration("acme-propagation-delay", 10*time.Second, "Length of time to wait for propagation if ACME_DISABLE_PROPAGATION_CHECK is enabled")
 	acmeResolvers           = flag.String("acme-resolvers", "", "Comma separated list of nameservers to use for DNS checks. Each should be specified as a host:port pair")
 	acmeOverallLimit        = flag.Int("acme-overall-request-limit", 18, "Maximum number of requests to send to the ACME server per second")
+	acmeObtainInterval      = flag.Duration("acme-obtain-interval", 0, "Minimum duration between certificate issuance requests. Set to 0 to disable.")
 	acmeOverallTimeout      = flag.Duration("acme-overall-timeout", 10*time.Minute, "Maximum time to spend on ACME operations")
 	wildcardDomains         = flag.String("wildcard-domains", "", "Space separated list of wildcard domains")
 	useStaples              = flag.Bool("ocsp-stapling", false, "Enable OCSP response stapling")
@@ -90,6 +91,7 @@ func createLegoSupplier() (*certificate.LegoSupplier, error) {
 			ExternalAccountKid:      *acmeExternalAccountKid,
 			ExternalAccountHmac:     *acmeExternalAccountHmac,
 			OverallRequestLimit:     *acmeOverallLimit,
+			ObtainInterval:          *acmeObtainInterval,
 			Resolvers:               parseResolvers(*acmeResolvers),
 			Timeout:                 *acmeOverallTimeout,
 		},

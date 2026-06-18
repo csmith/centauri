@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ocsp"
+	"golang.org/x/time/rate"
 )
 
 func Test_acmeUser_load_generatesKeyIfFileIsMissing(t *testing.T) {
@@ -196,8 +197,9 @@ func Test_Supplier_GetCertificate_passesDetailsToCertifier(t *testing.T) {
 		obtainErr: fmt.Errorf("denied"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
-		keyType:   certcrypto.EC384,
+		certifier:     c,
+		keyType:       certcrypto.EC384,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_, _ = s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
@@ -212,9 +214,10 @@ func Test_Supplier_GetCertificate_passesProfileToCertifier(t *testing.T) {
 		obtainErr: fmt.Errorf("denied"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
-		profile:   "shortlived",
-		keyType:   certcrypto.EC384,
+		certifier:     c,
+		profile:       "shortlived",
+		keyType:       certcrypto.EC384,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_, _ = s.GetCertificate(t.Context(), "example.com", nil, false)
@@ -226,7 +229,8 @@ func Test_Supplier_GetCertificate_returnsErrorIfObtainFails(t *testing.T) {
 		obtainErr: fmt.Errorf("denied"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
@@ -238,7 +242,8 @@ func Test_Supplier_GetCertificate_returnsErrorIfCertificateCantBeParsed(t *testi
 		resource: &legocert.Resource{Certificate: []byte("not a pem")},
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
@@ -254,7 +259,8 @@ func Test_Supplier_GetCertificate_returnsErrorIfStaplingFailsWhenEnabled(t *test
 		ocspErr:  fmt.Errorf("denied"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
@@ -270,7 +276,8 @@ func Test_Supplier_GetCertificate_doesNotTryToStapleIfDisabled(t *testing.T) {
 		ocspErr:  fmt.Errorf("denied"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	cert, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, false)
@@ -296,7 +303,8 @@ func Test_Supplier_GetCertificate_returnsCertificateDetails(t *testing.T) {
 		},
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	cert, err := s.GetCertificate(t.Context(), "example.com", []string{"alt.example.com", "example.net"}, true)
@@ -341,7 +349,8 @@ func Test_Supplier_UpdateStaple_errorsIfStaplerReturnStatusOtherTHanGood(t *test
 func Test_Supplier_UpdateStaple_passesCertToStapler(t *testing.T) {
 	c := &fakeCertifier{}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 	_ = s.UpdateStaple(t.Context(), &Details{Certificate: "cert"})
 	assert.EqualValues(t, "cert", c.bundle)
@@ -356,7 +365,8 @@ func Test_Supplier_UpdateStaple_updatesOcspDetails(t *testing.T) {
 		},
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	cert := &Details{Certificate: "cert"}
@@ -381,7 +391,8 @@ func Test_Supplier_UpdateRenewalInfo_returnsNilIfServerDoesNotSupportARI(t *test
 		renewalInfoErr: api.ErrNoARI,
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	cert := &Details{Certificate: string(pemCert)}
@@ -398,7 +409,8 @@ func Test_Supplier_UpdateRenewalInfo_returnsErrorIfGetRenewalInfoFails(t *testin
 		renewalInfoErr: fmt.Errorf("some other error"),
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	err := s.UpdateRenewalInfo(t.Context(), &Details{Certificate: string(pemCert)})
@@ -423,7 +435,8 @@ func Test_Supplier_UpdateRenewalInfo_passesCertToCertifier(t *testing.T) {
 		},
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	_ = s.UpdateRenewalInfo(t.Context(), &Details{Certificate: string(pemCert)})
@@ -452,7 +465,8 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 		},
 	}
 	s := &LegoSupplier{
-		certifier: c,
+		certifier:     c,
+		obtainLimiter: rate.NewLimiter(rate.Inf, 1),
 	}
 
 	cert := &Details{Certificate: string(pemCert)}

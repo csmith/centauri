@@ -18,6 +18,8 @@
 - Added `ACME_OVERALL_TIMEOUT` to limit the maximum time spent on
   ACME operations. This helps with providers that send an obnoxiously
   large `Retry-After` header.
+- Added `ACME_OBTAIN_INTERVAL` to limit the rate at which new certificates
+  are issued.
 
 ## Behaviour changes
 

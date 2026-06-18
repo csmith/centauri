@@ -347,6 +347,15 @@ The maximum number of requests that should be sent to the ACME server
 per second. Should be set to slightly less than the provider's rate
 limit. Let's Encrypt has a rate limit of 20rps.
 
+### `ACME_OBTAIN_INTERVAL`
+
+- **Default**: `0` (disabled)
+
+The minimum duration between certificate issuance requests. Useful for
+staying under request quotas imposed by ACME servers. Set to `0` to
+disable rate limiting on issuance. Note that OCSP staple refreshes
+and ARI updates are not affected by this setting.
+
 ### `ACME_OVERALL_TIMEOUT`
 
 - **Default**: `10m`

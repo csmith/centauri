@@ -25,6 +25,7 @@ import (
 	"github.com/go-acme/lego/v5/lego"
 	"github.com/go-acme/lego/v5/registration"
 	"golang.org/x/crypto/ocsp"
+	"golang.org/x/time/rate"
 )
 
 // registrar is the surface we use to interact with lego's account registration API.
@@ -42,11 +43,12 @@ type certifier interface {
 
 // LegoSupplier uses a lego client to obtain certificates from an ACME endpoint.
 type LegoSupplier struct {
-	user      *acmeUser
-	certifier certifier
-	profile   string
-	keyType   certcrypto.KeyType
-	timeout   time.Duration
+	user          *acmeUser
+	certifier     certifier
+	profile       string
+	keyType       certcrypto.KeyType
+	timeout       time.Duration
+	obtainLimiter *rate.Limiter
 }
 
 // LegoSupplierConfig contains the configuration used to create a new LegoSupplier.
@@ -73,6 +75,10 @@ type LegoSupplierConfig struct {
 	ExternalAccountHmac string
 	// OverallRequestLimit is the maximum number of ACME requests to send per second.
 	OverallRequestLimit int
+	// ObtainInterval is the minimum duration between certificate issuance requests.
+	// A value of zero or less means no limit. Useful for staying under per-account
+	// issuance quotas imposed by ACME servers (e.g. Let's Encrypt).
+	ObtainInterval time.Duration
 	// Resolvers defines the DNS resolvers to use in place of the system resolvers.
 	Resolvers []string
 	// Timeout is the maximum time to wait for ACME operations to complete.
@@ -132,11 +138,12 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 	}
 
 	s := &LegoSupplier{
-		user:      user,
-		certifier: client.Certificate,
-		profile:   config.Profile,
-		keyType:   config.KeyType,
-		timeout:   config.Timeout,
+		user:          user,
+		certifier:     client.Certificate,
+		profile:       config.Profile,
+		keyType:       config.KeyType,
+		timeout:       config.Timeout,
+		obtainLimiter: rate.NewLimiter(rate.Every(config.ObtainInterval), 1),
 	}
 
 	return s, nil
@@ -144,13 +151,18 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
 func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
+	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames, "timeout", s.timeout, "limited", s.obtainLimiter.Tokens() < 1)
+
+	if err := s.obtainLimiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
 		defer cancel()
 	}
 
-	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames)
 	res, err := s.certifier.Obtain(ctx, legocert.ObtainRequest{
 		Domains:    append([]string{subject}, altNames...),
 		Bundle:     true,
