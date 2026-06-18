@@ -1,6 +1,8 @@
 # Changelog
 
-## New features
+## 2.7.0 - 2026-06-18
+
+### New features
 
 - Added support for external account binding when registering with an
   ACME server. Setting `ACME_EXTERNAL_KID` and `ACME_EXTERNAL_HMAC` will
@@ -21,7 +23,7 @@
 - Added `ACME_OBTAIN_INTERVAL` to limit the rate at which new certificates
   are issued.
 
-## Behaviour changes
+### Behaviour changes
 
 - Centauri will now ensure that newly issued certificates are only
   used for routes with the same provider. Existing certificates will
