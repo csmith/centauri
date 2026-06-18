@@ -15,6 +15,9 @@
   DNS challenges.
 - Added `subject` directive to allow routes to specify the exact
   certificate subject they want requested.
+- Added `ACME_OVERALL_TIMEOUT` to limit the maximum time spent on
+  ACME operations. This helps with providers that send an obnoxiously
+  large `Retry-After` header.
 
 ## Behaviour changes
 

@@ -46,6 +46,7 @@ type LegoSupplier struct {
 	certifier certifier
 	profile   string
 	keyType   certcrypto.KeyType
+	timeout   time.Duration
 }
 
 // LegoSupplierConfig contains the configuration used to create a new LegoSupplier.
@@ -74,6 +75,8 @@ type LegoSupplierConfig struct {
 	OverallRequestLimit int
 	// Resolvers defines the DNS resolvers to use in place of the system resolvers.
 	Resolvers []string
+	// Timeout is the maximum time to wait for ACME operations to complete.
+	Timeout time.Duration
 }
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
@@ -133,6 +136,7 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 		certifier: client.Certificate,
 		profile:   config.Profile,
 		keyType:   config.KeyType,
+		timeout:   config.Timeout,
 	}
 
 	return s, nil
@@ -140,6 +144,12 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
 func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
+	if s.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
 	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames)
 	res, err := s.certifier.Obtain(ctx, legocert.ObtainRequest{
 		Domains:    append([]string{subject}, altNames...),
@@ -180,6 +190,12 @@ func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNa
 
 // UpdateStaple requests a new OCSP staple for the given certificate.
 func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
+	if s.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
 	slog.Info("Updating OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
 	b, response, err := s.certifier.GetOCSP(ctx, []byte(cert.Certificate))
 	if err != nil {
@@ -198,6 +214,12 @@ func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
 
 // UpdateRenewalInfo asks the ACME server when the certificate should be renewed.
 func (s *LegoSupplier) UpdateRenewalInfo(ctx context.Context, cert *Details) error {
+	if s.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
 	x509Cert, err := certcrypto.ParsePEMCertificate([]byte(cert.Certificate))
 	if err != nil {
 		return fmt.Errorf("unable to parse certificate: %w", err)

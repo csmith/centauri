@@ -347,6 +347,14 @@ The maximum number of requests that should be sent to the ACME server
 per second. Should be set to slightly less than the provider's rate
 limit. Let's Encrypt has a rate limit of 20rps.
 
+### `ACME_OVERALL_TIMEOUT`
+
+- **Default**: `10m`
+
+The maximum length of time to allow for ACME operations. Prevents
+Centauri waiting for arbitrarily long periods if providers send a
+large `Retry-After` header.
+
 ### `ACME_RESOLVERS`
 
 - **Default**: -
