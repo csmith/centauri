@@ -26,6 +26,7 @@
   even if they were configured to use a different provider.
 - Disabling propagation checks will now avoid querying DNS at all,
   and show an appropriate log message.
+- Updated TLS configuration to latest Mozilla intermediate recommendation
 
 ## 2.6.1 - 2026-05-09
 

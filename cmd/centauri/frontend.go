@@ -64,14 +64,20 @@ func (fc *frontendContext) createRedirector() http.Handler {
 func (fc *frontendContext) createTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
-		// Generated 2022-02-20, Mozilla Guideline v5.6, Go 1.14.4, intermediate configuration
+		// Generated 2026-06-18, TLSRef Guideline v6.0, Go 1.23.3, intermediate config, gitrev=9c09b2d
+		CurvePreferences: []tls.CurveID{
+			tls.X25519MLKEM768,
+			tls.X25519,
+			tls.CurveP256,
+			tls.CurveP384,
+		},
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 		},
 		GetCertificate: fc.recorder.TrackHello(fc.manager.CertificateForClient),
 		NextProtos:     []string{"h2", "http/1.1"},
