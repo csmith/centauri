@@ -13,7 +13,7 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/sys v0.46.0
 	golang.org/x/time v0.15.0
-	tailscale.com v1.98.4
+	tailscale.com v1.98.5
 )
 
 require (
