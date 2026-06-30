@@ -6,7 +6,7 @@ require (
 	github.com/csmith/envflag/v2 v2.0.0
 	github.com/csmith/legotapas/v2 v2.0.0
 	github.com/csmith/slogflags v1.2.0
-	github.com/go-acme/lego/v5 v5.2.1
+	github.com/go-acme/lego/v5 v5.2.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.52.0
