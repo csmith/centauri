@@ -1,6 +1,6 @@
 module github.com/csmith/centauri
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/csmith/envflag/v2 v2.0.0
@@ -13,7 +13,7 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/sys v0.46.0
 	golang.org/x/time v0.15.0
-	tailscale.com v1.98.5
+	tailscale.com v1.100.0
 )
 
 require (
@@ -85,7 +85,7 @@ require (
 	github.com/go-acme/tencentedgdeone v1.3.38 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
-	github.com/go-json-experiment/json v0.0.0-20250813024750-ebf49471dced // indirect
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
@@ -210,7 +210,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd // indirect
 	github.com/tailscale/peercred v0.0.0-20250107143737-35a0c7bd7edc // indirect
 	github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976 // indirect
-	github.com/tailscale/wireguard-go v0.0.0-20260427181203-e3ac4a0afb4e // indirect
+	github.com/tailscale/wireguard-go v0.0.0-20260527010701-b48af7099cad // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.106 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/transip/gotransip/v6 v6.27.1 // indirect
