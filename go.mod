@@ -8,7 +8,7 @@ require (
 	github.com/csmith/slogflags v1.2.0
 	github.com/go-acme/lego/v5 v5.2.2
 	github.com/prometheus/client_golang v1.23.2
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/sys v0.47.0
@@ -67,7 +67,6 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/creachadair/msync v0.7.1 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/dnsimple/dnsimple-go/v9 v9.1.0 // indirect
 	github.com/exoscale/egoscale/v3 v3.1.34 // indirect
@@ -176,7 +175,6 @@ require (
 	github.com/pires/go-proxyproto v0.8.1 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/pquerna/otp v1.5.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
