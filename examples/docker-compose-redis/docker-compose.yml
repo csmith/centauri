@@ -1,0 +1,54 @@
+services:
+  centauri:
+    image: "ghcr.io/csmith/centauri"
+    restart: "always"
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      # Persistent directory for storing ACME credentials
+      - "./data:/data"
+    environment:
+      ACME_EMAIL: "you@example.com"
+
+      # Store certificates in the Redis server rather than a local file. Multiple Centauri instances
+      # can share a single Redis server, allowing them to share a set of certificates and co-ordinate
+      # obtaining and renewing them.
+      CERTIFICATE_STORE_TYPE: "redis"
+      REDIS_ADDRESS: "redis:6379"
+      # REDIS_USERNAME: ""               # Username for Redis servers using ACLs
+      # REDIS_PASSWORD: ""               # Password to authenticate to the Redis server with
+      # REDIS_DB: "0"                    # Redis database number to store certificates in
+      # REDIS_KEY_PREFIX: "centauri"     # Use if you need multiple independent Centauri deployments
+      #                                  # to share the same redis server (and not share certs).
+      # REDIS_TLS: "false"               # Enable to connect over TLS
+
+      # Centauri uses DNS challenges to prove domain ownership. See the Lego docs for all available
+      # providers and their configuration: https://go-acme.github.io/lego/dns/
+      DNS_PROVIDER: "httpreq"
+      HTTPREQ_ENDPOINT: "https://api.mydnsprovider.example.com/httpreq"
+      HTTPREQ_USERNAME: "dns@example.com"
+      HTTPREQ_PASSWORD: "myp@ssw0rd"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Redis server to store certificates in.
+  redis:
+    image: "redis"
+    restart: "always"
+    command: "redis-server --appendonly yes"
+    volumes:
+      - "./redis-data:/data"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: "5s"
+      timeout: "3s"
+      retries: 12
+
+  # A container that will be proxied by Centauri. As the containers are on the same network (docker
+  # compose creates a "default" network) we can refer to this container just as "mycontainer" in the
+  # Centauri config.
+  mycontainer:
+    image: "nginx"
+    restart: "always"

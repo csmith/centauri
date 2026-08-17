@@ -21,6 +21,12 @@ to automatically generate a Centauri config based on containers that are
 running on the host, and send it directly to Centauri using the
 [network config protocol](network-config.md).
 
+## [docker-compose-redis](https://github.com/csmith/centauri/tree/master/examples/docker-compose-redis)
+
+A Docker Compose file that runs Centauri alongside a Redis server, and
+configures Centauri to store its certificates in Redis. This allows
+multiple Centauri instances to share a single set of certificates.
+
 ## [docker-compose-tailscale](https://github.com/csmith/centauri/tree/master/examples/docker-compose-tailscale)
 
 A simple Docker Compose file that defines Centauri and a target service.
