@@ -116,13 +116,29 @@ over tailscale.
 Each frontend has several additional options:
 [TCP options](#tcp-options) and [Tailscale options](#tailscale-options).
 
+### `CERTIFICATE_STORE_TYPE`
+
+- **Default**: `json`
+- **Options**: `json`, `redis`
+
+The type of store to save certificates in.
+
+The default `json` store writes all certificates to a single file, and only
+allows a single Centauri instance to use them. It is configured using the
+[`CERTIFICATE_STORE`](#certificate_store) option.
+
+The `redis` store saves certificates to a Redis server, allowing multiple
+Centauri instances to share a single set of certificates. Instances
+co-ordinate obtaining and renewing certificates using distributed locks. It
+has several additional [options](#redis-certificate-store-options).
+
 ### `CERTIFICATE_STORE`
 
 - **Default (CLI)**: `certs.json`
 - **Default (Docker)**: `/data/certs.json`
 
-The location that Centauri should save the certificates it obtains or
-generates.
+The location of the certificate store, when using the `json`
+[certificate store type](#certificate_store_type).
 
 This should be persisted across runs of Centauri (i.e., within a docker
 volume, or otherwise mounted in.)
@@ -271,6 +287,51 @@ to the tailnet when Centauri is restarted (unless you provide a reusable
 [key](#tailscale_key)).
 
 If not specified, Tailscale will create a dir under the user config directory.
+
+## Redis certificate store options
+
+When using the `redis` certificate store, the following options are used:
+
+### `REDIS_ADDRESS`
+
+- **Default**: `localhost:6379`
+
+The address (host:port) of the Redis server to store certificates in.
+
+### `REDIS_USERNAME`
+
+- **Default**: -
+
+The username to authenticate to the Redis server with (for servers using
+ACLs).
+
+### `REDIS_PASSWORD`
+
+- **Default**: -
+
+The password to authenticate to the Redis server with.
+
+### `REDIS_DB`
+
+- **Default**: `0`
+
+The Redis database number to store certificates in.
+
+### `REDIS_KEY_PREFIX`
+
+- **Default**: `centauri`
+
+The prefix to use for keys stored in Redis. This can be changed to store
+certificates for multiple independent Centauri deployments in a single Redis
+server.
+
+### `REDIS_TLS`
+
+- **Default**: `false`
+- **Options**: `true`, `false`
+
+If enabled, Centauri will connect to the Redis server over TLS. This is
+required by most hosted Redis providers.
 
 ## Lego options
 

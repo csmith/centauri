@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Added a Redis-backed certificate store, allowing multiple Centauri
+  instances to share a single set of certificates. Enable by setting
+  `-certificate-store-type` / `CERTIFICATE_STORE_TYPE` to `redis`, and
+  configure the Redis connection with the `REDIS_*` options. See
+  [docs/setup.md](docs/setup.md) for more details.
+- The new `noredis` build tag removes the Redis client from the binary for
+  deployments that only need the default JSON certificate store. See
+  [docs/buildtags.md](docs/buildtags.md) for more details.
+
 ## 2.7.0 - 2026-06-18
 
 ### New features

@@ -22,7 +22,8 @@ import (
 
 var (
 	userDataPath            = flag.String("user-data", "user.pem", "Path to user data")
-	certificateStorePath    = flag.String("certificate-store", "certs.json", "Path to certificate store")
+	certificateStoreType    = flag.String("certificate-store-type", "json", "Type of certificate store to use")
+	certificateStorePath    = flag.String("certificate-store", "certs.json", "Path to certificate store, when using the json certificate store")
 	certificateProviders    = flag.String("certificate-providers", "lego selfsigned", "Space separated list of certificate providers to use by default in order of preference")
 	dnsProviderName         = flag.String("dns-provider", "", "DNS provider to use for ACME DNS-01 challenges")
 	acmeEmail               = flag.String("acme-email", "", "Email address for ACME account")
@@ -41,7 +42,7 @@ var (
 )
 
 func certProvider() (proxy.CertificateProvider, error) {
-	store, err := certificate.NewStore(*certificateStorePath)
+	store, err := createCertificateStore(*certificateStoreType)
 	if err != nil {
 		return nil, fmt.Errorf("certificate store error: %v", err)
 	}

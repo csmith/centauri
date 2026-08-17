@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/csmith/centauri/certificate"
 	"github.com/csmith/centauri/metrics"
 	"github.com/csmith/centauri/proxy"
 	"github.com/csmith/envflag/v2"
@@ -159,6 +160,17 @@ func createConfigSource(name string) (configSource, error) {
 		return newNetworkConfigSource(), nil
 	default:
 		return nil, fmt.Errorf("unknown config source: %s", name)
+	}
+}
+
+func createCertificateStore(name string) (certificate.Store, error) {
+	switch strings.ToLower(name) {
+	case "json":
+		return certificate.NewStore(*certificateStorePath)
+	case "redis":
+		return createRedisStore()
+	default:
+		return nil, fmt.Errorf("unknown certificate store: %s", name)
 	}
 }
 

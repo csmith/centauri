@@ -17,3 +17,10 @@ info.
 Similarly, if you know you only want to use the `tcp` or `tailscale`
 frontends, you can disable the other with the `notcp` or `notailscale`
 build tags.
+
+## Certificate stores
+
+If you only want to use the default JSON certificate store, you can remove
+the Redis client from the binary with the `noredis` build tag. Attempting to
+use the `redis` certificate store in a binary built this way will result in
+an error at startup.

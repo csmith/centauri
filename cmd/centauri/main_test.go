@@ -43,6 +43,16 @@ func Test_Run_ErrorsIfConfigSourceUndefined(t *testing.T) {
 	assert.ErrorContains(t, err, "unknown config source: invalid")
 }
 
+func Test_Run_ErrorsIfCertificateStoreTypeUndefined(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"CERTIFICATE_STORE_TYPE", "invalid",
+	)
+
+	assert.ErrorContains(t, err, "error creating certificate providers")
+	assert.ErrorContains(t, err, "unknown certificate store: invalid")
+}
+
 func Test_Run_ErrorsIfNetworkConfigSourceWithoutAddress(t *testing.T) {
 	err := runTest(
 		make(chan os.Signal, 1),
