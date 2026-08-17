@@ -21,6 +21,11 @@ var (
 	tailscaleDir      = flag.String("tailscale-dir", "", "Directory to use to persist tailscale state")
 )
 
+// createTailscaleFrontend creates the tailscale frontend.
+func createTailscaleFrontend() (frontend, error) {
+	return &tailscaleFrontend{}, nil
+}
+
 type tailscaleFrontend struct {
 	tlsServer   *server
 	plainServer *server

@@ -13,6 +13,11 @@
   deployments that only need the default JSON certificate store. See
   [docs/buildtags.md](docs/buildtags.md) for more details.
 
+### Bug fixes
+
+- Fixed builds with the `notcp` or `notailscale` build tags failing to
+  compile. Binaries built without a frontend now also report an error.
+
 ## 2.7.0 - 2026-06-18
 
 ### New features

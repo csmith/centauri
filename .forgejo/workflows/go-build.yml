@@ -10,3 +10,18 @@ jobs:
   build:
     uses: meta/workflows/.forgejo/workflows/go-build.yml@master
     runs-on: docker
+  notcp:
+    uses: meta/workflows/.forgejo/workflows/go-build.yml@master
+    runs-on: docker
+    with:
+      tags: notcp
+  notailscale:
+    uses: meta/workflows/.forgejo/workflows/go-build.yml@master
+    runs-on: docker
+    with:
+      tags: notailscale
+  noredis:
+    uses: meta/workflows/.forgejo/workflows/go-build.yml@master
+    runs-on: docker
+    with:
+      tags: noredis

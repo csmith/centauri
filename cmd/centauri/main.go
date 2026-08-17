@@ -144,9 +144,9 @@ func run(args []string, signalChan <-chan os.Signal) error {
 func createFrontend(name string) (frontend, error) {
 	switch strings.ToLower(name) {
 	case "tcp":
-		return &tcpFrontend{}, nil
+		return createTcpFrontend()
 	case "tailscale":
-		return &tailscaleFrontend{}, nil
+		return createTailscaleFrontend()
 	default:
 		return nil, fmt.Errorf("unknown frontend: %s", name)
 	}

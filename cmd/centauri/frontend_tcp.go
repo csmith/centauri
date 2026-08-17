@@ -16,6 +16,11 @@ var (
 	httpsPort = flag.Int("https-port", 8443, "Port to listen on for HTTPS requests for the TCP frontend")
 )
 
+// createTcpFrontend creates the TCP frontend.
+func createTcpFrontend() (frontend, error) {
+	return &tcpFrontend{}, nil
+}
+
 type tcpFrontend struct {
 	tlsServer   *server
 	plainServer *server
