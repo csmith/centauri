@@ -63,3 +63,18 @@ func Test_Route_CertificateNames_returnsSingleDomainWithoutAlts(t *testing.T) {
 	assert.Equal(t, "example.com", subject)
 	assert.Empty(t, alts)
 }
+
+func Test_Route_ErrorMappingForStatus(t *testing.T) {
+	route := &Route{
+		ErrorMappings: []ErrorMapping{
+			{Status: 404, Upstream: "not-found:8080"},
+			{Status: 502, Upstream: "error-pages:8080"},
+			{Status: 404, Upstream: "other:8080"},
+		},
+	}
+
+	assert.Equal(t, &ErrorMapping{Status: 404, Upstream: "not-found:8080"}, route.ErrorMappingForStatus(404))
+	assert.Equal(t, &ErrorMapping{Status: 502, Upstream: "error-pages:8080"}, route.ErrorMappingForStatus(502))
+	assert.Nil(t, route.ErrorMappingForStatus(500))
+	assert.Nil(t, (&Route{}).ErrorMappingForStatus(404))
+}

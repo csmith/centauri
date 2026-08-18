@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/csmith/centauri/proxy"
@@ -43,6 +45,13 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				return nil, nil, fmt.Errorf("header without route: %s", line)
 			}
 			if err := parseHeader(args, route); err != nil {
+				return nil, nil, err
+			}
+		case "on_error":
+			if route == nil {
+				return nil, nil, fmt.Errorf("on_error without route: %s", line)
+			}
+			if err := parseOnError(args, route); err != nil {
 				return nil, nil, err
 			}
 		case "provider":
@@ -101,6 +110,43 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 	}
 
 	return
+}
+
+func parseOnError(args string, route *proxy.Route) error {
+	parts := strings.Fields(args)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid on_error line: %s", args)
+	}
+
+	status, err := strconv.Atoi(parts[0])
+	if err != nil || status < 400 || status > 599 {
+		return fmt.Errorf("invalid status code for on_error: %s (must be 400-599)", parts[0])
+	}
+
+	host, path, found := strings.Cut(parts[1], "/")
+	if host == "" {
+		return fmt.Errorf("no upstream specified for on_error: %s", args)
+	}
+	if strings.ContainsAny(host, "?#") {
+		return fmt.Errorf("on_error path must begin with a /: %s", parts[1])
+	}
+
+	mapping := proxy.ErrorMapping{
+		Status:   status,
+		Upstream: host,
+	}
+
+	if found && path != "" {
+		target, err := url.Parse("/" + path)
+		if err != nil || target.RawQuery == "" && strings.Contains(path, "?") {
+			return fmt.Errorf("invalid path for on_error: %s", parts[1])
+		}
+		mapping.Path = target.Path
+		mapping.RawQuery = target.RawQuery
+	}
+
+	route.ErrorMappings = append(route.ErrorMappings, mapping)
+	return nil
 }
 
 func parseHeader(args string, route *proxy.Route) error {

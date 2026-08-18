@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -34,8 +35,9 @@ type routeProvider interface {
 
 // Rewriter facilitates rewriting HTTP requests and responses according to the routes provided by a Manager.
 type Rewriter struct {
-	provider   routeProvider
-	decorators []Decorator
+	provider    routeProvider
+	decorators  []Decorator
+	errorClient *http.Client
 }
 
 // NewRewriter creates a new Rewriter backed by the given route manager.
@@ -47,6 +49,7 @@ func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet) *Rewriter {
 			NewBannedHeaderDecorator(),
 			NewUserAgentDecorator(),
 		},
+		errorClient: newErrorClient(),
 	}
 }
 
@@ -73,16 +76,30 @@ func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 
 // RewriteResponse modifies the given response according to the routes provided by the Manager.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
+// If the response has an error status code that the route maps to an error upstream, the
+// response is replaced with one fetched from that upstream.
 func (r *Rewriter) RewriteResponse(response *http.Response) error {
+	if response.StatusCode >= 400 {
+		r.replaceWithUpstreamErrorPage(response)
+	}
 	r.rewriteHeaders(response.Header, response.Request)
 	return nil
 }
 
-// RewriteError modifiers the headers in the response according to the rules in the routes.
-// It satisfies the signature of the ErrorHandler field of httputil.ReverseProxy
+// RewriteError handles the reverse proxy being unable to get a usable response from the upstream,
+// either because it could not be contacted or because it could not be proxied. It satisfies the
+// signature of the ErrorHandler field of httputil.ReverseProxy. If the route maps the status code
+// to an error upstream then a response is served from it; otherwise fn is called to serve a
+// fallback response.
 func (r *Rewriter) RewriteError(fn func(http.ResponseWriter, *http.Request, error)) func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, req *http.Request, err error) {
-		r.rewriteHeaders(req.Header, req)
+		slog.Warn("Failed to connect to upstream", "host", req.Host, "error", err)
+
+		if r.serveUpstreamErrorPage(writer, req, http.StatusBadGateway) {
+			return
+		}
+
+		r.rewriteHeaders(writer.Header(), req)
 		fn(writer, req, err)
 	}
 }

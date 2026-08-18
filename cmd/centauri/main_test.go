@@ -405,6 +405,130 @@ func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
 	<-doneChan
 }
 
+func Test_Run_OnError_ServesErrorPageFromUpstream(t *testing.T) {
+	// The primary upstream (127.0.0.1:1) is unreachable, so the route's on_error 502 mapping
+	// should cause the response to be served from the error upstream instead of the default page.
+	errorUpstream := startStaticServer(8705)
+	defer errorUpstream.Stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("on-error.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	// The status code is always the original error (502); the body comes from the error upstream.
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "This is the upstream on port 8705")
+	assert.NotContains(t, string(b), "The server was unable to complete your request")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {
+	// The error upstream responds with a redirect; Centauri should follow it itself and serve the
+	// final response, rather than passing the redirect on to the client.
+	errorUpstream := startServer(8705, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/final" {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("the error page after a redirect"))
+			return
+		}
+		http.Redirect(w, r, "/final", http.StatusFound)
+	}))
+	defer errorUpstream.Stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("on-error.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	// The redirect is resolved by Centauri: the client sees the original 502 with the final body,
+	// not a redirect status or a Location header. (The test client does not follow redirects.)
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+	assert.Empty(t, res.Header.Get("Location"))
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "the error page after a redirect")
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
+func Test_Run_OnError_PassesHeadersFromErrorUpstream(t *testing.T) {
+	// Headers set by the error upstream (such as Content-Type) should be served to the client.
+	errorUpstream := startServer(8705, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"error":"bad gateway"}`))
+	}))
+	defer errorUpstream.Stop(context.Background())
+
+	signalChan := make(chan os.Signal, 1)
+	doneChan := make(chan struct{}, 1)
+
+	go func() {
+		err := runTest(
+			signalChan,
+			"CONFIG", testdata.Path("on-error.conf"),
+			"PROVIDER", "selfsigned",
+			"FRONTEND", "tcp",
+			"HTTP_PORT", "8702",
+			"HTTPS_PORT", "8703",
+		)
+		assert.NoError(t, err)
+		doneChan <- struct{}{}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(8703, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+	assert.Equal(t, "application/json", res.Header.Get("Content-Type"))
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.JSONEq(t, `{"error":"bad gateway"}`, string(b))
+
+	signalChan <- os.Interrupt
+	<-doneChan
+}
+
 func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
 	upstream := startStaticServer(8701)
 	defer upstream.Stop(context.Background())
@@ -818,18 +942,22 @@ func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 }
 
 func startStaticServer(port int) *frontend.Server {
-	errChan := make(chan error, 1)
-
-	go func() {
-		panic(<-errChan)
-	}()
-	srv := frontend.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return startServer(port, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("This is the upstream on port %d\n\nYou provided headers:\n", port)))
 		for k := range r.Header {
 			w.Write([]byte(fmt.Sprintf("%s: %s\n", k, r.Header.Get(k))))
 		}
-	}), errChan)
+	}))
+}
+
+func startServer(port int, handler http.Handler) *frontend.Server {
+	errChan := make(chan error, 1)
+
+	go func() {
+		panic(<-errChan)
+	}()
+	srv := frontend.NewServer(handler, errChan)
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		panic(err)

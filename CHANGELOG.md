@@ -4,6 +4,12 @@
 
 ### New features
 
+- Added the `on_error` route directive, which maps an error status code to an
+  upstream that should generate the response for it. For example,
+  `on_error 502 error-pages:8080` serves the response body from
+  `error-pages:8080` whenever the route's upstream is unreachable, allowing
+  e.g. a JSON error document to be served for APIs. See
+  [docs/routes.md](docs/routes.md) for more details.
 - Added a Redis-backed certificate store, allowing multiple Centauri
   instances to share a single set of certificates. Enable by setting
   `-certificate-store-type` / `CERTIFICATE_STORE_TYPE` to `redis`, and
@@ -18,6 +24,8 @@
 - Flags for optional components (the Redis certificate store and the TCP
   and tailscale frontends) are now always defined, even in binaries built
   without those components.
+- Route `header` rules are now applied to error responses (such as the
+  default 502 page) in addition to normal upstream responses.
 
 ### Bug fixes
 

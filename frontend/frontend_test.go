@@ -83,6 +83,106 @@ func Test_Context_CreateProxy_returnsBadGatewayWhenUpstreamUnreachable(t *testin
 	assert.Contains(t, string(body), "The server was unable to complete your request")
 }
 
+func Test_Context_CreateProxy_servesErrorPageFromUpstreamWhenUpstreamUnreachable(t *testing.T) {
+	errorUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":"unavailable"}`))
+	}))
+	defer errorUpstream.Close()
+
+	ctx := newTestContext(t, &proxy.Route{
+		Domains:   []string{"example.com"},
+		Upstreams: []proxy.Upstream{{Host: "127.0.0.1:1"}},
+		ErrorMappings: []proxy.ErrorMapping{
+			{Status: http.StatusBadGateway, Upstream: errorUpstream.Listener.Addr().String()},
+		},
+	})
+
+	proxyServer := httptest.NewServer(ctx.createProxy())
+	defer proxyServer.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxyServer.URL+"/widgets/3", nil)
+	require.NoError(t, err)
+	request.Host = "example.com"
+
+	response, err := proxyServer.Client().Do(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+
+	assert.Equal(t, http.StatusBadGateway, response.StatusCode)
+	assert.Equal(t, "application/json", response.Header.Get("Content-Type"))
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Equal(t, `{"error":"unavailable"}`, string(body))
+}
+
+func Test_Context_CreateProxy_servesErrorPageFromUpstreamForUpstreamErrorStatuses(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer upstream.Close()
+
+	errorUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/widgets/3", r.URL.Path)
+		_, _ = w.Write([]byte("nicer not found page"))
+	}))
+	defer errorUpstream.Close()
+
+	ctx := newTestContext(t, &proxy.Route{
+		Domains:   []string{"example.com"},
+		Upstreams: []proxy.Upstream{{Host: upstream.Listener.Addr().String()}},
+		ErrorMappings: []proxy.ErrorMapping{
+			{Status: http.StatusNotFound, Upstream: errorUpstream.Listener.Addr().String()},
+		},
+	})
+
+	proxyServer := httptest.NewServer(ctx.createProxy())
+	defer proxyServer.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxyServer.URL+"/widgets/3", nil)
+	require.NoError(t, err)
+	request.Host = "example.com"
+
+	response, err := proxyServer.Client().Do(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, response.StatusCode)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "nicer not found page", string(body))
+}
+
+func Test_Context_CreateProxy_fallsBackToDefaultPageWhenErrorUpstreamUnreachable(t *testing.T) {
+	errorUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	address := errorUpstream.Listener.Addr().String()
+	errorUpstream.Close()
+
+	ctx := newTestContext(t, &proxy.Route{
+		Domains:   []string{"example.com"},
+		Upstreams: []proxy.Upstream{{Host: "127.0.0.1:1"}},
+		ErrorMappings: []proxy.ErrorMapping{
+			{Status: http.StatusBadGateway, Upstream: address},
+		},
+	})
+
+	proxyServer := httptest.NewServer(ctx.createProxy())
+	defer proxyServer.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxyServer.URL, nil)
+	require.NoError(t, err)
+	request.Host = "example.com"
+
+	response, err := proxyServer.Client().Do(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+
+	assert.Equal(t, http.StatusBadGateway, response.StatusCode)
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "The server was unable to complete your request")
+}
+
 func Test_Context_CreateProxy_redirectsSecondaryDomainsToPrimary(t *testing.T) {
 	ctx := newTestContext(t, &proxy.Route{
 		Domains:           []string{"example.com", "www.example.com"},

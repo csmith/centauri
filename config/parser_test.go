@@ -377,3 +377,119 @@ route example.com
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"foo", "bar"}, routes[0].Subject)
 }
+
+func Test_Parse_OnError_UpstreamOnly(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 502 error-pages:8080
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []proxy.ErrorMapping{{Status: 502, Upstream: "error-pages:8080"}}, routes[0].ErrorMappings)
+}
+
+func Test_Parse_OnError_WithPath(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 404 not-found:8080/not-found
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []proxy.ErrorMapping{{Status: 404, Upstream: "not-found:8080", Path: "/not-found"}}, routes[0].ErrorMappings)
+}
+
+func Test_Parse_OnError_WithQuery(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 500 error-pages:8080/error?code=500
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []proxy.ErrorMapping{{Status: 500, Upstream: "error-pages:8080", Path: "/error", RawQuery: "code=500"}}, routes[0].ErrorMappings)
+}
+
+func Test_Parse_OnError_TrailingSlashIsTreatedAsNoPath(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 502 error-pages:8080/
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []proxy.ErrorMapping{{Status: 502, Upstream: "error-pages:8080"}}, routes[0].ErrorMappings)
+}
+
+func Test_Parse_OnError_MultipleDirectives(t *testing.T) {
+	routes, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 404 not-found:8080
+	on_error 502 error-pages:8080
+`)))
+
+	assert.NoError(t, err)
+	assert.Equal(t, []proxy.ErrorMapping{
+		{Status: 404, Upstream: "not-found:8080"},
+		{Status: 502, Upstream: "error-pages:8080"},
+	}, routes[0].ErrorMappings)
+}
+
+func Test_Parse_OnError_OutsideRoute(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`on_error 502 error-pages:8080`)))
+
+	assert.ErrorContains(t, err, "on_error without route")
+}
+
+func Test_Parse_OnError_TooFewParameters(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 502
+`)))
+
+	assert.ErrorContains(t, err, "invalid on_error line")
+}
+
+func Test_Parse_OnError_NonNumericStatus(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error unicorn error-pages:8080
+`)))
+
+	assert.ErrorContains(t, err, "invalid status code")
+}
+
+func Test_Parse_OnError_StatusTooLow(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 302 error-pages:8080
+`)))
+
+	assert.ErrorContains(t, err, "invalid status code")
+}
+
+func Test_Parse_OnError_StatusTooHigh(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 600 error-pages:8080
+`)))
+
+	assert.ErrorContains(t, err, "invalid status code")
+}
+
+func Test_Parse_OnError_QueryWithoutPath(t *testing.T) {
+	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.com
+	upstream localhost:8080
+	on_error 502 error-pages:8080?code=502
+`)))
+
+	assert.ErrorContains(t, err, "path must begin with a /")
+}
+

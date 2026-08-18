@@ -11,6 +11,7 @@ type Route struct {
 	Upstreams         []Upstream
 	Subject           []string
 	Headers           []Header
+	ErrorMappings     []ErrorMapping
 	Provider          string
 	RedirectToPrimary bool
 
@@ -39,6 +40,17 @@ func (r *Route) CertificateNames() (string, []string) {
 		return r.Subject[0], r.Subject[1:]
 	}
 	return r.Domains[0], r.Domains[1:]
+}
+
+// ErrorMappingForStatus returns the first error mapping configured for the given status code,
+// or nil if there is none.
+func (r *Route) ErrorMappingForStatus(status int) *ErrorMapping {
+	for i := range r.ErrorMappings {
+		if r.ErrorMappings[i].Status == status {
+			return &r.ErrorMappings[i]
+		}
+	}
+	return nil
 }
 
 // Upstream represents a configured upstream server for a route.
@@ -72,4 +84,14 @@ type Header struct {
 	Name      string
 	Value     string
 	Operation HeaderOp
+}
+
+// ErrorMapping describes an upstream that should be used to generate the response for a request
+// that results in a particular error status code, either because the upstream returned it or
+// because it could not be contacted at all.
+type ErrorMapping struct {
+	Status   int    // The error status code that triggers the mapping
+	Upstream string // The host (and port) of the upstream to fetch the response from
+	Path     string // The path to request from the upstream. If empty, the original request path is used.
+	RawQuery string // The query string to use when requesting Path, if any
 }

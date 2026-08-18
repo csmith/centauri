@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -138,9 +137,10 @@ const badGatewayError = `<!doctype html>
 </body>
 </html>`
 
-// handleError handles the reverse proxy not being able to connect to an upstream
+// handleError serves the default response for the reverse proxy not being able to get a usable
+// response from an upstream. It is used when no error upstream is configured for the route (or
+// it could not be contacted); see proxy.RewriteError for the full error handling flow.
 func handleError(writer http.ResponseWriter, request *http.Request, err error) {
-	slog.Warn("Failed to connect to upstream", "host", request.Host, "error", err)
 	writer.WriteHeader(http.StatusBadGateway)
 	_, _ = writer.Write([]byte(badGatewayError))
 }
