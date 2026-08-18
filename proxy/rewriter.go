@@ -1,11 +1,31 @@
 package proxy
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 )
+
+// ParseCIDRList parses a comma-separated list of CIDR ranges, as accepted by the trusted-downstreams
+// option. Entries consisting only of whitespace are ignored.
+func ParseCIDRList(downstreams string) ([]net.IPNet, error) {
+	var res []net.IPNet
+	parts := strings.Split(downstreams, ",")
+	for i := range parts {
+		v := strings.TrimSpace(parts[i])
+		if v != "" {
+			_, ipNet, err := net.ParseCIDR(v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse CIDR range %q: %w", v, err)
+			}
+			res = append(res, *ipNet)
+		}
+	}
+	return res, nil
+}
 
 // routeProvider is the surface we use to interact with the Manager.
 type routeProvider interface {

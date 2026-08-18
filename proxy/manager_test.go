@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -463,5 +464,34 @@ func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
 		manager.CheckCertificates(t.Context())
 		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").CertificateStatus())
 		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("test.example.com").CertificateStatus())
+	})
+}
+
+func Test_Manager_MonitorCertificates_checksPeriodicallyUntilCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		certManager := &fakeCertManager{certificate: dummyCert}
+		route := &Route{Domains: []string{"example.com"}}
+
+		manager := NewManager(certManager)
+		assert.NoError(t, manager.SetRoutes(t.Context(), []*Route{route}, nil))
+		synctest.Wait()
+		certManager.subject = "" // discard the calls made while the routes were installed
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			manager.MonitorCertificates(ctx, time.Millisecond)
+		}()
+
+		time.Sleep(10 * time.Millisecond)
+		assert.Equal(t, "example.com", certManager.subject)
+
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Minute):
+			t.Fatal("MonitorCertificates did not return after cancellation")
+		}
 	})
 }

@@ -13,6 +13,12 @@
   deployments that only need the default JSON certificate store. See
   [docs/buildtags.md](docs/buildtags.md) for more details.
 
+### Changes
+
+- Flags for optional components (the Redis certificate store and the TCP
+  and tailscale frontends) are now always defined, even in binaries built
+  without those components.
+
 ### Bug fixes
 
 - Fixed builds with the `notcp` or `notailscale` build tags failing to

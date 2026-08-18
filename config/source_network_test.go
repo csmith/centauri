@@ -1,6 +1,4 @@
-//go:build integration
-
-package main
+package config
 
 import (
 	"context"
@@ -11,12 +9,33 @@ import (
 
 	"github.com/csmith/centauri/proxy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
-	// Start a simple config server
+// writeConfigFrame writes a full network config protocol frame to the given connection.
+func writeConfigFrame(conn net.Conn, payload []byte) error {
+	if _, err := conn.Write([]byte(magicBytes)); err != nil {
+		return err
+	}
+
+	version := []byte{0x00, 0x00, 0x00, protocolVersion}
+	if _, err := conn.Write(version); err != nil {
+		return err
+	}
+
+	length := make([]byte, 4)
+	binary.BigEndian.PutUint32(length, uint32(len(payload)))
+	if _, err := conn.Write(length); err != nil {
+		return err
+	}
+
+	_, err := conn.Write(payload)
+	return err
+}
+
+func Test_NetworkSource_ConnectsAndReceivesConfig(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	serverDone := make(chan struct{})
 	go func() {
@@ -27,43 +46,31 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 		}
 		defer conn.Close()
 
-		// Send protocol header
-		conn.Write([]byte("CENTAURI"))
-
-		// Send version (4 bytes: 0x00 0x00 0x00 0x01)
-		version := []byte{0x00, 0x00, 0x00, 0x01}
-		conn.Write(version)
-
-		// Send config payload
-		payload := []byte("route example.com\n    upstream 127.0.0.1:8080\n")
-		length := make([]byte, 4)
-		binary.BigEndian.PutUint32(length, uint32(len(payload)))
-		conn.Write(length)
-		conn.Write(payload)
+		assert.NoError(t, writeConfigFrame(conn, []byte(validFileConfig)))
 
 		// Keep connection open briefly
 		time.Sleep(100 * time.Millisecond)
 	}()
 
-	source := newNetworkConfigSource()
-	*configNetworkAddress = listener.Addr().String()
+	source := NewNetworkSource(listener.Addr().String())
 
 	routesCalled := make(chan struct{})
 	updateRoutes := func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
 		assert.Len(t, routes, 1)
 		assert.Equal(t, "example.com", routes[0].Domains[0])
+		assert.Nil(t, fallback)
 		close(routesCalled)
 		return nil
 	}
 
 	errChan := make(chan error, 1)
 	err = source.Start(t.Context(), updateRoutes, errChan)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer func() {
 		// Close listener first so the background goroutine can't reconnect,
 		// then stop the source and wait for the goroutine to exit.
 		listener.Close()
-		source.Stop(nil)
+		source.Stop(t.Context())
 		select {
 		case <-errChan:
 		case <-time.After(500 * time.Millisecond):
@@ -82,9 +89,9 @@ func Test_NetworkConfigSource_ConnectsAndReceivesConfig(t *testing.T) {
 	<-serverDone
 }
 
-func Test_NetworkConfigSource_ErrorsOnInvalidMagicBytes(t *testing.T) {
+func Test_NetworkSource_ErrorsOnInvalidMagicBytes(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	go func() {
 		conn, err := listener.Accept()
@@ -94,21 +101,18 @@ func Test_NetworkConfigSource_ErrorsOnInvalidMagicBytes(t *testing.T) {
 		defer conn.Close()
 
 		// Send invalid magic bytes
-		conn.Write([]byte("INVALID!"))
+		_, _ = conn.Write([]byte("INVALID!"))
 
 		// Close listener immediately so reconnection will fail
 		listener.Close()
 	}()
 
-	source := newNetworkConfigSource()
-	*configNetworkAddress = listener.Addr().String()
+	source := NewNetworkSource(listener.Addr().String())
 
 	errChan := make(chan error, 1)
-	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
-		return nil
-	}, errChan)
-	assert.NoError(t, err)
-	defer source.Stop(nil)
+	err = source.Start(t.Context(), noopUpdater, errChan)
+	require.NoError(t, err)
+	defer source.Stop(t.Context())
 
 	select {
 	case err := <-errChan:
@@ -118,9 +122,9 @@ func Test_NetworkConfigSource_ErrorsOnInvalidMagicBytes(t *testing.T) {
 	}
 }
 
-func Test_NetworkConfigSource_ErrorsOnUnsupportedVersion(t *testing.T) {
+func Test_NetworkSource_ErrorsOnUnsupportedVersion(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	go func() {
 		conn, err := listener.Accept()
@@ -130,25 +134,21 @@ func Test_NetworkConfigSource_ErrorsOnUnsupportedVersion(t *testing.T) {
 		defer conn.Close()
 
 		// Send valid magic bytes
-		conn.Write([]byte("CENTAURI"))
+		_, _ = conn.Write([]byte(magicBytes))
 
 		// Send unsupported version (0x00 0x00 0x00 0x99)
-		version := []byte{0x00, 0x00, 0x00, 0x99}
-		conn.Write(version)
+		_, _ = conn.Write([]byte{0x00, 0x00, 0x00, 0x99})
 
 		// Close listener immediately so reconnection will fail
 		listener.Close()
 	}()
 
-	source := newNetworkConfigSource()
-	*configNetworkAddress = listener.Addr().String()
+	source := NewNetworkSource(listener.Addr().String())
 
 	errChan := make(chan error, 1)
-	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
-		return nil
-	}, errChan)
-	assert.NoError(t, err)
-	defer source.Stop(nil)
+	err = source.Start(t.Context(), noopUpdater, errChan)
+	require.NoError(t, err)
+	defer source.Stop(t.Context())
 
 	select {
 	case err := <-errChan:
@@ -158,20 +158,17 @@ func Test_NetworkConfigSource_ErrorsOnUnsupportedVersion(t *testing.T) {
 	}
 }
 
-func Test_NetworkConfigSource_RequiresAddress(t *testing.T) {
-	source := newNetworkConfigSource()
-	*configNetworkAddress = ""
+func Test_NetworkSource_RequiresAddress(t *testing.T) {
+	source := NewNetworkSource("")
 
-	err := source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
-		return nil
-	}, make(chan error))
+	err := source.Start(t.Context(), noopUpdater, make(chan error))
 
 	assert.ErrorContains(t, err, "address must be specified")
 }
 
-func Test_NetworkConfigSource_InitialConfigTimeout(t *testing.T) {
+func Test_NetworkSource_InitialConfigTimeout(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer listener.Close()
 
 	stopServer := make(chan struct{})
@@ -200,21 +197,19 @@ func Test_NetworkConfigSource_InitialConfigTimeout(t *testing.T) {
 		}
 	}()
 
-	source := newNetworkConfigSource()
-	*configNetworkAddress = listener.Addr().String()
+	source := NewNetworkSource(listener.Addr().String())
+	source.initialConfigTimeout = 50 * time.Millisecond
+	source.reconnectInterval = 10 * time.Millisecond
 
 	errChan := make(chan error, 1)
-	err = source.Start(t.Context(), func(_ context.Context, routes []*proxy.Route, fallback *proxy.Route) error {
-		return nil
-	}, errChan)
-	assert.NoError(t, err)
-	defer source.Stop(nil)
+	err = source.Start(t.Context(), noopUpdater, errChan)
+	require.NoError(t, err)
+	defer source.Stop(t.Context())
 
 	select {
 	case err := <-errChan:
 		assert.ErrorContains(t, err, "failed to read config after reconnection")
-	case <-time.After(25 * time.Second):
-		// Should timeout within 10 seconds + reconnect + 10 seconds + small buffer
+	case <-time.After(2 * time.Second):
 		t.Fatal("Expected timeout for initial config read")
 	}
 }

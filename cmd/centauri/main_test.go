@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/csmith/centauri/cmd/centauri/testdata"
+	"github.com/csmith/centauri/frontend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,10 +66,10 @@ func Test_Run_ErrorsIfNetworkConfigSourceWithoutAddress(t *testing.T) {
 
 func Test_Run_NetworkConfigSource_AppliesUpdates(t *testing.T) {
 	upstream1 := startStaticServer(8701)
-	defer upstream1.stop(context.Background())
+	defer upstream1.Stop(context.Background())
 
 	upstream2 := startStaticServer(8702)
-	defer upstream2.stop(context.Background())
+	defer upstream2.Stop(context.Background())
 
 	configListener, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
@@ -160,7 +161,7 @@ func Test_Run_ErrorsIfConfigCantBeParsed(t *testing.T) {
 
 func Test_Run_ProxiesToUpstream(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -194,7 +195,7 @@ func Test_Run_ProxiesToUpstream(t *testing.T) {
 
 func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -230,7 +231,7 @@ func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 
 func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -274,7 +275,7 @@ func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T)
 
 func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -321,7 +322,7 @@ func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T
 
 func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -406,7 +407,7 @@ func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
 
 func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -463,7 +464,7 @@ func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
 
 func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	stopPebble := startPebble("pebble-config.json")
 	defer stopPebble()
@@ -528,7 +529,7 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 
 func Test_Run_ObtainsCertificatesUsingAcmeWithExternalAccountBinding(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	stopPebble := startPebble("pebble-config-eab.json")
 	defer stopPebble()
@@ -674,7 +675,7 @@ func Test_Run_ValidateFlag_WorksWithDifferentConfigPaths(t *testing.T) {
 
 func Test_Run_RedirectsToPrimaryDomain(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -715,7 +716,7 @@ func Test_Run_RedirectsToPrimaryDomain(t *testing.T) {
 
 func Test_Run_UsesSubjectForCertificateNames(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -754,7 +755,7 @@ func Test_Run_UsesSubjectForCertificateNames(t *testing.T) {
 
 func Test_Run_RedirectsHttpToHttps(t *testing.T) {
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -816,13 +817,13 @@ func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	return run([]string{}, signalChan)
 }
 
-func startStaticServer(port int) *server {
+func startStaticServer(port int) *frontend.Server {
 	errChan := make(chan error, 1)
 
 	go func() {
 		panic(<-errChan)
 	}()
-	srv := newServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := frontend.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("This is the upstream on port %d\n\nYou provided headers:\n", port)))
 		for k := range r.Header {
@@ -833,7 +834,7 @@ func startStaticServer(port int) *server {
 	if err != nil {
 		panic(err)
 	}
-	go srv.start(listener)
+	go srv.Start(listener)
 	return srv
 }
 

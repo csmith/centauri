@@ -1,5 +1,6 @@
 /.idea
 /.zed
+/.zcode
 /centauri.conf
 /*.pem
 *.pprof

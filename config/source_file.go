@@ -1,42 +1,39 @@
-package main
+package config
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/csmith/centauri/config"
 )
 
-var (
-	configPath = flag.String("config", "centauri.conf", "Path to config")
-)
-
-type fileConfigSource struct {
+// FileSource reads routes from a file on disk, re-reading it every time Reload is called.
+type FileSource struct {
+	path       string
 	updateChan chan struct{}
 	stopChan   chan struct{}
 }
 
-func newFileConfigSource() *fileConfigSource {
-	return &fileConfigSource{
+// NewFileSource creates a source that reads routes from the file at the given path.
+func NewFileSource(path string) *FileSource {
+	return &FileSource{
+		path:       path,
 		updateChan: make(chan struct{}, 1),
 		stopChan:   make(chan struct{}, 1),
 	}
 }
 
-func (f *fileConfigSource) Start(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) error {
+func (f *FileSource) Start(ctx context.Context, updateRoutes RouteUpdater, errChan chan<- error) error {
 	go f.run(ctx, updateRoutes, errChan)
 	f.Reload()
 	return nil
 }
 
-func (f *fileConfigSource) Stop(ctx context.Context) {
+func (f *FileSource) Stop(ctx context.Context) {
 	f.stopChan <- struct{}{}
 }
 
-func (f *fileConfigSource) Reload() {
+func (f *FileSource) Reload() {
 	select {
 	case f.updateChan <- struct{}{}:
 		slog.Info("Scheduled config update")
@@ -45,41 +42,41 @@ func (f *fileConfigSource) Reload() {
 	}
 }
 
-func (f *fileConfigSource) Validate() error {
-	slog.Debug("Validating config file", "path", *configPath)
+func (f *FileSource) Validate() error {
+	slog.Debug("Validating config file", "path", f.path)
 
-	configFile, err := os.Open(*configPath)
+	configFile, err := os.Open(f.path)
 	if err != nil {
 		return fmt.Errorf("failed to open config file: %w", err)
 	}
 	defer configFile.Close()
 
-	_, _, err = config.Parse(configFile)
+	_, _, err = Parse(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	slog.Info("Config file is valid", "path", *configPath)
+	slog.Info("Config file is valid", "path", f.path)
 	return nil
 }
 
-func (f *fileConfigSource) run(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) {
+func (f *FileSource) run(ctx context.Context, updateRoutes RouteUpdater, errChan chan<- error) {
 	for {
 		select {
 		case <-f.stopChan:
 			return
 		case <-f.updateChan:
 			(func() {
-				slog.Debug("Reading config file", "path", *configPath)
+				slog.Debug("Reading config file", "path", f.path)
 
-				configFile, err := os.Open(*configPath)
+				configFile, err := os.Open(f.path)
 				if err != nil {
 					errChan <- fmt.Errorf("failed to open config file: %w", err)
 					return
 				}
 				defer configFile.Close()
 
-				routes, fallback, err := config.Parse(configFile)
+				routes, fallback, err := Parse(configFile)
 				if err != nil {
 					errChan <- fmt.Errorf("failed to parse config file: %w", err)
 					return

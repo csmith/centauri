@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
@@ -132,6 +133,23 @@ func (m *Manager) CheckCertificates(ctx context.Context) {
 			route.setCertificateStatus(CertificateNotRequired)
 		} else {
 			m.updateCert(ctx, route)
+		}
+	}
+}
+
+// MonitorCertificates periodically calls CheckCertificates until the context is cancelled.
+// It blocks and is intended to be run in its own goroutine.
+func (m *Manager) MonitorCertificates(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			slog.Info("Checking for certificate validity...")
+			m.CheckCertificates(ctx)
 		}
 	}
 }

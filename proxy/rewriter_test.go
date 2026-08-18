@@ -444,3 +444,34 @@ func Test_Rewriter_RewriteResponse_StripsPortsFromHosts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "example.com", provider.domain)
 }
+
+func Test_ParseCIDRList(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{"empty string", "", nil},
+		{"whitespace only", " , ,, ", nil},
+		{"single CIDR", "10.0.0.0/8", []string{"10.0.0.0/8"}},
+		{"multiple CIDRs", "10.0.0.0/8,192.168.0.0/16", []string{"10.0.0.0/8", "192.168.0.0/16"}},
+		{"multiple CIDRs with whitespace", " 10.0.0.0/8 , ::1/128 ", []string{"10.0.0.0/8", "::1/128"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nets, err := ParseCIDRList(tt.input)
+			require.NoError(t, err)
+
+			var got []string
+			for i := range nets {
+				got = append(got, nets[i].String())
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_ParseCIDRList_errorsOnInvalidEntry(t *testing.T) {
+	_, err := ParseCIDRList("10.0.0.0/8,not-a-cidr")
+	assert.ErrorContains(t, err, "not-a-cidr")
+}

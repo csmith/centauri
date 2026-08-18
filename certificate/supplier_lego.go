@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	mathrand "math/rand/v2"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-acme/lego/v5/acme"
@@ -25,6 +27,7 @@ import (
 	"github.com/go-acme/lego/v5/lego"
 	"github.com/go-acme/lego/v5/registration"
 	"golang.org/x/crypto/ocsp"
+	"golang.org/x/sys/unix"
 	"golang.org/x/time/rate"
 )
 
@@ -87,6 +90,10 @@ type LegoSupplierConfig struct {
 
 // NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
 func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupplier, error) {
+	if err := canWriteTo(config.Path); err != nil {
+		return nil, fmt.Errorf("unable to write to path %s: %w", config.Path, err)
+	}
+
 	user := &acmeUser{
 		email:   config.Email,
 		eabKid:  config.ExternalAccountKid,
@@ -386,4 +393,27 @@ func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, pat
 	}
 
 	return os.WriteFile(path, b, 0600)
+}
+
+// ParseResolvers parses a comma-separated list of DNS resolver addresses, as accepted by the acme-resolvers
+// option. Entries consisting only of whitespace are ignored.
+func ParseResolvers(input string) []string {
+	var res []string
+	parts := strings.Split(input, ",")
+	for i := range parts {
+		if p := strings.TrimSpace(parts[i]); p != "" {
+			res = append(res, p)
+		}
+	}
+	return res
+}
+
+// canWriteTo reports whether the current user may write to the given path. If the path does not exist,
+// write permission is checked on its parent directory instead, since the file will be created there.
+func canWriteTo(path string) error {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return unix.Access(filepath.Dir(path), unix.W_OK)
+	} else {
+		return unix.Access(path, unix.W_OK)
+	}
 }

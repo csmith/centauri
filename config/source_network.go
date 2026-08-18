@@ -1,49 +1,55 @@
-package main
+package config
 
 import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"time"
-
-	"github.com/csmith/centauri/config"
-)
-
-var (
-	configNetworkAddress = flag.String("config-network-address", "", "Address to connect to for network config source")
 )
 
 const (
-	magicBytes           = "CENTAURI"
-	protocolVersion      = 0x01
-	reconnectInterval    = 100 * time.Millisecond
-	initialConfigTimeout = 10 * time.Second
+	// magicBytes are sent at the start of every connection, to identify the protocol.
+	magicBytes = "CENTAURI"
+	// protocolVersion is the version of the network config protocol implemented by this client.
+	protocolVersion = 0x01
+
+	defaultReconnectInterval    = 100 * time.Millisecond
+	defaultInitialConfigTimeout = 10 * time.Second
 )
 
-type networkConfigSource struct {
-	stopChan          chan struct{}
-	conn              net.Conn
-	initialConfigRead bool
+// NetworkSource reads routes from a server speaking the network config protocol: an 8-byte magic
+// header, a 4-byte protocol version, a 4-byte big-endian payload length, and then the payload in the
+// standard routes config format. See docs/network-config.md for details.
+type NetworkSource struct {
+	address              string
+	stopChan             chan struct{}
+	conn                 net.Conn
+	initialConfigRead    bool
+	reconnectInterval    time.Duration
+	initialConfigTimeout time.Duration
 }
 
-func newNetworkConfigSource() *networkConfigSource {
-	return &networkConfigSource{
-		stopChan: make(chan struct{}, 1),
+// NewNetworkSource creates a source that reads routes from the config server at the given address.
+func NewNetworkSource(address string) *NetworkSource {
+	return &NetworkSource{
+		address:              address,
+		stopChan:             make(chan struct{}, 1),
+		reconnectInterval:    defaultReconnectInterval,
+		initialConfigTimeout: defaultInitialConfigTimeout,
 	}
 }
 
-func (n *networkConfigSource) Start(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) error {
-	if *configNetworkAddress == "" {
+func (n *NetworkSource) Start(ctx context.Context, updateRoutes RouteUpdater, errChan chan<- error) error {
+	if n.address == "" {
 		return fmt.Errorf("address must be specified when using network config source")
 	}
 
 	var err error
-	n.conn, err = net.Dial("tcp", *configNetworkAddress)
+	n.conn, err = net.Dial("tcp", n.address)
 	if err != nil {
 		return fmt.Errorf("failed to connect to config server: %w", err)
 	}
@@ -52,22 +58,22 @@ func (n *networkConfigSource) Start(ctx context.Context, updateRoutes routeUpdat
 	return nil
 }
 
-func (n *networkConfigSource) Stop(ctx context.Context) {
+func (n *NetworkSource) Stop(ctx context.Context) {
 	n.stopChan <- struct{}{}
 	if n.conn != nil {
 		n.conn.Close()
 	}
 }
 
-func (n *networkConfigSource) Reload() {
+func (n *NetworkSource) Reload() {
 	slog.Info("Reloading is not supported for network config source")
 }
 
-func (n *networkConfigSource) Validate() error {
+func (n *NetworkSource) Validate() error {
 	return fmt.Errorf("validation is not supported for network config source")
 }
 
-func (n *networkConfigSource) run(ctx context.Context, updateRoutes routeUpdater, errChan chan<- error) {
+func (n *NetworkSource) run(ctx context.Context, updateRoutes RouteUpdater, errChan chan<- error) {
 	secondChance := false
 	for {
 		select {
@@ -75,7 +81,7 @@ func (n *networkConfigSource) run(ctx context.Context, updateRoutes routeUpdater
 			return
 		default:
 			if !n.initialConfigRead {
-				if err := n.conn.SetDeadline(time.Now().Add(initialConfigTimeout)); err != nil {
+				if err := n.conn.SetDeadline(time.Now().Add(n.initialConfigTimeout)); err != nil {
 					errChan <- fmt.Errorf("failed to set initial config read timeout: %w", err)
 					return
 				}
@@ -109,24 +115,24 @@ func (n *networkConfigSource) run(ctx context.Context, updateRoutes routeUpdater
 	}
 }
 
-func (n *networkConfigSource) reconnect() error {
+func (n *NetworkSource) reconnect() error {
 	if n.conn != nil {
 		n.conn.Close()
 	}
 
-	time.Sleep(reconnectInterval)
+	time.Sleep(n.reconnectInterval)
 
 	var err error
-	n.conn, err = net.Dial("tcp", *configNetworkAddress)
+	n.conn, err = net.Dial("tcp", n.address)
 	if err != nil {
 		return err
 	}
 
-	slog.Info("Reconnected to config server", "address", *configNetworkAddress)
+	slog.Info("Reconnected to config server", "address", n.address)
 	return nil
 }
 
-func (n *networkConfigSource) readAndApplyConfig(ctx context.Context, updateRoutes routeUpdater) error {
+func (n *NetworkSource) readAndApplyConfig(ctx context.Context, updateRoutes RouteUpdater) error {
 	// Magic header (8 bytes)
 	magic := make([]byte, 8)
 	if _, err := io.ReadFull(n.conn, magic); err != nil {
@@ -164,7 +170,7 @@ func (n *networkConfigSource) readAndApplyConfig(ctx context.Context, updateRout
 
 	slog.Debug("Received config from network", "size", payloadLength)
 
-	routes, fallback, err := config.Parse(bytes.NewReader(payload))
+	routes, fallback, err := Parse(bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}

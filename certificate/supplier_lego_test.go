@@ -479,3 +479,41 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 	assert.True(t, !cert.AriRenewalTime.Before(windowStart), "AriRenewalTime should be >= window start")
 	assert.True(t, cert.AriRenewalTime.Before(windowEnd), "AriRenewalTime should be < window end")
 }
+
+func Test_NewLegoSupplier_errorsIfParentDirectoryDoesNotExist(t *testing.T) {
+	_, err := NewLegoSupplier(t.Context(), &LegoSupplierConfig{
+		Path: filepath.Join(t.TempDir(), "missing", "user.pem"),
+	})
+	assert.ErrorContains(t, err, "unable to write to path")
+}
+
+func Test_NewLegoSupplier_errorsIfUserDataPathIsReadOnly(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("file permissions are not enforced when running as root")
+	}
+
+	path := filepath.Join(t.TempDir(), "user.pem")
+	require.NoError(t, os.WriteFile(path, nil, 0o444))
+
+	_, err := NewLegoSupplier(t.Context(), &LegoSupplierConfig{Path: path})
+	assert.ErrorContains(t, err, "unable to write to path")
+}
+
+func Test_ParseResolvers(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{"empty string", "", nil},
+		{"whitespace only", " , ,, ", nil},
+		{"single resolver", "127.0.0.1:53", []string{"127.0.0.1:53"}},
+		{"multiple resolvers", "127.0.0.1:53,8.8.8.8:53", []string{"127.0.0.1:53", "8.8.8.8:53"}},
+		{"multiple resolvers with whitespace", " 127.0.0.1:53 , 8.8.8.8:53 ", []string{"127.0.0.1:53", "8.8.8.8:53"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ParseResolvers(tt.input))
+		})
+	}
+}

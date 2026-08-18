@@ -37,7 +37,7 @@ func Test_Run_UsesRedisCertificateStore(t *testing.T) {
 	server := miniredis.RunT(t)
 
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
@@ -82,7 +82,7 @@ func Test_Run_ObtainsCertificatesUsingAcmeWithRedisStore(t *testing.T) {
 	server := miniredis.RunT(t)
 
 	upstream := startStaticServer(8701)
-	defer upstream.stop(context.Background())
+	defer upstream.Stop(context.Background())
 
 	stopPebble := startPebble("pebble-config.json")
 	defer stopPebble()
