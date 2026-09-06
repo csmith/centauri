@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.0 - 2026-09-6
+
+### Changes
+
+- Recursive checks for TXT propagation are now disabled when using lego for
+  DNS-01 challenges. These checks became enabled by default in lego v5
+  (included since Centauri v2.7.0), and can cause delays or timeouts when
+  recursive resolvers cache NXDOMAIN responses across qtypes, as they should.
+  See [this lego discussion](https://github.com/go-acme/lego/discussions/3261)
+  for more details. Thanks to @tsumaru720 for help debugging.
+
 ## 2.8.0 - 2026-08-18 
 
 ### New features
