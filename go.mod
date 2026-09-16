@@ -14,7 +14,7 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/sys v0.47.0
-	golang.org/x/time v0.15.0
+	golang.org/x/time v0.16.0
 	tailscale.com v1.102.2
 )
 
