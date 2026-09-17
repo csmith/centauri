@@ -1,6 +1,6 @@
 module github.com/csmith/centauri
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
@@ -15,7 +15,7 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/sys v0.47.0
 	golang.org/x/time v0.16.0
-	tailscale.com v1.102.2
+	tailscale.com v1.102.3
 )
 
 require (
