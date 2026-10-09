@@ -3,6 +3,9 @@ name: vuln check
 on:
   schedule:
     - cron: '30 */6 * * *'
+  push:
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
