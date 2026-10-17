@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -36,33 +35,22 @@ func Test_Run_ErrorsIfRedisCertificateStoreUnreachable(t *testing.T) {
 func Test_Run_UsesRedisCertificateStore(t *testing.T) {
 	server := miniredis.RunT(t)
 
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"CERTIFICATE_STORE_TYPE", "redis",
-			"REDIS_ADDRESS", server.Addr(),
-			"REDIS_KEY_PREFIX", "centauri-test",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+		"CERTIFICATE_STORE_TYPE", "redis",
+		"REDIS_ADDRESS", server.Addr(),
+		"REDIS_KEY_PREFIX", "centauri-test",
+	)
 
 	start := time.Now()
 	for time.Since(start) < 30*time.Second {
 		time.Sleep(500 * time.Millisecond)
 
-		res, err := proxyGet(8703, "https://example.com/test")
+		res, err := proxyGet(c.httpsPort, "https://example.com/test")
 		if err != nil {
 			continue
 		}
@@ -70,8 +58,6 @@ func Test_Run_UsesRedisCertificateStore(t *testing.T) {
 		assert.Equal(t, http.StatusOK, res.StatusCode)
 		require.True(t, server.Exists("centauri-test:certificates"), "certificate should be stored in redis")
 
-		signalChan <- os.Interrupt
-		<-doneChan
 		return
 	}
 
@@ -81,14 +67,9 @@ func Test_Run_UsesRedisCertificateStore(t *testing.T) {
 func Test_Run_ObtainsCertificatesUsingAcmeWithRedisStore(t *testing.T) {
 	server := miniredis.RunT(t)
 
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	stopPebble := startPebble("pebble-config.json")
-	defer stopPebble()
-
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
+	p := startPebble(t, "pebble-config.json")
 
 	userPem, err := os.CreateTemp("", "centauri-integration-test-user-*.pem")
 	assert.NoError(t, err)
@@ -96,40 +77,34 @@ func Test_Run_ObtainsCertificatesUsingAcmeWithRedisStore(t *testing.T) {
 	os.Remove(userPem.Name())
 	defer os.Remove(userPem.Name())
 
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "lego",
-			"DNS_PROVIDER", "exec",
-			"EXEC_PATH", testdata.Path("update.sh"),
-			"ACME_EMAIL", "test@example.com",
-			"ACME_DIRECTORY", "https://localhost:14000/dir",
-			"ACME_DISABLE_PROPAGATION_CHECK", "true",
-			"USER_DATA", userPem.Name(),
-			"CERTIFICATE_STORE_TYPE", "redis",
-			"REDIS_ADDRESS", server.Addr(),
-			"REDIS_KEY_PREFIX", "centauri-test",
-			"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "lego",
+		"DNS_PROVIDER", "exec",
+		"EXEC_PATH", testdata.Path("update.sh"),
+		"ACME_EMAIL", "test@example.com",
+		"ACME_DIRECTORY", p.directory,
+		"CHALLTESTSRV_MANAGEMENT_ADDRESS", p.challengeManagementAddress,
+		"ACME_DISABLE_PROPAGATION_CHECK", "true",
+		"USER_DATA", userPem.Name(),
+		"CERTIFICATE_STORE_TYPE", "redis",
+		"REDIS_ADDRESS", server.Addr(),
+		"REDIS_KEY_PREFIX", "centauri-test",
+		"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
+	)
 
 	start := time.Now()
 	for time.Since(start) < time.Minute {
 		time.Sleep(2 * time.Second)
 
-		res, err := proxyGet(8703, "https://example.com/test")
+		res, err := proxyGet(c.httpsPort, "https://example.com/test")
 		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
 			slog.Warn("Centauri isn't serving a cert yet, waiting...")
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
 
 		servedCert := res.TLS.PeerCertificates[0]
@@ -158,8 +133,6 @@ func Test_Run_ObtainsCertificatesUsingAcmeWithRedisStore(t *testing.T) {
 		_, err = tls.X509KeyPair([]byte(details.Certificate), []byte(details.PrivateKey))
 		assert.NoError(t, err, "stored private key should match the stored certificate")
 
-		signalChan <- os.Interrupt
-		<-doneChan
 		return
 	}
 

@@ -14,7 +14,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -65,11 +68,8 @@ func Test_Run_ErrorsIfNetworkConfigSourceWithoutAddress(t *testing.T) {
 }
 
 func Test_Run_NetworkConfigSource_AppliesUpdates(t *testing.T) {
-	upstream1 := startStaticServer(8701)
-	defer upstream1.Stop(context.Background())
-
-	upstream2 := startStaticServer(8702)
-	defer upstream2.Stop(context.Background())
+	upstream1 := startStaticServer(t)
+	upstream2 := startStaticServer(t)
 
 	configListener, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
@@ -85,7 +85,7 @@ func Test_Run_NetworkConfigSource_AppliesUpdates(t *testing.T) {
 		}
 		defer conn.Close()
 
-		initialConfig := []byte("route example.com\n    upstream 127.0.0.1:8701\n")
+		initialConfig := []byte("route example.com\n    upstream " + upstream1 + "\n")
 		require.NoError(t, sendNetworkConfig(conn, initialConfig))
 
 		newConfig := <-configUpdateChan
@@ -94,49 +94,37 @@ func Test_Run_NetworkConfigSource_AppliesUpdates(t *testing.T) {
 		<-configUpdateChan
 	}()
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG_SOURCE", "network",
-			"CONFIG_NETWORK_ADDRESS", configListener.Addr().String(),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8703",
-			"HTTPS_PORT", "8704",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG_SOURCE", "network",
+		"CONFIG_NETWORK_ADDRESS", configListener.Addr().String(),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8704, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	b, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8701")
+	assert.Contains(t, string(b), "This is the upstream on "+upstream1)
 
-	updatedConfig := []byte("route example.com\n    upstream 127.0.0.1:8702\n")
+	updatedConfig := []byte("route example.com\n    upstream " + upstream2 + "\n")
 	configUpdateChan <- updatedConfig
 
 	time.Sleep(2 * time.Second)
 
-	res, err = proxyGet(8704, "https://example.com/test")
+	res, err = proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	b, _ = io.ReadAll(res.Body)
 	res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8702")
+	assert.Contains(t, string(b), "This is the upstream on "+upstream2)
 
-	signalChan <- os.Interrupt
-	<-doneChan
-
+	c.stop(t)
 	close(configUpdateChan)
 	<-configServerDone
 }
@@ -160,62 +148,37 @@ func Test_Run_ErrorsIfConfigCantBeParsed(t *testing.T) {
 }
 
 func Test_Run_ProxiesToUpstream(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8701")
-
-	signalChan <- os.Interrupt
-	<-doneChan
+	assert.Contains(t, string(b), "This is the upstream on "+upstream)
 }
 
 func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -224,31 +187,17 @@ func Test_Run_SendsXForwardedHeadersToUpstream(t *testing.T) {
 	assert.Contains(t, string(b), "X-Forwarded-For: 127.0.0.1\n")
 	assert.Contains(t, string(b), "X-Forwarded-Host: example.com\n")
 	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-			"TRUSTED_DOWNSTREAMS", "127.0.0.0/8",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+		"TRUSTED_DOWNSTREAMS", "127.0.0.0/8",
+	)
 
 	time.Sleep(2 * time.Second)
 
@@ -258,7 +207,7 @@ func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T)
 	req.Header.Set("X-Forwarded-Host", "original.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
 
-	res, err := proxyDo(8703, req)
+	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -268,31 +217,17 @@ func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T)
 	assert.Contains(t, string(b), "X-Forwarded-For: 10.0.0.1, 127.0.0.1\n")
 	assert.Contains(t, string(b), "X-Forwarded-Host: original.example.com\n")
 	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-			"TRUSTED_DOWNSTREAMS", "192.168.1.0/24",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+		"TRUSTED_DOWNSTREAMS", "192.168.1.0/24",
+	)
 
 	time.Sleep(2 * time.Second)
 
@@ -302,7 +237,7 @@ func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T
 	req.Header.Set("X-Forwarded-Host", "malicious.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
 
-	res, err := proxyDo(8703, req)
+	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -315,30 +250,16 @@ func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T
 
 	assert.NotContains(t, string(b), "10.0.0.1")
 	assert.NotContains(t, string(b), "malicious.example.com")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
@@ -354,7 +275,7 @@ func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
 	req.Header.Set("Tailscale-User-Name", "Acid Burn")
 	req.Header.Set("Tailscale-User-Profile-Pic", "http://example.net/...")
 
-	res, err := proxyDo(8703, req)
+	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -369,84 +290,54 @@ func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
 
 	// None of the Tailscale headers should exist
 	assert.NotContains(t, string(b), "Tailscale")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy-bad-port.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", testdata.Path("simple-proxy-bad-port.conf"),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
 
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	assert.Contains(t, string(b), "The server was unable to complete your request")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_OnError_ServesErrorPageFromUpstream(t *testing.T) {
 	// The primary upstream (127.0.0.1:1) is unreachable, so the route's on_error 502 mapping
 	// should cause the response to be served from the error upstream instead of the default page.
-	errorUpstream := startStaticServer(8705)
-	defer errorUpstream.Stop(context.Background())
+	errorUpstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("on-error.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "on-error.conf", "ERROR_UPSTREAM", errorUpstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	// The status code is always the original error (502); the body comes from the error upstream.
 	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
 
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8705")
+	assert.Contains(t, string(b), "This is the upstream on "+errorUpstream)
 	assert.NotContains(t, string(b), "The server was unable to complete your request")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {
 	// The error upstream responds with a redirect; Centauri should follow it itself and serve the
 	// final response, rather than passing the redirect on to the client.
-	errorUpstream := startServer(8705, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	errorUpstream := startServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/final" {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("the error page after a redirect"))
@@ -454,27 +345,16 @@ func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {
 		}
 		http.Redirect(w, r, "/final", http.StatusFound)
 	}))
-	defer errorUpstream.Stop(context.Background())
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("on-error.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "on-error.conf", "ERROR_UPSTREAM", errorUpstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	// The redirect is resolved by Centauri: the client sees the original 502 with the final body,
 	// not a redirect status or a Location header. (The test client does not follow redirects.)
@@ -484,39 +364,25 @@ func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	assert.Contains(t, string(b), "the error page after a redirect")
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_OnError_PassesHeadersFromErrorUpstream(t *testing.T) {
 	// Headers set by the error upstream (such as Content-Type) should be served to the client.
-	errorUpstream := startServer(8705, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	errorUpstream := startServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"error":"bad gateway"}`))
 	}))
-	defer errorUpstream.Stop(context.Background())
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("on-error.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "on-error.conf", "ERROR_UPSTREAM", errorUpstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
 	assert.Equal(t, "application/json", res.Header.Get("Content-Type"))
@@ -524,77 +390,49 @@ func Test_Run_OnError_PassesHeadersFromErrorUpstream(t *testing.T) {
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	assert.JSONEq(t, `{"error":"bad gateway"}`, string(b))
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_ReloadsConfigOnHUP(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
-
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	f, err := os.CreateTemp("", "centauri-integration-test-*.config")
-	assert.NoError(t, err)
-	f.Close()
-	defer os.Remove(f.Name())
+	upstream := startStaticServer(t)
 
 	// Start with our bad port
+	configPath := filepath.Join(t.TempDir(), "centauri.conf")
 	b, err := os.ReadFile(testdata.Path("simple-proxy-bad-port.conf"))
-	assert.NoError(t, err)
-	err = os.WriteFile(f.Name(), b, os.FileMode(0600))
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, b, os.FileMode(0600)))
 
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", f.Name(),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", configPath,
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
 	// Make sure we're using the "bad" config
-	res, err := proxyGet(8703, "https://example.com/test")
-	assert.NoError(t, err)
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
 
 	// Update the config
-	b, err = os.ReadFile(testdata.Path("simple-proxy.conf"))
-	assert.NoError(t, err)
-	err = os.WriteFile(f.Name(), b, os.FileMode(0600))
-	assert.NoError(t, err)
+	b, err = os.ReadFile(writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, b, os.FileMode(0600)))
 
 	// Send a HUP
-	signalChan <- syscall.SIGHUP
+	c.signals <- syscall.SIGHUP
 	time.Sleep(2 * time.Second)
 
 	// Now the same request should work
-	res, err = proxyGet(8703, "https://example.com/test")
-	assert.NoError(t, err)
+	res, err = proxyGet(c.httpsPort, "https://example.com/test")
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	stopPebble := startPebble("pebble-config.json")
-	defer stopPebble()
-
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
+	p := startPebble(t, "pebble-config.json")
 
 	userPem, err := os.CreateTemp("", "centauri-integration-test-user-*.pem")
 	assert.NoError(t, err)
@@ -608,43 +446,35 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 	os.Remove(certsJson.Name())
 	defer os.Remove(certsJson.Name())
 
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "lego",
-			"DNS_PROVIDER", "exec",
-			"EXEC_PATH", testdata.Path("update.sh"),
-			"ACME_EMAIL", "test@example.com",
-			"ACME_DIRECTORY", "https://localhost:14000/dir",
-			"ACME_DISABLE_PROPAGATION_CHECK", "true",
-			"USER_DATA", userPem.Name(),
-			"CERTIFICATE_STORE", certsJson.Name(),
-			"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "lego",
+		"DNS_PROVIDER", "exec",
+		"EXEC_PATH", testdata.Path("update.sh"),
+		"ACME_EMAIL", "test@example.com",
+		"ACME_DIRECTORY", p.directory,
+		"CHALLTESTSRV_MANAGEMENT_ADDRESS", p.challengeManagementAddress,
+		"ACME_DISABLE_PROPAGATION_CHECK", "true",
+		"USER_DATA", userPem.Name(),
+		"CERTIFICATE_STORE", certsJson.Name(),
+		"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
+	)
 
 	start := time.Now()
 	for time.Since(start) < time.Minute {
 		time.Sleep(2 * time.Second)
 
-		res, err := proxyGet(8703, "https://example.com/test")
+		res, err := proxyGet(c.httpsPort, "https://example.com/test")
 		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
 			slog.Warn("Centauri isn't serving a cert yet, waiting...")
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
 		assert.True(t, strings.Contains(res.TLS.PeerCertificates[0].Issuer.CommonName, "Pebble Intermediate CA"))
 
-		signalChan <- os.Interrupt
-		<-doneChan
 		return
 	}
 
@@ -652,14 +482,9 @@ func Test_Run_ObtainsCertificatesUsingAcme(t *testing.T) {
 }
 
 func Test_Run_ObtainsCertificatesUsingAcmeWithExternalAccountBinding(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	stopPebble := startPebble("pebble-config-eab.json")
-	defer stopPebble()
-
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
+	p := startPebble(t, "pebble-config-eab.json")
 
 	userPem, err := os.CreateTemp("", "centauri-integration-test-user-*.pem")
 	assert.NoError(t, err)
@@ -673,45 +498,37 @@ func Test_Run_ObtainsCertificatesUsingAcmeWithExternalAccountBinding(t *testing.
 	os.Remove(certsJson.Name())
 	defer os.Remove(certsJson.Name())
 
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "lego",
-			"DNS_PROVIDER", "exec",
-			"EXEC_PATH", testdata.Path("update.sh"),
-			"ACME_EMAIL", "test@example.com",
-			"ACME_DIRECTORY", "https://localhost:14000/dir",
-			"ACME_DISABLE_PROPAGATION_CHECK", "true",
-			"ACME_EXTERNAL_KID", "kid-1",
-			"ACME_EXTERNAL_HMAC", "w7rzMImDLQBdYxpKZLT9x9g2QU3_yrBH6ZxzzpZ4Jto",
-			"USER_DATA", userPem.Name(),
-			"CERTIFICATE_STORE", certsJson.Name(),
-			"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "lego",
+		"DNS_PROVIDER", "exec",
+		"EXEC_PATH", testdata.Path("update.sh"),
+		"ACME_EMAIL", "test@example.com",
+		"ACME_DIRECTORY", p.directory,
+		"CHALLTESTSRV_MANAGEMENT_ADDRESS", p.challengeManagementAddress,
+		"ACME_DISABLE_PROPAGATION_CHECK", "true",
+		"ACME_EXTERNAL_KID", "kid-1",
+		"ACME_EXTERNAL_HMAC", "w7rzMImDLQBdYxpKZLT9x9g2QU3_yrBH6ZxzzpZ4Jto",
+		"USER_DATA", userPem.Name(),
+		"CERTIFICATE_STORE", certsJson.Name(),
+		"LEGO_CA_CERTIFICATES", testdata.Path("pebble.minica.pem"),
+	)
 
 	start := time.Now()
 	for time.Since(start) < time.Minute {
 		time.Sleep(2 * time.Second)
 
-		res, err := proxyGet(8703, "https://example.com/test")
+		res, err := proxyGet(c.httpsPort, "https://example.com/test")
 		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
 			slog.Warn("Centauri isn't serving a cert yet, waiting...")
 			continue
 		}
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, res.StatusCode)
 		assert.True(t, strings.Contains(res.TLS.PeerCertificates[0].Issuer.CommonName, "Pebble Intermediate CA"))
 
-		signalChan <- os.Interrupt
-		<-doneChan
 		return
 	}
 
@@ -722,7 +539,7 @@ func Test_Run_ValidateFlag_ExitsSuccessfullyWithValidConfig(t *testing.T) {
 	err := runTest(
 		make(chan os.Signal, 1),
 		"VALIDATE", "true",
-		"CONFIG", testdata.Path("simple-proxy.conf"),
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", "127.0.0.1:8080"),
 	)
 
 	assert.NoError(t, err)
@@ -751,15 +568,14 @@ func Test_Run_ValidateFlag_ExitsWithErrorForInvalidConfig(t *testing.T) {
 func Test_Run_ValidateFlag_DoesNotStartServer(t *testing.T) {
 	signalChan := make(chan os.Signal, 1)
 	doneChan := make(chan struct{}, 1)
+	configPath := writeConfig(t, "simple-proxy.conf", "UPSTREAM", "127.0.0.1:8080")
 
 	go func() {
 		err := runTest(
 			signalChan,
 			"VALIDATE", "true",
-			"CONFIG", testdata.Path("simple-proxy.conf"),
+			"CONFIG", configPath,
 			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
 		)
 
 		assert.NoError(t, err)
@@ -777,7 +593,7 @@ func Test_Run_ValidateFlag_WorksWithDifferentConfigPaths(t *testing.T) {
 	err := runTest(
 		make(chan os.Signal, 1),
 		"VALIDATE", "true",
-		"CONFIG", testdata.Path("simple-proxy.conf"),
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", "127.0.0.1:8080"),
 	)
 	assert.NoError(t, err)
 
@@ -798,69 +614,44 @@ func Test_Run_ValidateFlag_WorksWithDifferentConfigPaths(t *testing.T) {
 }
 
 func Test_Run_RedirectsToPrimaryDomain(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("domain-redirect.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "domain-redirect.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
 	// Test HTTPS redirect from www.example.com to example.com
-	res, err := proxyGet(8703, "https://www.example.com/test?param=value")
+	res, err := proxyGet(c.httpsPort, "https://www.example.com/test?param=value")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
 	assert.Equal(t, "https://example.com/test?param=value", res.Header.Get("Location"))
 
 	// Test that requests to primary domain (example.com) are not redirected
-	res, err = proxyGet(8703, "https://example.com/test")
+	res, err = proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8701")
-
-	signalChan <- os.Interrupt
-	<-doneChan
+	assert.Contains(t, string(b), "This is the upstream on "+upstream)
 }
 
 func Test_Run_UsesSubjectForCertificateNames(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("subject.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "subject.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
-	res, err := proxyGet(8703, "https://example.com/test")
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -871,42 +662,28 @@ func Test_Run_UsesSubjectForCertificateNames(t *testing.T) {
 
 	b, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
-	assert.Contains(t, string(b), "This is the upstream on port 8701")
-
-	signalChan <- os.Interrupt
-	<-doneChan
+	assert.Contains(t, string(b), "This is the upstream on "+upstream)
 }
 
 func Test_Run_RedirectsHttpToHttps(t *testing.T) {
-	upstream := startStaticServer(8701)
-	defer upstream.Stop(context.Background())
+	upstream := startStaticServer(t)
 
-	signalChan := make(chan os.Signal, 1)
-	doneChan := make(chan struct{}, 1)
-
-	go func() {
-		err := runTest(
-			signalChan,
-			"CONFIG", testdata.Path("simple-proxy.conf"),
-			"PROVIDER", "selfsigned",
-			"FRONTEND", "tcp",
-			"HTTP_PORT", "8702",
-			"HTTPS_PORT", "8703",
-		)
-		assert.NoError(t, err)
-		doneChan <- struct{}{}
-	}()
+	c := startCentauri(
+		t,
+		"CONFIG", writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER", "selfsigned",
+	)
 
 	time.Sleep(2 * time.Second)
 
 	// Test HTTP to HTTPS redirect
-	res, err := getClientProxy(8702).Get("http://example.com/test?param=value")
+	res, err := getClientProxy(c.httpPort).Get("http://example.com/test?param=value")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
 	assert.Equal(t, "https://example.com/test?param=value", res.Header.Get("Location"))
 
 	// Test HTTP to HTTPS redirect strips port
-	res, err = getClientProxy(8702).Get("http://example.com:80/test")
+	res, err = getClientProxy(c.httpPort).Get("http://example.com:80/test")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
 	assert.Equal(t, "https://example.com/test", res.Header.Get("Location"))
@@ -916,12 +693,9 @@ func Test_Run_RedirectsHttpToHttps(t *testing.T) {
 	assert.NoError(t, err)
 	req.Host = "invalid..domain"
 
-	res, err = getClientProxy(8702).Do(req)
+	res, err = getClientProxy(c.httpPort).Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
-
-	signalChan <- os.Interrupt
-	<-doneChan
 }
 
 func runTest(signalChan <-chan os.Signal, cfg ...string) error {
@@ -933,6 +707,10 @@ func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 		}
 	})
 
+	// Avoid the default ports, which may already be in use. Tests can override these.
+	ports := freePorts(2)
+	cfg = append([]string{"HTTP_PORT", strconv.Itoa(ports[0]), "HTTPS_PORT", strconv.Itoa(ports[1])}, cfg...)
+
 	for i := 0; i < len(cfg); i += 2 {
 		os.Setenv(cfg[i], cfg[i+1])
 		defer os.Unsetenv(cfg[i])
@@ -941,29 +719,134 @@ func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	return run([]string{}, signalChan)
 }
 
-func startStaticServer(port int) *frontend.Server {
-	return startServer(port, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+type centauri struct {
+	httpPort  int
+	httpsPort int
+	signals   chan os.Signal
+	stopOnce  sync.Once
+	result    chan error
+}
+
+// startCentauri runs Centauri with the TCP frontend listening on free ports. It is stopped when the test
+// finishes, regardless of whether the test passed, so it never holds on to ports used by later tests.
+func startCentauri(t *testing.T, cfg ...string) *centauri {
+	ports := freePorts(2)
+	c := &centauri{
+		httpPort:  ports[0],
+		httpsPort: ports[1],
+		signals:   make(chan os.Signal, 1),
+		result:    make(chan error, 1),
+	}
+
+	cfg = append(cfg,
+		"FRONTEND", "tcp",
+		"HTTP_PORT", strconv.Itoa(c.httpPort),
+		"HTTPS_PORT", strconv.Itoa(c.httpsPort),
+	)
+	go func() {
+		c.result <- runTest(c.signals, cfg...)
+	}()
+
+	t.Cleanup(func() { c.stop(t) })
+	return c
+}
+
+func (c *centauri) stop(t *testing.T) {
+	c.stopOnce.Do(func() {
+		select {
+		case c.signals <- os.Interrupt:
+		case err := <-c.result:
+			// Centauri already exited of its own accord.
+			assert.NoError(t, err)
+			return
+		}
+
+		select {
+		case err := <-c.result:
+			assert.NoError(t, err)
+		case <-time.After(30 * time.Second):
+			t.Error("timed out waiting for centauri to stop")
+		}
+	})
+}
+
+// freePorts finds n distinct TCP ports that are currently free.
+func freePorts(n int) []int {
+	var ports []int
+	for range n {
+		listener, err := net.Listen("tcp", ":0")
+		if err != nil {
+			panic(fmt.Sprintf("Failed to find a free port: %v", err))
+		}
+		defer listener.Close()
+		ports = append(ports, listener.Addr().(*net.TCPAddr).Port)
+	}
+	return ports
+}
+
+// writeConfig expands ${VARIABLES} in the named testdata file using the given key/value pairs, and
+// writes the result to a temporary file.
+func writeConfig(t *testing.T, name string, vars ...string) string {
+	b, err := os.ReadFile(testdata.Path(name))
+	require.NoError(t, err)
+
+	values := make(map[string]string)
+	for i := 0; i < len(vars); i += 2 {
+		values[vars[i]] = vars[i+1]
+	}
+
+	content := os.Expand(string(b), func(key string) string {
+		value, ok := values[key]
+		if !ok {
+			t.Fatalf("no value provided for %s in %s", key, name)
+		}
+		return value
+	})
+
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte(content), os.FileMode(0600)))
+	return path
+}
+
+// startStaticServer starts an upstream that echoes its address and the request headers, returning its address.
+func startStaticServer(t *testing.T) string {
+	listener := listen(t)
+	addr := listener.Addr().String()
+	serve(t, listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("This is the upstream on port %d\n\nYou provided headers:\n", port)))
+		w.Write([]byte(fmt.Sprintf("This is the upstream on %s\n\nYou provided headers:\n", addr)))
 		for k := range r.Header {
 			w.Write([]byte(fmt.Sprintf("%s: %s\n", k, r.Header.Get(k))))
 		}
 	}))
+	return addr
 }
 
-func startServer(port int, handler http.Handler) *frontend.Server {
+// startServer starts an upstream using the given handler, returning its address.
+func startServer(t *testing.T, handler http.Handler) string {
+	listener := listen(t)
+	serve(t, listener, handler)
+	return listener.Addr().String()
+}
+
+func listen(t *testing.T) net.Listener {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	return listener
+}
+
+func serve(t *testing.T, listener net.Listener, handler http.Handler) {
 	errChan := make(chan error, 1)
 
 	go func() {
 		panic(<-errChan)
 	}()
 	srv := frontend.NewServer(handler, errChan)
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	if err != nil {
-		panic(err)
-	}
 	go srv.Start(listener)
-	return srv
+	t.Cleanup(func() {
+		srv.Stop(context.Background())
+		_ = listener.Close()
+	})
 }
 
 func sendNetworkConfig(conn net.Conn, config []byte) error {
@@ -1028,60 +911,81 @@ func getClientProxy(realPort int) *http.Client {
 	}
 }
 
-func startPebble(configName string) func() {
-	stopChallTestSrv := startChallTestSrv()
-
-	cmd := exec.Command("go", "tool", "github.com/letsencrypt/pebble/v2/cmd/pebble", "-strict", "-config", configName, "-dnsserver", "localhost:8053")
-	cmd.Dir = testdata.Path(".")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "PEBBLE_VA_NOSLEEP=1", "PEBBLE_WFE_NONCEREJECT=0", "PEBBLE_AUTHZREUSE=0")
-
-	if err := cmd.Start(); err != nil {
-		panic(err)
-	}
-	go cmd.Wait()
-
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
-	start := time.Now()
-	for time.Since(start) < time.Minute {
-		resp, err := client.Get("https://localhost:14000/dir")
-		if err != nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		resp.Body.Close()
-		break
-	}
-
-	return func() {
-		if cmd.Process != nil {
-			cmd.Process.Signal(syscall.SIGTERM)
-		}
-		stopChallTestSrv()
-	}
+type pebble struct {
+	directory                  string
+	challengeManagementAddress string
 }
 
-func startChallTestSrv() func() {
-	cmd := exec.Command("go", "tool", "github.com/letsencrypt/pebble/v2/cmd/pebble-challtestsrv", "-http01", "\"\"", "-https01", "\"\"", "-tlsalpn01", "\"\"")
+// startPebble starts pebble and its challenge test server on free ports, stopping them when the test finishes.
+func startPebble(t *testing.T, configName string) *pebble {
+	ports := freePorts(4)
+	dnsAddress := fmt.Sprintf("localhost:%d", ports[0])
+	p := &pebble{
+		directory:                  fmt.Sprintf("https://localhost:%d/dir", ports[1]),
+		challengeManagementAddress: fmt.Sprintf("localhost:%d", ports[2]),
+	}
+
+	startPebbleTool(
+		t,
+		"pebble-challtestsrv",
+		nil,
+		"-http01", "",
+		"-https01", "",
+		"-tlsalpn01", "",
+		"-doh", "",
+		"-dnsserver", dnsAddress,
+		"-management", p.challengeManagementAddress,
+	)
+
+	startPebbleTool(
+		t,
+		"pebble",
+		[]string{"PEBBLE_VA_NOSLEEP=1", "PEBBLE_WFE_NONCEREJECT=0", "PEBBLE_AUTHZREUSE=0"},
+		"-strict",
+		"-config", writeConfig(
+			t,
+			configName,
+			"PEBBLE_ADDRESS", fmt.Sprintf("localhost:%d", ports[1]),
+			"PEBBLE_MANAGEMENT_ADDRESS", fmt.Sprintf("localhost:%d", ports[3]),
+		),
+		"-dnsserver", dnsAddress,
+	)
+
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	require.Eventually(t, func() bool {
+		resp, err := client.Get(p.directory)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, time.Minute, 500*time.Millisecond, "pebble did not start")
+
+	return p
+}
+
+// startPebbleTool runs one of pebble's commands, and waits for it to exit when the test finishes.
+func startPebbleTool(t *testing.T, name string, env []string, args ...string) {
+	cmd := exec.Command("go", append([]string{"tool", "github.com/letsencrypt/pebble/v2/cmd/" + name}, args...)...)
 	cmd.Dir = testdata.Path(".")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), env...)
+	require.NoError(t, cmd.Start())
 
-	if err := cmd.Start(); err != nil {
-		panic(err)
-	}
-	go cmd.Wait()
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
 
-	return func() {
-		if cmd.Process != nil {
-			cmd.Process.Signal(syscall.SIGTERM)
+	t.Cleanup(func() {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-exited:
+		case <-time.After(10 * time.Second):
+			_ = cmd.Process.Kill()
+			<-exited
 		}
-	}
+	})
 }

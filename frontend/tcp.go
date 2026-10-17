@@ -29,13 +29,15 @@ func (t *tcpFrontend) Serve(ctx *Context) error {
 	if err != nil {
 		return err
 	}
-	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan)
-	go t.tlsServer.Start(tlsListener)
 
 	plainListener, err := net.Listen("tcp", fmt.Sprintf(":%d", t.httpPort))
 	if err != nil {
+		_ = tlsListener.Close()
 		return err
 	}
+
+	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan)
+	go t.tlsServer.Start(tlsListener)
 
 	t.plainServer = NewServer(ctx.createRedirector(), ctx.ErrChan)
 	go t.plainServer.Start(plainListener)

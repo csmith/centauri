@@ -1,7 +1,7 @@
 {
   "pebble": {
-    "listenAddress": "0.0.0.0:14000",
-    "managementListenAddress": "0.0.0.0:15000",
+    "listenAddress": "${PEBBLE_ADDRESS}",
+    "managementListenAddress": "${PEBBLE_MANAGEMENT_ADDRESS}",
     "certificate": "localhost/cert.pem",
     "privateKey": "localhost/key.pem",
     "httpPort": 5002,
