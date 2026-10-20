@@ -9,6 +9,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -481,9 +483,11 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 }
 
 func Test_NewLegoSupplier_errorsIfParentDirectoryDoesNotExist(t *testing.T) {
-	_, err := NewLegoSupplier(t.Context(), &LegoSupplierConfig{
-		Path: filepath.Join(t.TempDir(), "missing", "user.pem"),
-	})
+	_, err := NewLegoSupplier(
+		&LegoSupplierConfig{
+			Path: filepath.Join(t.TempDir(), "missing", "user.pem"),
+		},
+	)
 	assert.ErrorContains(t, err, "unable to write to path")
 }
 
@@ -495,8 +499,51 @@ func Test_NewLegoSupplier_errorsIfUserDataPathIsReadOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "user.pem")
 	require.NoError(t, os.WriteFile(path, nil, 0o444))
 
-	_, err := NewLegoSupplier(t.Context(), &LegoSupplierConfig{Path: path})
+	_, err := NewLegoSupplier(&LegoSupplierConfig{Path: path})
 	assert.ErrorContains(t, err, "unable to write to path")
+}
+
+func Test_LegoSupplier_Connect_errorsIfDirectoryIsUnavailable(t *testing.T) {
+	directory := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			},
+		),
+	)
+	defer directory.Close()
+
+	s, err := NewLegoSupplier(
+		&LegoSupplierConfig{
+			Path:   filepath.Join(t.TempDir(), "user.pem"),
+			DirUrl: directory.URL,
+		},
+	)
+	require.NoError(t, err)
+
+	require.Error(t, s.Connect(t.Context()))
+	_, err = s.GetCertificate(t.Context(), "example.com", nil, false)
+	assert.ErrorIs(t, err, errNotConnected)
+}
+
+func Test_Supplier_GetCertificate_doesNotUseObtainLimitIfNotConnected(t *testing.T) {
+	s := &LegoSupplier{
+		obtainLimiter: rate.NewLimiter(rate.Every(time.Hour), 1),
+	}
+
+	_, err := s.GetCertificate(t.Context(), "example.com", nil, false)
+	require.ErrorIs(t, err, errNotConnected)
+	assert.True(t, s.obtainLimiter.Allow())
+}
+
+func Test_Supplier_UpdateStaple_errorsIfNotConnected(t *testing.T) {
+	s := &LegoSupplier{}
+	assert.ErrorIs(t, s.UpdateStaple(t.Context(), &Details{}), errNotConnected)
+}
+
+func Test_Supplier_UpdateRenewalInfo_errorsIfNotConnected(t *testing.T) {
+	s := &LegoSupplier{}
+	assert.ErrorIs(t, s.UpdateRenewalInfo(t.Context(), &Details{}), errNotConnected)
 }
 
 func Test_ParseResolvers(t *testing.T) {

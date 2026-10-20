@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- If a DNS provider is configured, Centauri now always uses lego for
+  certificates. Previously, if the ACME server couldn't be reached at startup,
+  Centauri silently fell back to self-signed certificates. It now keeps
+  serving existing certificates and retries connecting in the background,
+  obtaining any new certificates once it succeeds.
+  ([issue #99](https://github.com/csmith/centauri/issues/99))
+- Centauri now fails to start if the configured DNS provider or lego user
+  data can't be loaded, instead of falling back to self-signed certificates.
+
 ## 2.9.1 - 2026-10-20
 
 - Updated to Go 1.27.3 and base image 1.20261020.1, which include fixes

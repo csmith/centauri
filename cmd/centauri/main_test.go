@@ -6,18 +6,21 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -533,6 +536,107 @@ func Test_Run_ObtainsCertificatesUsingAcmeWithExternalAccountBinding(t *testing.
 	}
 
 	assert.Fail(t, "timeout exceeded")
+}
+
+func Test_Run_ObtainsCertificatesUsingAcmeAfterInitialConnectionFails(t *testing.T) {
+	upstream := startStaticServer(t)
+
+	p := startPebble(t, "pebble-config.json")
+
+	// Fail the first request for the directory, then pass subsequent ones through to pebble.
+	var directoryRequested atomic.Bool
+	pebbleClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	directory := httptest.NewTLSServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				if !directoryRequested.Swap(true) {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+
+				res, err := pebbleClient.Get(p.directory)
+				if err != nil {
+					w.WriteHeader(http.StatusBadGateway)
+					return
+				}
+				defer res.Body.Close()
+
+				w.Header().Set("Content-Type", res.Header.Get("Content-Type"))
+				w.WriteHeader(res.StatusCode)
+				_, _ = io.Copy(w, res.Body)
+			},
+		),
+	)
+	defer directory.Close()
+
+	directoryCa := filepath.Join(t.TempDir(), "directory.pem")
+	require.NoError(
+		t,
+		os.WriteFile(
+			directoryCa,
+			pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: directory.Certificate().Raw}),
+			0o600,
+		),
+	)
+
+	c := startCentauri(
+		t,
+		"CONFIG",
+		writeConfig(t, "simple-proxy.conf", "UPSTREAM", upstream),
+		"PROVIDER",
+		"lego",
+		"DNS_PROVIDER",
+		"exec",
+		"EXEC_PATH",
+		testdata.Path("update.sh"),
+		"ACME_EMAIL",
+		"test@example.com",
+		"ACME_DIRECTORY",
+		directory.URL,
+		"CHALLTESTSRV_MANAGEMENT_ADDRESS",
+		p.challengeManagementAddress,
+		"ACME_DISABLE_PROPAGATION_CHECK",
+		"true",
+		"USER_DATA",
+		filepath.Join(t.TempDir(), "user.pem"),
+		"CERTIFICATE_STORE",
+		filepath.Join(t.TempDir(), "certs.json"),
+		"LEGO_CA_CERTIFICATES",
+		testdata.Path("pebble.minica.pem")+string(os.PathListSeparator)+directoryCa,
+	)
+
+	start := time.Now()
+	for time.Since(start) < time.Minute {
+		time.Sleep(2 * time.Second)
+
+		res, err := proxyGet(c.httpsPort, "https://example.com/test")
+		if err != nil && strings.Contains(err.Error(), "tls: unrecognized name") {
+			slog.Warn("Centauri isn't serving a cert yet, waiting...")
+			continue
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, res.StatusCode)
+		assert.True(t, strings.Contains(res.TLS.PeerCertificates[0].Issuer.CommonName, "Pebble Intermediate CA"))
+		assert.True(t, directoryRequested.Load())
+
+		return
+	}
+
+	assert.Fail(t, "timeout exceeded")
+}
+
+func Test_Run_ErrorsIfDnsProviderCannotBeCreated(t *testing.T) {
+	err := runTest(
+		make(chan os.Signal, 1),
+		"CONFIG",
+		writeConfig(t, "simple-proxy.conf", "UPSTREAM", "localhost:1"),
+		"DNS_PROVIDER",
+		"not-a-real-provider",
+		"CERTIFICATE_STORE",
+		filepath.Join(t.TempDir(), "certs.json"),
+	)
+	assert.ErrorContains(t, err, "not-a-real-provider")
 }
 
 func Test_Run_ValidateFlag_ExitsSuccessfullyWithValidConfig(t *testing.T) {

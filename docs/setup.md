@@ -154,8 +154,12 @@ directory.
 An ordered list of providers to use to obtain certificates. Individual
 routes may request a specific provider in their [config](routes.md).
 
-The default configuration will use lego to obtain ACME certificates if
-it is [fully configured](#lego-options); otherwise it falls back to self-signed certificates.
+The default configuration will use lego to obtain ACME certificates if a
+[DNS provider](#dns_provider) is configured; otherwise it falls back to self-signed
+certificates. If the ACME server can't be reached when Centauri starts, it will
+keep retrying in the background. Existing certificates will continue to be
+served in the meantime, but new certificates won't be obtained until it
+succeeds.
 
 ### `WILDCARD_DOMAINS`
 

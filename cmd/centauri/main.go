@@ -120,10 +120,17 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		return fmt.Errorf("invalid frontend specified: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var provider proxy.CertificateProvider
+	legoConnected := make(chan struct{})
 	if f.UsesCertificates() {
 		var err error
-		provider, err = certProvider()
+		provider, err = certProvider(
+			ctx,
+			func() { close(legoConnected) },
+		)
 		if err != nil {
 			return fmt.Errorf("error creating certificate providers: %v", err)
 		}
@@ -143,6 +150,11 @@ func run(args []string, signalChan <-chan os.Signal) error {
 
 	if f.UsesCertificates() {
 		go proxyManager.MonitorCertificates(context.Background(), certCheckInterval)
+		go checkCertificatesOnConnect(
+			ctx,
+			legoConnected,
+			proxyManager,
+		)
 	}
 
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
@@ -185,6 +197,15 @@ func run(args []string, signalChan <-chan os.Signal) error {
 			}
 			return err
 		}
+	}
+}
+
+func checkCertificatesOnConnect(ctx context.Context, connected <-chan struct{}, manager *proxy.Manager) {
+	select {
+	case <-connected:
+		slog.Info("Checking for certificate validity now ACME server is available...")
+		manager.CheckCertificates(ctx)
+	case <-ctx.Done():
 	}
 }
 
@@ -241,10 +262,10 @@ func createCertificateStore(name string) (certificate.Store, error) {
 	}
 }
 
-// certProvider assembles the certificate provider from the configured store and suppliers. If the lego
-// supplier cannot be created - for example because no DNS provider is configured - a warning is logged
-// and only the selfsigned supplier is used.
-func certProvider() (proxy.CertificateProvider, error) {
+// certProvider assembles the certificate provider from the configured store and suppliers. If no DNS provider
+// is configured, a warning is logged and only the selfsigned supplier is used. Otherwise, the lego supplier
+// connects to the ACME server, and onLegoConnected is called if that only succeeds after startup.
+func certProvider(ctx context.Context, onLegoConnected func()) (proxy.CertificateProvider, error) {
 	store, err := createCertificateStore(*certificateStoreType)
 	if err != nil {
 		return nil, fmt.Errorf("certificate store error: %v", err)
@@ -254,7 +275,7 @@ func certProvider() (proxy.CertificateProvider, error) {
 	if *dnsProviderName == "" {
 		slog.Warn("Unable to create lego certificate supplier: no DNS provider specified")
 	} else if dnsProvider, err := legotapas.CreateProvider(*dnsProviderName); err != nil {
-		slog.Warn("Unable to create lego certificate supplier", "error", err)
+		return nil, fmt.Errorf("unable to create DNS provider %s: %w", *dnsProviderName, err)
 	} else {
 		legoConfig = &certificate.LegoSupplierConfig{
 			Path:                    *userDataPath,
@@ -274,13 +295,21 @@ func certProvider() (proxy.CertificateProvider, error) {
 		}
 	}
 
-	return certificate.NewProvider(context.Background(), certificate.ProviderConfig{
-		Store:              store,
-		Lego:               legoConfig,
-		PreferredSuppliers: strings.Split(*certificateProv, " "),
-		WildcardDomains:    strings.Split(*wildcardDomains, " "),
-		UseStaples:         *useStaples,
-	}), nil
+	provider, err := certificate.NewProvider(
+		ctx,
+		certificate.ProviderConfig{
+			Store:              store,
+			Lego:               legoConfig,
+			OnLegoConnected:    onLegoConnected,
+			PreferredSuppliers: strings.Split(*certificateProv, " "),
+			WildcardDomains:    strings.Split(*wildcardDomains, " "),
+			UseStaples:         *useStaples,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return provider, nil
 }
 
 func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errChan chan<- error) {

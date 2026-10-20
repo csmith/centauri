@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-acme/lego/v5/acme"
@@ -46,12 +47,15 @@ type certifier interface {
 
 // LegoSupplier uses a lego client to obtain certificates from an ACME endpoint.
 type LegoSupplier struct {
+	config        *LegoSupplierConfig
 	user          *acmeUser
-	certifier     certifier
 	profile       string
 	keyType       certcrypto.KeyType
 	timeout       time.Duration
 	obtainLimiter *rate.Limiter
+
+	certifierMutex sync.RWMutex
+	certifier      certifier
 }
 
 // LegoSupplierConfig contains the configuration used to create a new LegoSupplier.
@@ -88,8 +92,17 @@ type LegoSupplierConfig struct {
 	Timeout time.Duration
 }
 
-// NewLegoSupplier creates a new supplier, registering or retrieving an account with the ACME server as necessary.
-func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupplier, error) {
+// errNotConnected is returned by LegoSupplier methods that are called before Connect has succeeded.
+var errNotConnected = errors.New("not yet connected to the ACME server")
+
+const (
+	connectInitialDelay = 5 * time.Second
+	connectMaxDelay     = 6 * time.Hour
+)
+
+// NewLegoSupplier creates a new supplier, loading any cached registration data. The supplier cannot obtain
+// certificates until Connect has succeeded.
+func NewLegoSupplier(config *LegoSupplierConfig) (*LegoSupplier, error) {
 	if err := canWriteTo(config.Path); err != nil {
 		return nil, fmt.Errorf("unable to write to path %s: %w", config.Path, err)
 	}
@@ -103,31 +116,59 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 		return nil, err
 	}
 
-	legoConfig := lego.NewConfig(user)
-	legoConfig.CADirURL = config.DirUrl
-	legoConfig.Certificate.OverallRequestLimit = config.OverallRequestLimit
+	if len(config.Resolvers) > 0 {
+		dns01.SetDefaultClient(
+			dns01.NewClient(
+				&dns01.Options{
+					RecursiveNameservers: config.Resolvers,
+				},
+			),
+		)
+	}
+
+	return &LegoSupplier{
+		config:        config,
+		user:          user,
+		profile:       config.Profile,
+		keyType:       config.KeyType,
+		timeout:       config.Timeout,
+		obtainLimiter: rate.NewLimiter(rate.Every(config.ObtainInterval), 1),
+	}, nil
+}
+
+// Connect creates a client for the ACME server, registering an account with it if necessary.
+func (s *LegoSupplier) Connect(ctx context.Context) error {
+	if s.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, s.timeout)
+		defer cancel()
+	}
+
+	legoConfig := lego.NewConfig(s.user)
+	legoConfig.CADirURL = s.config.DirUrl
+	legoConfig.Certificate.OverallRequestLimit = s.config.OverallRequestLimit
 
 	client, err := lego.NewClient(legoConfig)
 	if err != nil {
-		return nil, err
-	}
-
-	if len(config.Resolvers) > 0 {
-		dns01.SetDefaultClient(dns01.NewClient(&dns01.Options{
-			RecursiveNameservers: config.Resolvers,
-		}))
+		return err
 	}
 
 	if err = client.Challenge.SetDNS01Provider(
-		config.DnsProvider,
+		s.config.DnsProvider,
 		dns01.DisableRecursiveNSsPropagationRequirement(),
 		dns01.CondOptions(
-			config.DisablePropagationCheck,
+			s.config.DisablePropagationCheck,
 			dns01.WrapPreCheck(func(ctx context.Context, domain, fqdn, value string, check dns01.PreCheckFunc) (bool, error) {
-				slog.Info("Propagation check disabled, not checking DNS at all", "domain", domain, "wait", config.PropagationDelay)
+				slog.Info(
+					"Propagation check disabled, not checking DNS at all",
+					"domain",
+					domain,
+					"wait",
+					s.config.PropagationDelay,
+				)
 
 				select {
-				case <-time.After(config.PropagationDelay):
+				case <-time.After(s.config.PropagationDelay):
 				case <-ctx.Done():
 					return false, ctx.Err()
 				}
@@ -136,29 +177,28 @@ func NewLegoSupplier(ctx context.Context, config *LegoSupplierConfig) (*LegoSupp
 			}),
 		),
 	); err != nil {
-		return nil, err
+		return err
 	}
 
-	if user.account == nil {
-		if err = user.registerAndSave(ctx, client.Registration, config.Path); err != nil {
-			return nil, err
+	if s.user.account == nil {
+		if err = s.user.registerAndSave(ctx, client.Registration, s.config.Path); err != nil {
+			return err
 		}
 	}
 
-	s := &LegoSupplier{
-		user:          user,
-		certifier:     client.Certificate,
-		profile:       config.Profile,
-		keyType:       config.KeyType,
-		timeout:       config.Timeout,
-		obtainLimiter: rate.NewLimiter(rate.Every(config.ObtainInterval), 1),
-	}
-
-	return s, nil
+	s.certifierMutex.Lock()
+	defer s.certifierMutex.Unlock()
+	s.certifier = client.Certificate
+	return nil
 }
 
 // GetCertificate obtains a new certificate for the given names, and immediately requests a new OCSP staple.
 func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNames []string, shouldStaple bool) (*Details, error) {
+	c, err := s.currentCertifier()
+	if err != nil {
+		return nil, err
+	}
+
 	slog.Info("Starting ACME process to obtain certificate", "domain", subject, "altNames", altNames, "timeout", s.timeout, "limited", s.obtainLimiter.Tokens() < 1)
 
 	if err := s.obtainLimiter.Wait(ctx); err != nil {
@@ -171,13 +211,16 @@ func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNa
 		defer cancel()
 	}
 
-	res, err := s.certifier.Obtain(ctx, legocert.ObtainRequest{
-		Domains:    append([]string{subject}, altNames...),
-		Bundle:     true,
-		MustStaple: shouldStaple,
-		Profile:    s.profile,
-		KeyType:    s.keyType,
-	})
+	res, err := c.Obtain(
+		ctx,
+		legocert.ObtainRequest{
+			Domains:    append([]string{subject}, altNames...),
+			Bundle:     true,
+			MustStaple: shouldStaple,
+			Profile:    s.profile,
+			KeyType:    s.keyType,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -210,6 +253,11 @@ func (s *LegoSupplier) GetCertificate(ctx context.Context, subject string, altNa
 
 // UpdateStaple requests a new OCSP staple for the given certificate.
 func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
+	c, err := s.currentCertifier()
+	if err != nil {
+		return err
+	}
+
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
@@ -217,7 +265,7 @@ func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
 	}
 
 	slog.Info("Updating OCSP staple", "domain", cert.Subject, "altNames", cert.AltNames)
-	b, response, err := s.certifier.GetOCSP(ctx, []byte(cert.Certificate))
+	b, response, err := c.GetOCSP(ctx, []byte(cert.Certificate))
 	if err != nil {
 		return err
 	}
@@ -234,6 +282,11 @@ func (s *LegoSupplier) UpdateStaple(ctx context.Context, cert *Details) error {
 
 // UpdateRenewalInfo asks the ACME server when the certificate should be renewed.
 func (s *LegoSupplier) UpdateRenewalInfo(ctx context.Context, cert *Details) error {
+	c, err := s.currentCertifier()
+	if err != nil {
+		return err
+	}
+
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
@@ -245,7 +298,7 @@ func (s *LegoSupplier) UpdateRenewalInfo(ctx context.Context, cert *Details) err
 		return fmt.Errorf("unable to parse certificate: %w", err)
 	}
 
-	response, err := s.certifier.GetRenewalInfo(ctx, x509Cert)
+	response, err := c.GetRenewalInfo(ctx, x509Cert)
 
 	if err != nil {
 		if errors.Is(err, api.ErrNoARI) {
@@ -280,6 +333,45 @@ func (s *LegoSupplier) MinCertificateValidity() time.Duration {
 
 func (s *LegoSupplier) MinStapleValidity() time.Duration {
 	return time.Hour * 24
+}
+
+// connectWithBackoff calls Connect until it succeeds or the context is cancelled, waiting an exponentially
+// increasing amount of time between attempts. The attempted channel is closed once the first attempt has
+// finished, whether or not it succeeded.
+func (s *LegoSupplier) connectWithBackoff(ctx context.Context, attempted chan<- struct{}) error {
+	delay := connectInitialDelay
+	for {
+		err := s.Connect(ctx)
+		if attempted != nil {
+			close(attempted)
+			attempted = nil
+		}
+
+		if err == nil {
+			slog.Info("Connected to ACME server", "directory", s.config.DirUrl)
+			return nil
+		}
+
+		slog.Warn("Unable to connect to ACME server, will retry", "directory", s.config.DirUrl, "error", err, "delay", delay)
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		delay = min(delay*2, connectMaxDelay)
+	}
+}
+
+func (s *LegoSupplier) currentCertifier() (certifier, error) {
+	s.certifierMutex.RLock()
+	defer s.certifierMutex.RUnlock()
+
+	if s.certifier == nil {
+		return nil, errNotConnected
+	}
+	return s.certifier, nil
 }
 
 // acmeUser implements the User interface required by lego for account registration.
