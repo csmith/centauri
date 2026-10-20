@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.1 - 2026-10-20
+
+- Updated to Go 1.27.3 and base image 1.20261020.1, which include fixes
+  for the eMudhra intermediate CA compromise.
+- Updated gRPC (an indirect dependency) to fix HTTP/2 vulnerabilities.
+
 ## 2.9.0 - 2026-09-6
 
 ### Changes
