@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,20 +15,24 @@ import (
 // Parse reads a configuration file from the given reader, and returns the routes that it contains.
 func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err error) {
 	var route *proxy.Route
+	var lineNumber, routeLine int
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
+		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
 		directive, args, _ := strings.Cut(line, " ")
 
+		var lineErr error
 		switch strings.ToLower(directive) {
 		case "route":
 			if args == "" {
-				return nil, nil, fmt.Errorf("no domains specified for route")
+				lineErr = errors.New("no domains specified for route")
+				break
 			}
 			if route != nil {
 				if len(route.Upstreams) == 0 {
-					return nil, nil, fmt.Errorf("no upstreams specified for route %s", route.Domains)
+					return nil, nil, fmt.Errorf("line %d: no upstreams specified for route %s", routeLine, route.Domains)
 				}
 				routes = append(routes, route)
 			}
@@ -35,72 +40,85 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				Domains:   strings.Split(args, " "),
 				Upstreams: []proxy.Upstream{},
 			}
+			routeLine = lineNumber
 		case "upstream":
 			if route == nil {
-				return nil, nil, fmt.Errorf("upstream without route: %s", line)
+				lineErr = fmt.Errorf("upstream without route: %s", line)
+				break
 			}
 			route.Upstreams = append(route.Upstreams, proxy.Upstream{Host: args})
 		case "header":
 			if route == nil {
-				return nil, nil, fmt.Errorf("header without route: %s", line)
+				lineErr = fmt.Errorf("header without route: %s", line)
+				break
 			}
-			if err := parseHeader(args, route); err != nil {
-				return nil, nil, err
-			}
+			lineErr = parseHeader(args, route)
 		case "on_error":
 			if route == nil {
-				return nil, nil, fmt.Errorf("on_error without route: %s", line)
+				lineErr = fmt.Errorf("on_error without route: %s", line)
+				break
 			}
-			if err := parseOnError(args, route); err != nil {
-				return nil, nil, err
-			}
+			lineErr = parseOnError(args, route)
 		case "provider":
 			if route == nil {
-				return nil, nil, fmt.Errorf("provider without route: %s", line)
+				lineErr = fmt.Errorf("provider without route: %s", line)
+				break
 			}
 			if route.Provider != "" {
-				return nil, nil, fmt.Errorf("route %s has multiple providers", route.Domains)
+				lineErr = fmt.Errorf("route %s has multiple providers", route.Domains)
+				break
 			}
 			route.Provider = args
 		case "fallback":
 			if route == nil {
-				return nil, nil, fmt.Errorf("fallback without route: %s", line)
+				lineErr = fmt.Errorf("fallback without route: %s", line)
+				break
 			}
 			if fallback != nil {
-				return nil, nil, fmt.Errorf("multiple fallback routes specified: %s and %s", route.Domains, fallback.Domains)
+				lineErr = fmt.Errorf("multiple fallback routes specified: %s and %s", route.Domains, fallback.Domains)
+				break
 			}
 			fallback = route
 		case "redirect-to-primary":
 			if route == nil {
-				return nil, nil, fmt.Errorf("redirect-to-primary without route: %s", line)
+				lineErr = fmt.Errorf("redirect-to-primary without route: %s", line)
+				break
 			}
 			if route.RedirectToPrimary {
-				return nil, nil, fmt.Errorf("multiple redirect-to-primary options specified in route %s", route.Domains)
+				lineErr = fmt.Errorf("multiple redirect-to-primary options specified in route %s", route.Domains)
+				break
 			}
 			if len(route.Domains) < 2 {
-				return nil, nil, fmt.Errorf("redirect-to-primary specified with only a single domain in route %s", route.Domains)
+				lineErr = fmt.Errorf("redirect-to-primary specified with only a single domain in route %s", route.Domains)
+				break
 			}
 			route.RedirectToPrimary = true
 		case "subject":
 			if route == nil {
-				return nil, nil, fmt.Errorf("subject without route: %s", line)
+				lineErr = fmt.Errorf("subject without route: %s", line)
+				break
 			}
 			if args == "" {
-				return nil, nil, fmt.Errorf("no domains specified for subject in route %s", route.Domains)
+				lineErr = fmt.Errorf("no domains specified for subject in route %s", route.Domains)
+				break
 			}
 			route.Subject = append(route.Subject, strings.Split(args, " ")...)
 		case "#":
 			// Ignore comments
 		default:
 			if len(line) > 0 {
-				return nil, nil, fmt.Errorf("invalid line: %s", line)
+				lineErr = fmt.Errorf("invalid line: %s", line)
 			}
+		}
+
+		if lineErr != nil {
+			return nil, nil, fmt.Errorf("line %d: %w", lineNumber, lineErr)
 		}
 	}
 
 	if route != nil {
 		if len(route.Upstreams) == 0 {
-			return nil, nil, fmt.Errorf("no upstreams specified for route %s", route.Domains)
+			return nil, nil, fmt.Errorf("line %d: no upstreams specified for route %s", routeLine, route.Domains)
 		}
 		routes = append(routes, route)
 	}

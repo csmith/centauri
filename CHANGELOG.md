@@ -13,6 +13,10 @@
 - Centauri now fails to start if the configured DNS provider or lego user
   data can't be loaded, instead of falling back to self-signed certificates.
 
+### Added
+
+- Config parse errors now include the line number of the problem.
+
 ## 2.9.1 - 2026-10-20
 
 - Updated to Go 1.27.3 and base image 1.20261020.1, which include fixes

@@ -18,7 +18,7 @@ func Test_Parse_ReturnsEmptySliceForEmptyFile(t *testing.T) {
 func Test_Parse_ErrorsOnUnknownLine(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte("error please")))
 
-	assert.ErrorContains(t, err, "invalid line")
+	assert.ErrorContains(t, err, "line 1: invalid line")
 }
 
 func Test_Parse_ErrorsOnUpstreamOutsideOfRoute(t *testing.T) {
@@ -45,7 +45,7 @@ route example.com
 	header nothing
 `)))
 
-	assert.ErrorContains(t, err, "invalid header operation")
+	assert.ErrorContains(t, err, "line 3: invalid header operation")
 }
 
 func Test_Parse_ErrorsOnHeaderWithTooFewParameters(t *testing.T) {
@@ -73,15 +73,19 @@ route example.net
 	upstream localhost:8080
 `)))
 
-	assert.ErrorContains(t, err, "no upstreams specified for route")
+	assert.ErrorContains(t, err, "line 2: no upstreams specified for route")
 }
 
 func Test_Parse_ErrorsOnFinalRouteWithoutUpstreams(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte(`
+route example.org
+	upstream localhost:8080
+
 route example.com
+	provider lego
 `)))
 
-	assert.ErrorContains(t, err, "no upstreams specified for route")
+	assert.ErrorContains(t, err, "line 5: no upstreams specified for route")
 }
 
 func Test_Parse_ErrorsOnHeaderAddWithoutValue(t *testing.T) {
@@ -492,4 +496,3 @@ route example.com
 
 	assert.ErrorContains(t, err, "path must begin with a /")
 }
-
