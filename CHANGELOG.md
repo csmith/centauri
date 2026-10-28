@@ -17,6 +17,11 @@
 
 - Config parse errors now include the line number of the problem.
 
+### Fixed
+
+- Updated golang.org/x/net (an indirect dependency) to fix HTML parsing
+  vulnerabilities.
+
 ## 2.9.1 - 2026-10-20
 
 - Updated to Go 1.27.3 and base image 1.20261020.1, which include fixes
