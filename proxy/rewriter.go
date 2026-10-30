@@ -63,6 +63,9 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 	route := r.provider.RouteForDomain(r.hostForRequest(p.In))
 	if route == nil || len(route.Upstreams) == 0 {
+		// Make sure we're not going to proxy to an absolute url
+		p.Out.URL.Scheme = ""
+		p.Out.URL.Host = ""
 		return
 	}
 

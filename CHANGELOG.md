@@ -19,6 +19,7 @@
 
 ### Fixed
 
+- Fixed handling of absolute URLs in requests for unknown hosts.
 - Updated golang.org/x/net (an indirect dependency) to fix HTML parsing
   vulnerabilities.
 

@@ -313,6 +313,50 @@ func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
 	assert.Contains(t, string(b), "The server was unable to complete your request")
 }
 
+func Test_Run_ReturnsBadGatewayForUnknownHosts(t *testing.T) {
+	upstream := startStaticServer(t)
+
+	var otherHit atomic.Bool
+	other := startServer(
+		t,
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				otherHit.Store(true)
+				w.WriteHeader(http.StatusOK)
+			},
+		),
+	)
+
+	c := startCentauri(
+		t,
+		"CONFIG",
+		writeConfig(t, "subject.conf", "UPSTREAM", upstream),
+		"PROVIDER",
+		"selfsigned",
+	)
+
+	time.Sleep(2 * time.Second)
+
+	conn, err := tls.Dial(
+		"tcp",
+		fmt.Sprintf("127.0.0.1:%d", c.httpsPort),
+		&tls.Config{
+			ServerName:         "example.com",
+			InsecureSkipVerify: true,
+		},
+	)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = fmt.Fprintf(conn, "GET http://%s/ HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n", other)
+	require.NoError(t, err)
+
+	b, err := io.ReadAll(conn)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(b), "HTTP/1.1 502 "), "unexpected response: %s", b)
+	assert.False(t, otherHit.Load())
+}
+
 func Test_Run_OnError_ServesErrorPageFromUpstream(t *testing.T) {
 	// The primary upstream (127.0.0.1:1) is unreachable, so the route's on_error 502 mapping
 	// should cause the response to be served from the error upstream instead of the default page.

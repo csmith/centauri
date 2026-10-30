@@ -240,11 +240,29 @@ func Test_Rewriter_RewriteRequest_UsesHostHeaderIfTlsNotUsed(t *testing.T) {
 	assert.Equal(t, "http://hostname:8080/foo/bar", request.URL.String())
 }
 
-func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
+func Test_Rewriter_RewriteRequest_ClearsAbsoluteUrlIfRouteIsNil(t *testing.T) {
 	provider := &fakeProvider{}
 	rewriter := &Rewriter{provider: provider}
 
-	u, _ := url.Parse("https://example.com/foo/bar")
+	u, _ := url.Parse("http://127.0.0.1:9090/metrics")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		Host:       "127.0.0.1:9090",
+		RemoteAddr: "127.0.0.1:11003",
+	}
+	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
+
+	assert.Equal(t, "127.0.0.1", provider.domain)
+	assert.Empty(t, request.URL.Scheme)
+	assert.Empty(t, request.URL.Host)
+}
+
+func Test_Rewriter_RewriteRequest_ClearsAbsoluteUrlIfRouteHasNoUpstreams(t *testing.T) {
+	provider := &fakeProvider{route: &Route{}}
+	rewriter := &Rewriter{provider: provider}
+
+	u, _ := url.Parse("http://127.0.0.1:9090/metrics")
 	request := &http.Request{
 		URL:        u,
 		Header:     make(http.Header),
@@ -253,8 +271,8 @@ func Test_Rewriter_RewriteRequest_DoesNothingIfRouteIsNill(t *testing.T) {
 	}
 	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
-	assert.Equal(t, "example.com", provider.domain)
-	assert.Equal(t, "https://example.com/foo/bar", request.URL.String())
+	assert.Empty(t, request.URL.Scheme)
+	assert.Empty(t, request.URL.Host)
 }
 
 func Test_Rewriter_RewriteRequest_StripsPortsFromHosts(t *testing.T) {
