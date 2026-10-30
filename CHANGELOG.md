@@ -12,6 +12,8 @@
   ([issue #99](https://github.com/csmith/centauri/issues/99))
 - Centauri now fails to start if the configured DNS provider or lego user
   data can't be loaded, instead of falling back to self-signed certificates.
+- Requests for hosts with no matching route are now rejected before reaching
+  the reverse proxy, and are logged at debug level instead of as warnings.
 
 ### Added
 

@@ -40,22 +40,28 @@ type RouteProvider interface {
 type DomainRedirector struct {
 	routeProvider RouteProvider
 	next          http.Handler
+	unrouted      http.Handler
 }
 
 // NewDomainRedirector creates a new DomainRedirector which will obtain routes
 // from the given provider. If the request does not need to be redirected, it is
-// passed to the `next` handler.
-func NewDomainRedirector(provider RouteProvider, next http.Handler) *DomainRedirector {
+// passed to the `next` handler. Requests that don't match a route with
+// upstreams are passed to the `unrouted` handler instead.
+func NewDomainRedirector(provider RouteProvider, next http.Handler, unrouted http.Handler) *DomainRedirector {
 	return &DomainRedirector{
 		routeProvider: provider,
 		next:          next,
+		unrouted:      unrouted,
 	}
 }
 
 func (d *DomainRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	host := d.hostForRequest(request)
 	route := d.routeProvider.RouteForDomain(host)
-	if route != nil && route.RedirectToPrimary && route.Domains[0] != host {
+	if route == nil || len(route.Upstreams) == 0 {
+		slog.Debug("No route found for request", "host", request.Host)
+		d.unrouted.ServeHTTP(writer, request)
+	} else if route.RedirectToPrimary && route.Domains[0] != host {
 		newAddress := request.URL
 		newAddress.Host = route.Domains[0]
 		if request.TLS != nil {

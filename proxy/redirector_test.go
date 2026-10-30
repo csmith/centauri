@@ -161,11 +161,39 @@ func (m *mockNextHandler) ServeHTTP(writer http.ResponseWriter, request *http.Re
 	m.called = true
 }
 
-func Test_DomainRedirector_PassesThroughWhenNoRoute(t *testing.T) {
+func Test_DomainRedirector_UsesUnroutedHandlerWhenNoRoute(t *testing.T) {
 	provider := &mockRouteProvider{
 		routes: make(map[string]*Route),
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
+
+	u, _ := url.Parse("http://127.0.0.1:9090/metrics")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+		Host:       "127.0.0.1:9090",
+	}
+
+	writer := &fakeResponseWriter{
+		header: make(http.Header),
+	}
+
+	NewDomainRedirector(provider, nextHandler, unroutedHandler).ServeHTTP(writer, request)
+
+	assert.False(t, nextHandler.called)
+	assert.True(t, unroutedHandler.called)
+}
+
+func Test_DomainRedirector_UsesUnroutedHandlerWhenRouteHasNoUpstreams(t *testing.T) {
+	provider := &mockRouteProvider{
+		routes: map[string]*Route{
+			"example.com": {Domains: []string{"example.com"}},
+		},
+	}
+	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -179,23 +207,24 @@ func Test_DomainRedirector_PassesThroughWhenNoRoute(t *testing.T) {
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
-	redirector.ServeHTTP(writer, request)
+	NewDomainRedirector(provider, nextHandler, unroutedHandler).ServeHTTP(writer, request)
 
-	assert.True(t, nextHandler.called)
-	assert.Equal(t, 0, writer.statusCode)
+	assert.False(t, nextHandler.called)
+	assert.True(t, unroutedHandler.called)
 }
 
 func Test_DomainRedirector_PassesThroughWhenRedirectToPrimaryIsFalse(t *testing.T) {
 	provider := &mockRouteProvider{
 		routes: map[string]*Route{
-			"example.com": {
+			"www.example.com": {
 				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
 				RedirectToPrimary: false,
 			},
 		},
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -209,7 +238,7 @@ func Test_DomainRedirector_PassesThroughWhenRedirectToPrimaryIsFalse(t *testing.
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
+	redirector := NewDomainRedirector(provider, nextHandler, unroutedHandler)
 	redirector.ServeHTTP(writer, request)
 
 	assert.True(t, nextHandler.called)
@@ -221,11 +250,13 @@ func Test_DomainRedirector_PassesThroughWhenAlreadyOnPrimaryDomain(t *testing.T)
 		routes: map[string]*Route{
 			"example.com": {
 				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
 				RedirectToPrimary: true,
 			},
 		},
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -239,7 +270,7 @@ func Test_DomainRedirector_PassesThroughWhenAlreadyOnPrimaryDomain(t *testing.T)
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
+	redirector := NewDomainRedirector(provider, nextHandler, unroutedHandler)
 	redirector.ServeHTTP(writer, request)
 
 	assert.True(t, nextHandler.called)
@@ -251,11 +282,13 @@ func Test_DomainRedirector_RedirectsToHttpsWhenTlsPresent(t *testing.T) {
 		routes: map[string]*Route{
 			"www.example.com": {
 				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
 				RedirectToPrimary: true,
 			},
 		},
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar?baz=quux")
 	request := &http.Request{
@@ -270,7 +303,7 @@ func Test_DomainRedirector_RedirectsToHttpsWhenTlsPresent(t *testing.T) {
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
+	redirector := NewDomainRedirector(provider, nextHandler, unroutedHandler)
 	redirector.ServeHTTP(writer, request)
 
 	assert.False(t, nextHandler.called)
@@ -283,11 +316,13 @@ func Test_DomainRedirector_RedirectsToHttpWhenNoTls(t *testing.T) {
 		routes: map[string]*Route{
 			"www.example.com": {
 				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
 				RedirectToPrimary: true,
 			},
 		},
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar?baz=quux")
 	request := &http.Request{
@@ -302,7 +337,7 @@ func Test_DomainRedirector_RedirectsToHttpWhenNoTls(t *testing.T) {
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
+	redirector := NewDomainRedirector(provider, nextHandler, unroutedHandler)
 	redirector.ServeHTTP(writer, request)
 
 	assert.False(t, nextHandler.called)
@@ -315,11 +350,13 @@ func Test_DomainRedirector_StripsPortFromHost(t *testing.T) {
 		routes: map[string]*Route{
 			"www.example.com": {
 				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
 				RedirectToPrimary: true,
 			},
 		},
 	}
 	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -334,7 +371,7 @@ func Test_DomainRedirector_StripsPortFromHost(t *testing.T) {
 		header: make(http.Header),
 	}
 
-	redirector := NewDomainRedirector(provider, nextHandler)
+	redirector := NewDomainRedirector(provider, nextHandler, unroutedHandler)
 	redirector.ServeHTTP(writer, request)
 
 	assert.False(t, nextHandler.called)

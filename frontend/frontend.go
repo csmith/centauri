@@ -59,7 +59,9 @@ func (fc *Context) createProxy() http.Handler {
 				MaxIdleConnsPerHost: 100,
 				IdleConnTimeout:     90 * time.Second,
 			},
-		})
+		},
+		http.HandlerFunc(handleUnrouted),
+	)
 }
 
 // createRedirector creates a http.Handler that redirects all requests to HTTPS.
@@ -143,6 +145,11 @@ const badGatewayError = `<!doctype html>
 func handleError(writer http.ResponseWriter, request *http.Request, err error) {
 	writer.WriteHeader(http.StatusBadGateway)
 	_, _ = writer.Write([]byte(badGatewayError))
+}
+
+// handleUnrouted serves the default bad gateway response for requests that don't match any route.
+func handleUnrouted(writer http.ResponseWriter, request *http.Request) {
+	handleError(writer, request, nil)
 }
 
 type bufferPool struct {
