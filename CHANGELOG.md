@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.9.2 - 2026-10-30 
 
 ### Changes
 
@@ -14,9 +14,6 @@
   data can't be loaded, instead of falling back to self-signed certificates.
 - Requests for hosts with no matching route are now rejected before reaching
   the reverse proxy, and are logged at debug level instead of as warnings.
-
-### Added
-
 - Config parse errors now include the line number of the problem.
 
 ### Fixed
@@ -32,8 +29,6 @@
 - Updated gRPC (an indirect dependency) to fix HTTP/2 vulnerabilities.
 
 ## 2.9.0 - 2026-09-6
-
-### Changes
 
 - Recursive checks for TXT propagation are now disabled when using lego for
   DNS-01 challenges. These checks became enabled by default in lego v5
