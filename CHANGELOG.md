@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.9.3 - 2026-11-06
+
+- Dependency updates
+
 ## 2.9.2 - 2026-10-30 
 
 ### Changes
