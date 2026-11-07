@@ -7,9 +7,9 @@
 - Centauri now refuses to connect to anything other than the upstreams
   (including `on_error` upstreams) in its config. Any attempt to do so is
   logged as an error and counted in the new
-  `centauri_upstream_dial_blocked_total` metric. As a result, `on_error`
-  upstreams can no longer redirect Centauri to hosts that aren't configured
-  as upstreams.
+  `centauri_upstream_dial_blocked_total` metric.
+- Redirects from `on_error` upstreams are now only followed if they stay on
+  the same upstream. Previously Centauri would follow redirects to any host.
 
 ### Fixed
 

@@ -291,3 +291,71 @@ func Test_Rewriter_RewriteError_FallsBackWhenErrorUpstreamUnreachable(t *testing
 
 	assert.True(t, fallbackCalled)
 }
+
+func Test_Rewriter_RewriteResponse_FollowsRedirectsOnSameUpstream(t *testing.T) {
+	errorUpstream := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/final" {
+					_, _ = w.Write([]byte("final page"))
+					return
+				}
+				http.Redirect(w, r, "/final", http.StatusFound)
+			},
+		),
+	)
+	defer errorUpstream.Close()
+
+	rewriter := newTestRewriter(
+		&Route{
+			Upstreams:     []Upstream{{Host: "upstream:8080"}},
+			ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
+		},
+	)
+	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	defer response.Body.Close()
+
+	require.NoError(t, rewriter.RewriteResponse(response))
+
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "final page", string(body))
+}
+
+func Test_Rewriter_RewriteResponse_DoesNotFollowRedirectsToOtherHosts(t *testing.T) {
+	otherHit := false
+	other := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				otherHit = true
+				_, _ = w.Write([]byte("other server"))
+			},
+		),
+	)
+	defer other.Close()
+
+	errorUpstream := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, other.URL+"/final", http.StatusFound)
+			},
+		),
+	)
+	defer errorUpstream.Close()
+
+	rewriter := newTestRewriter(
+		&Route{
+			Upstreams:     []Upstream{{Host: "upstream:8080"}},
+			ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
+		},
+	)
+	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	defer response.Body.Close()
+
+	require.NoError(t, rewriter.RewriteResponse(response))
+
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "original body", string(body))
+	assert.False(t, otherHit)
+}

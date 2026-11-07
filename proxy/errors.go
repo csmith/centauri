@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,21 +13,37 @@ import (
 // before giving up and falling back to the default error handling.
 const errorFetchTimeout = 5 * time.Second
 
+// maxErrorRedirects matches the limit http.Client applies by default.
+const maxErrorRedirects = 10
+
 // forwardedHeaders are the headers set by our decorators that are copied to error upstreams, so
 // that they see the same information about the original request as regular upstreams do.
 var forwardedHeaders = []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
 
 // newErrorClient creates the client used to fetch responses from error upstreams. It is separate
 // from the transport used for proxied requests: error fetches are rare and want a hard timeout
-// that regular proxying must not have.
+// that regular proxying must not have. Redirects are only followed if they stay on the same
+// upstream.
 func newErrorClient(dialContext DialContextFunc) *http.Client {
 	return &http.Client{
-		Timeout: errorFetchTimeout,
+		Timeout:       errorFetchTimeout,
+		CheckRedirect: checkErrorRedirect,
 		Transport: &http.Transport{
 			DialContext:        dialContext,
 			DisableCompression: true,
 		},
 	}
+}
+
+func checkErrorRedirect(request *http.Request, via []*http.Request) error {
+	if len(via) >= maxErrorRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxErrorRedirects)
+	}
+	original := via[0].URL
+	if request.URL.Scheme != original.Scheme || normaliseAddress(request.URL.Host) != normaliseAddress(original.Host) {
+		return fmt.Errorf("refusing to follow redirect from %s to another host: %s", original.Host, request.URL.Redacted())
+	}
+	return nil
 }
 
 // replaceWithUpstreamErrorPage replaces the given error response with one fetched from the upstream

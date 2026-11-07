@@ -65,10 +65,10 @@ mapped. If the mapped upstream cannot be contacted, Centauri falls back to its
 normal error handling. Responses from the mapped upstream have the route's
 [`header`](#header-add) rules applied to them like any other response.
 
-If the mapped upstream returns a redirect, Centauri follows it itself and
-serves the final response; the redirect is not passed on to the client.
-Centauri only ever connects to the upstreams in its config, so a redirect to
-any other host isn't followed and the normal error handling is used instead.
+If the mapped upstream returns a redirect to another path on the same
+upstream, Centauri follows it itself and serves the final response; the
+redirect is not passed on to the client. Redirects to any other host aren't
+followed, and the normal error handling is used instead.
 
 ### `provider`
 
