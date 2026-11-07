@@ -74,6 +74,55 @@ route
 	assert.ErrorContains(t, err, "no domains specified for route")
 }
 
+func Test_Parse_IgnoresExtraWhitespaceBetweenDomains(t *testing.T) {
+	routes, _, err := Parse(strings.NewReader("route example.com  www.example.com \t example.net\n\tupstream app\n"))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "www.example.com", "example.net"}, routes[0].Domains)
+}
+
+func Test_Parse_RemovesTrailingDotsFromDomains(t *testing.T) {
+	routes, _, err := Parse(strings.NewReader("route Example.com. www.example.com\n\tupstream app\n"))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
+}
+
+func Test_Parse_ErrorsOnInvalidRouteDomains(t *testing.T) {
+	tests := []string{
+		"*.example.com",
+		"example..com",
+		"example.com..",
+		".",
+		"example-.com",
+		"example.com:443",
+		"example.com/path",
+		"127.0.0.1",
+		"[::1]",
+		"bücher.example",
+	}
+	for _, domain := range tests {
+		t.Run(
+			domain,
+			func(t *testing.T) {
+				_, _, err := Parse(
+					strings.NewReader("route example.net\n\tupstream app\nroute example.com " + domain + "\n\tupstream app\n"),
+				)
+				assert.ErrorContains(t, err, "line 3: invalid domain name")
+			},
+		)
+	}
+}
+
+func Test_Parse_RouteDomainsAreAcceptedByManager(t *testing.T) {
+	routes, fallback, err := Parse(
+		strings.NewReader("route Example.com. www.example.com  _srv.example.com\n\tupstream app\n\tfallback\n"),
+	)
+	require.NoError(t, err)
+
+	assert.NoError(t, proxy.NewManager(nil).SetRoutes(t.Context(), routes, fallback))
+}
+
 func Test_Parse_ErrorsOnIntermediateRouteWithoutUpstreams(t *testing.T) {
 	_, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com

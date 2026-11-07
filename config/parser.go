@@ -30,8 +30,9 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 		var lineErr error
 		switch strings.ToLower(directive) {
 		case "route":
-			if args == "" {
-				lineErr = errors.New("no domains specified for route")
+			domains, err := parseRouteDomains(args)
+			if err != nil {
+				lineErr = err
 				break
 			}
 			if route != nil {
@@ -41,7 +42,7 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				routes = append(routes, route)
 			}
 			route = &proxy.Route{
-				Domains:   strings.Split(strings.ToLower(args), " "),
+				Domains:   domains,
 				Upstreams: []proxy.Upstream{},
 			}
 			routeLine = lineNumber
@@ -137,6 +138,20 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 	}
 
 	return
+}
+
+func parseRouteDomains(args string) ([]string, error) {
+	domains := strings.Fields(strings.ToLower(args))
+	if len(domains) == 0 {
+		return nil, errors.New("no domains specified for route")
+	}
+	for i, domain := range domains {
+		if !proxy.IsDomainName(domain) {
+			return nil, fmt.Errorf("invalid domain name in route: %q", domain)
+		}
+		domains[i] = strings.TrimSuffix(domain, ".")
+	}
+	return domains, nil
 }
 
 func parseOnError(args string, route *proxy.Route) error {

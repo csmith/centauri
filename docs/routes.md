@@ -24,6 +24,11 @@ Defines a route with a list of domain names that will be accepted from clients.
 Domains are matched against the request's `Host` header ignoring case, any port
 and any trailing dot, so `Example.COM.:443` matches `example.com`.
 
+Domains are separated by spaces, and must be plain hostnames: IP addresses,
+ports and wildcards (e.g. `*.example.com`) aren't allowed, and invalid domains
+are rejected when the config is loaded. Wildcard certificates are configured
+separately; see [wildcard domains](wildcards.md).
+
 Routes must have at least one domain name (even if they're the [fallback](#fallback) route).
 
 The first domain will be used as the subject for the certificate, while others will

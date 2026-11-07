@@ -182,7 +182,7 @@ func (h *HttpRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Req
 	host := normaliseHost(request.Host)
 
 	// Make sure the host isn't garbage
-	if !isDomainName(host) {
+	if !IsDomainName(host) {
 		slog.Debug("Invalid host header from HTTP client, not redirecting", "host", request.Host)
 		writer.WriteHeader(http.StatusBadRequest)
 		return

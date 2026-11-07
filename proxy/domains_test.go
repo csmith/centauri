@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_isDomainName(t *testing.T) {
+func Test_IsDomainName(t *testing.T) {
 	tests := []struct {
 		domain string
 		want   bool
@@ -32,7 +32,7 @@ func Test_isDomainName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.domain, func(t *testing.T) {
-			assert.Equalf(t, tt.want, isDomainName(tt.domain), "isDomainName(%v)", tt.domain)
+			assert.Equalf(t, tt.want, IsDomainName(tt.domain), "IsDomainName(%v)", tt.domain)
 		})
 	}
 }

@@ -168,7 +168,7 @@ func (r *routeMap) Update(routes []*Route, fallback *Route) error {
 	for i := range routes {
 		route := routes[i]
 		for j := range route.Domains {
-			if !isDomainName(route.Domains[j]) {
+			if !IsDomainName(route.Domains[j]) {
 				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
 			}
 

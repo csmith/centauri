@@ -14,6 +14,10 @@
   the config is loaded. Addresses with a scheme, path, username or invalid
   port (e.g. `http://app` or `app:99999`) are rejected with an error giving
   the line number, instead of failing when a request is proxied.
+- Route domains are now validated when the config is parsed, so `-validate`
+  rejects invalid domains (e.g. `*.example.com`) with an error giving the line
+  number, instead of them only failing when the routes are applied. Extra
+  spaces between domains are now ignored, and trailing dots are removed.
 - Each request is now routed once, as soon as it arrives. The route and
   upstream chosen then are used for the whole request, including response
   header rules and `on_error` mappings, even if the config is reloaded while
