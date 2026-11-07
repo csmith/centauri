@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,4 +151,73 @@ func Test_Decision_allowsDial_refusesIfNotProxying(t *testing.T) {
 		assert.False(t, decision.allowsDial("app:8080"))
 	}
 	assert.False(t, (*Decision)(nil).allowsDial("app:8080"))
+}
+
+func Test_upstreamTransport_refusesUnsanitisedRequests(t *testing.T) {
+	var hit atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hit.Store(true) }))
+	defer server.Close()
+
+	var blocked []BlockReason
+	transport := newUpstreamTransport(func(reason BlockReason) { blocked = append(blocked, reason) })
+
+	route := &Route{Upstreams: []Upstream{{Host: server.Listener.Addr().String()}}}
+	request, err := http.NewRequestWithContext(routedContext(t.Context(), route), http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+
+	response, err := transport.RoundTrip(request)
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	require.ErrorIs(t, err, ErrUnsanitised)
+	assert.Nil(t, response)
+	assert.False(t, hit.Load())
+	assert.Equal(t, []BlockReason{BlockedUnsanitised}, blocked)
+}
+
+func Test_upstreamTransport_sendsSanitisedRequestsToUpstream(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer server.Close()
+
+	transport := newUpstreamTransport(nil)
+
+	route := &Route{Upstreams: []Upstream{{Host: server.Listener.Addr().String()}}}
+	request, err := http.NewRequestWithContext(
+		withSanitised(routedContext(t.Context(), route)),
+		http.MethodGet,
+		server.URL,
+		nil,
+	)
+	require.NoError(t, err)
+
+	response, err := transport.RoundTrip(request)
+	require.NoError(t, err)
+	_ = response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+}
+
+func Test_upstreamTransport_reportsBlockedDials(t *testing.T) {
+	var blocked []BlockReason
+	transport := newUpstreamTransport(func(reason BlockReason) { blocked = append(blocked, reason) })
+
+	route := &Route{Upstreams: []Upstream{{Host: "upstream:8080"}}}
+	request, err := http.NewRequestWithContext(
+		withSanitised(routedContext(t.Context(), route)),
+		http.MethodGet,
+		"http://other:8080/",
+		nil,
+	)
+	require.NoError(t, err)
+
+	response, err := transport.RoundTrip(request)
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	require.ErrorIs(t, err, ErrDialNotAllowed)
+	assert.Equal(t, []BlockReason{BlockedDial}, blocked)
+}
+
+func Test_Rewriter_errorClientUsesUpstreamTransport(t *testing.T) {
+	rewriter := NewRewriter(nil, nil)
+	assert.Same(t, rewriter.Transport(), rewriter.errorClient.Transport)
 }

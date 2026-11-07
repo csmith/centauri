@@ -32,31 +32,41 @@ func ParseCIDRList(downstreams string) ([]net.IPNet, error) {
 // Rewriter facilitates rewriting HTTP requests and responses according to the Decision a Router
 // attached to the request.
 type Rewriter struct {
+	forwarding  xForwardedForDecorator
 	decorators  []Decorator
+	transport   http.RoundTripper
 	errorClient *http.Client
 }
 
-// NewRewriter creates a new Rewriter. Connections to error upstreams are made using dialContext.
-func NewRewriter(trustedDownstreams []net.IPNet, dialContext DialContextFunc) *Rewriter {
+// NewRewriter creates a new Rewriter. X-Forwarded-* headers are accepted from clients in
+// trustedDownstreams. If onBlock is non-nil it is called whenever a request to an upstream is
+// refused.
+func NewRewriter(trustedDownstreams []net.IPNet, onBlock func(BlockReason)) *Rewriter {
+	transport := newUpstreamTransport(onBlock)
 	return &Rewriter{
-		decorators: []Decorator{
-			NewXForwardedForDecorator(trustedDownstreams),
-			NewBannedHeaderDecorator(),
-			NewUserAgentDecorator(),
-		},
-		errorClient: newErrorClient(dialContext),
+		forwarding:  xForwardedForDecorator{trustedDownstreams: trustedDownstreams},
+		decorators:  []Decorator{NewUserAgentDecorator()},
+		transport:   transport,
+		errorClient: newErrorClient(transport),
 	}
 }
 
-// AddDecorator adds a new Decorator to the chain that is applied to each request.
+// Transport returns the http.RoundTripper that requests rewritten by RewriteRequest must be sent
+// with. It refuses requests that haven't been rewritten.
+func (r *Rewriter) Transport() http.RoundTripper {
+	return r.transport
+}
+
+// AddDecorator adds a new Decorator to the chain that is applied to each request. Decorators run
+// after client-supplied forwarding and identity headers have been removed, so may set them.
 func (r *Rewriter) AddDecorator(d Decorator) {
 	r.decorators = append(r.decorators, d)
 }
 
 // RewriteRequest points the given request at the upstream chosen by its Decision. If the request
 // has no Decision, or it isn't to be proxied, the request is left without a destination so it
-// can't be proxied anywhere. It satisfies the signature of the Rewrite field of
-// httputil.ReverseProxy.
+// can't be proxied anywhere. Client-supplied forwarding and identity headers are removed before
+// any decorators run. It satisfies the signature of the Rewrite field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 	decision := DecisionFromContext(p.In.Context())
 	if decision.Outcome() != OutcomeProxy {
@@ -67,9 +77,17 @@ func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 		return
 	}
 
+	// SECURITY INVARIANT: client-supplied headers that upstreams may trust are removed here, before
+	// anything sets Centauri's own values for them. The request is then marked so the upstream
+	// transport will send it.
+	if removed := sanitiseHeaders(p.Out.Header); len(removed) > 0 {
+		slog.Debug("Removed client-supplied headers", "host", p.In.Host, "headers", removed)
+	}
+	r.forwarding.Decorate(p.In, p.Out)
 	for i := range r.decorators {
 		r.decorators[i].Decorate(p.In, p.Out)
 	}
+	p.Out = p.Out.WithContext(withSanitised(p.Out.Context()))
 
 	p.Out.URL.Scheme = "http"
 	p.Out.URL.Host = decision.Upstream().Host

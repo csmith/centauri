@@ -1,9 +1,13 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
+	"slices"
+	"strings"
 )
 
 // Decorator modifies a HTTP request in some way before it is proxied.
@@ -12,68 +16,135 @@ type Decorator interface {
 	Decorate(in, out *http.Request)
 }
 
-type bannedHeaderDecorator struct {
-	headers []string
+// bannedHeaderPrefixes are lowercase prefixes of client-supplied header names that must never reach
+// an upstream. Centauri sets its own values for some of them after sanitising.
+var bannedHeaderPrefixes = []string{
+	"x-forwarded-",
+	"tailscale-",
 }
 
-// NewBannedHeaderDecorator creates a decorator that removes security related headers supplied by the client.
-func NewBannedHeaderDecorator() Decorator {
-	return &bannedHeaderDecorator{
-		headers: []string{
-			// Variety of headers used for passing on the client IP. We don't want to pass on any rubbish clients
-			// may send in these headers. Note that we explicitly set (i.e. replace) X-Forwarded-For,
-			// X-Forwarded-Proto, and X-Forwarded-Host so they don't need to be included here.
-			"X-Real-IP",
-			"True-Client-IP",
-			"Forwarded",
-			"Tailscale-User-Login",
-			"Tailscale-User-Name",
-			"Tailscale-User-Profile-Pic",
-		},
-	}
+// bannedHeaderNames are lowercase client-supplied header names that must never reach an upstream.
+// They are used to pass on the client's address or the original URL, which upstreams may trust.
+var bannedHeaderNames = []string{
+	"cf-connecting-ip",
+	"cf-connecting-ipv6",
+	"client-ip",
+	"fastly-client-ip",
+	"forwarded",
+	"true-client-ip",
+	"x-client-ip",
+	"x-cluster-client-ip",
+	"x-original-forwarded-for",
+	"x-original-uri",
+	"x-original-url",
+	"x-originating-ip",
+	"x-real-ip",
+	"x-remote-addr",
+	"x-remote-ip",
+	"x-rewrite-url",
 }
 
-func (b *bannedHeaderDecorator) Decorate(_, out *http.Request) {
-	for i := range b.headers {
-		out.Header.Del(b.headers[i])
+// bannedHeader reports whether a client-supplied header with the given name must be removed before
+// the request is sent to an upstream. Any name containing an underscore is banned, as some upstreams
+// treat underscores and hyphens as equivalent.
+func bannedHeader(name string) bool {
+	if strings.Contains(name, "_") {
+		return true
 	}
+	name = strings.ToLower(name)
+	if slices.Contains(bannedHeaderNames, name) {
+		return true
+	}
+	for i := range bannedHeaderPrefixes {
+		if strings.HasPrefix(name, bannedHeaderPrefixes[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// forwardingHeader reports whether name is an X-Forwarded-* header that may be passed on from a
+// trusted downstream.
+func forwardingHeader(name string) bool {
+	return strings.HasPrefix(strings.ToLower(name), "x-forwarded-") && !strings.Contains(name, "_")
+}
+
+// sanitiseHeaders deletes every banned header from h, returning the names it removed.
+func sanitiseHeaders(h http.Header) []string {
+	var removed []string
+	for name := range h {
+		if bannedHeader(name) {
+			delete(h, name)
+			removed = append(removed, name)
+		}
+	}
+	return removed
+}
+
+type sanitisedKey struct{}
+
+// withSanitised marks a context as belonging to a request whose headers have been sanitised.
+func withSanitised(ctx context.Context) context.Context {
+	return context.WithValue(ctx, sanitisedKey{}, true)
+}
+
+// isSanitised reports whether the context was marked by withSanitised.
+func isSanitised(ctx context.Context) bool {
+	v, _ := ctx.Value(sanitisedKey{}).(bool)
+	return v
 }
 
 type xForwardedForDecorator struct {
 	trustedDownstreams []net.IPNet
 }
 
-// NewXForwardedForDecorator creates a decorator that sets the X-Forwarded-For and X-Forward-Proto headers
-// based on the downstream request.
-func NewXForwardedForDecorator(trustedDownstreams []net.IPNet) Decorator {
-	return &xForwardedForDecorator{trustedDownstreams: trustedDownstreams}
+// Decorate sets the X-Forwarded-* headers on out. It must run after the headers have been
+// sanitised.
+func (x *xForwardedForDecorator) Decorate(in, out *http.Request) {
+	maps.Copy(out.Header, x.headers(in, out))
 }
 
-func (x *xForwardedForDecorator) Decorate(in, out *http.Request) {
+// headers returns the X-Forwarded-* headers to send to an upstream. X-Forwarded-For, -Host and
+// -Proto are derived from the connection, extending or keeping the values in from a trusted
+// downstream. Any other X-Forwarded-* headers are only passed on from trusted downstreams.
+func (x *xForwardedForDecorator) headers(in, out *http.Request) http.Header {
 	ip, _, _ := net.SplitHostPort(out.RemoteAddr)
 	trusted := x.trusted(ip)
+	headers := make(http.Header)
 
-	if h := in.Header.Get("X-Forwarded-For"); !trusted || h == "" {
-		out.Header.Set("X-Forwarded-For", ip)
-	} else {
-		out.Header.Set("X-Forwarded-For", fmt.Sprintf("%s, %s", h, ip))
+	if trusted {
+		connection := connectionHeaders(in.Header)
+		for name, values := range in.Header {
+			if forwardingHeader(name) && !connection[strings.ToLower(name)] {
+				headers[http.CanonicalHeaderKey(name)] = slices.Clone(values)
+			}
+		}
 	}
 
-	if h := in.Header.Get("X-Forwarded-Host"); !trusted || h == "" {
-		out.Header.Set("X-Forwarded-Host", out.Host)
+	// Values from a trusted downstream are read from the copies above, so get the same filtering.
+	if h := headers.Get("X-Forwarded-For"); !trusted || h == "" {
+		headers.Set("X-Forwarded-For", ip)
 	} else {
-		out.Header.Set("X-Forwarded-Host", h)
+		headers.Set("X-Forwarded-For", fmt.Sprintf("%s, %s", h, ip))
 	}
 
-	if h := in.Header.Get("X-Forwarded-Proto"); !trusted || h == "" {
+	if h := headers.Get("X-Forwarded-Host"); !trusted || h == "" {
+		headers.Set("X-Forwarded-Host", out.Host)
+	} else {
+		headers.Set("X-Forwarded-Host", h)
+	}
+
+	if h := headers.Get("X-Forwarded-Proto"); !trusted || h == "" {
 		if out.TLS == nil {
-			out.Header.Set("X-Forwarded-Proto", "http")
+			headers.Set("X-Forwarded-Proto", "http")
 		} else {
-			out.Header.Set("X-Forwarded-Proto", "https")
+			headers.Set("X-Forwarded-Proto", "https")
 		}
 	} else {
-		out.Header.Set("X-Forwarded-Proto", h)
+		headers.Set("X-Forwarded-Proto", h)
 	}
+
+	return headers
 }
 
 func (x *xForwardedForDecorator) trusted(ip string) bool {
@@ -87,6 +158,20 @@ func (x *xForwardedForDecorator) trusted(ip string) bool {
 		}
 	}
 	return false
+}
+
+// connectionHeaders returns the lowercase names listed in h's Connection header. They apply only to
+// the connection the request arrived on, so must not be passed on.
+func connectionHeaders(h http.Header) map[string]bool {
+	names := make(map[string]bool)
+	for _, value := range h.Values("Connection") {
+		for name := range strings.SplitSeq(value, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				names[strings.ToLower(name)] = true
+			}
+		}
+	}
+	return names
 }
 
 type userAgentDecorator struct{}

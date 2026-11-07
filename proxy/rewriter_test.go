@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/tls"
 	"net/http"
+	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"testing"
@@ -39,7 +40,7 @@ func Test_Rewriter_RewriteRequest_SetsHostToUpstream(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -57,7 +58,7 @@ func Test_Rewriter_RewriteRequest_AddsOriginalHostHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
@@ -75,7 +76,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedForHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttps(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
@@ -93,7 +94,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttps(t *testing.T) 
 
 func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("http://proxy/foo/bar")
 	request := &http.Request{
@@ -110,7 +111,7 @@ func Test_Rewriter_RewriteRequest_SetsForwardedProtoHeaderIfHttp(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
@@ -129,7 +130,7 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedForHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{NewXForwardedForDecorator(nil)}}
+	rewriter := &Rewriter{}
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
@@ -148,25 +149,78 @@ func Test_Rewriter_RewriteRequest_ReplacesForwardedProtoHeader(t *testing.T) {
 
 func Test_Rewriter_RewriteRequest_RemovesBannedHeaders(t *testing.T) {
 	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
-	rewriter := &Rewriter{decorators: []Decorator{&bannedHeaderDecorator{[]string{"x-test1", "x-test2"}}}}
+	rewriter := NewRewriter(nil, nil)
 
 	u, _ := url.Parse("https://proxy/foo/bar")
 	request := &http.Request{
 		URL:        u,
+		Host:       "example.com",
 		TLS:        &tls.ConnectionState{ServerName: "example.com"},
 		Header:     make(http.Header),
 		RemoteAddr: "127.0.0.1:11003",
 	}
 	request = routedTo(request, route)
-	request.Header.Add("x-test1", "value")
-	request.Header.Add("x-test1", "value")
-	request.Header.Add("X-Test2", "value")
-	request.Header.Add("X-Test2-other", "value")
+	request.Header["X_Real_IP"] = []string{"6.6.6.6"}
+	request.Header["Tailscale_User_Login"] = []string{"acidburn"}
+	request.Header.Add("X-Real-IP", "6.6.6.6")
+	request.Header.Add("X-Forwarded-Port", "1337")
+	request.Header.Add("X-Forwarded-For", "6.6.6.6")
+	request.Header.Add("X-Other", "value")
 	rewriter.RewriteRequest(&httputil.ProxyRequest{In: request, Out: request})
 
-	assert.Equal(t, 0, len(request.Header.Values("x-test1")))
-	assert.Equal(t, 0, len(request.Header.Values("X-Test2")))
-	assert.Equal(t, 1, len(request.Header.Values("X-Test2-other")))
+	assert.Equal(
+		t,
+		http.Header{
+			"X-Forwarded-For":   {"127.0.0.1"},
+			"X-Forwarded-Host":  {"example.com"},
+			"X-Forwarded-Proto": {"https"},
+			"X-Other":           {"value"},
+			"User-Agent":        {""},
+		},
+		request.Header,
+	)
+}
+
+// tailscaleTestDecorator sets an identity header in the same way the tailscale frontend does.
+type tailscaleTestDecorator struct{}
+
+func (tailscaleTestDecorator) Decorate(_, out *http.Request) {
+	out.Header.Set("Tailscale-User-Login", "real-user")
+}
+
+func Test_Rewriter_RewriteRequest_DecoratorsCanSetBannedHeaders(t *testing.T) {
+	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
+	rewriter := NewRewriter(nil, nil)
+	rewriter.AddDecorator(tailscaleTestDecorator{})
+
+	in := routedTo(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil), route)
+	in.Header.Set("Tailscale-User-Login", "acidburn")
+	in.Header["Tailscale_User_Login"] = []string{"acidburn"}
+	proxyRequest := &httputil.ProxyRequest{In: in, Out: in.Clone(in.Context())}
+	rewriter.RewriteRequest(proxyRequest)
+
+	assert.Equal(t, []string{"real-user"}, proxyRequest.Out.Header.Values("Tailscale-User-Login"))
+	assert.NotContains(t, proxyRequest.Out.Header, "Tailscale_User_Login")
+}
+
+func Test_Rewriter_RewriteRequest_MarksOnlyOutboundRequestAsSanitised(t *testing.T) {
+	route := &Route{Upstreams: []Upstream{{Host: "hostname:8080"}}}
+	in := routedTo(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil), route)
+	proxyRequest := &httputil.ProxyRequest{In: in, Out: in.Clone(in.Context())}
+
+	NewRewriter(nil, nil).RewriteRequest(proxyRequest)
+
+	assert.True(t, isSanitised(proxyRequest.Out.Context()))
+	assert.False(t, isSanitised(proxyRequest.In.Context()))
+}
+
+func Test_Rewriter_RewriteRequest_DoesNotMarkRequestWithoutDecision(t *testing.T) {
+	in := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil)
+	proxyRequest := &httputil.ProxyRequest{In: in, Out: in.Clone(in.Context())}
+
+	NewRewriter(nil, nil).RewriteRequest(proxyRequest)
+
+	assert.False(t, isSanitised(proxyRequest.Out.Context()))
 }
 
 func Test_Rewriter_RewriteRequest_BlanksUserAgentIfUnset(t *testing.T) {

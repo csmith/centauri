@@ -210,6 +210,8 @@ func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T)
 	req.Header.Set("X-Forwarded-For", "10.0.0.1")
 	req.Header.Set("X-Forwarded-Host", "original.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Port", "8443")
+	req.Header.Set("X_Forwarded_Prefix", "/underscore")
 
 	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
@@ -221,6 +223,8 @@ func Test_Run_TrustedDownstreams_PreservesHeadersFromTrustedSource(t *testing.T)
 	assert.Contains(t, string(b), "X-Forwarded-For: 10.0.0.1, 127.0.0.1\n")
 	assert.Contains(t, string(b), "X-Forwarded-Host: original.example.com\n")
 	assert.Contains(t, string(b), "X-Forwarded-Proto: https\n")
+	assert.Contains(t, string(b), "X-Forwarded-Port: 8443\n")
+	assert.NotContains(t, string(b), "/underscore")
 }
 
 func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T) {
@@ -240,6 +244,7 @@ func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T
 	req.Header.Set("X-Forwarded-For", "10.0.0.1")
 	req.Header.Set("X-Forwarded-Host", "malicious.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Port", "8443")
 
 	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
@@ -254,6 +259,7 @@ func Test_Run_TrustedDownstreams_ReplacesHeadersFromUntrustedSource(t *testing.T
 
 	assert.NotContains(t, string(b), "10.0.0.1")
 	assert.NotContains(t, string(b), "malicious.example.com")
+	assert.NotContains(t, string(b), "8443")
 }
 
 func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
@@ -278,6 +284,12 @@ func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
 	req.Header.Set("Tailscale-User-Login", "acidburn")
 	req.Header.Set("Tailscale-User-Name", "Acid Burn")
 	req.Header.Set("Tailscale-User-Profile-Pic", "http://example.net/...")
+	req.Header.Set("Tailscale-App-Capabilities", "{}")
+	req.Header.Set("X_Real_IP", "1.3.3.7")
+	req.Header.Set("Tailscale_User_Login", "acidburn")
+	req.Header.Set("X-Forwarded-Port", "31337")
+	req.Header.Set("CF-Connecting-IP", "1.3.3.7")
+	req.Header.Set("X-Original-URL", "/admin")
 
 	res, err := proxyDo(c.httpsPort, req)
 	assert.NoError(t, err)
@@ -291,9 +303,11 @@ func Test_Run_IgnoresBadHeadersFromClients(t *testing.T) {
 	assert.NotContains(t, string(b), "tcp")
 	assert.NotContains(t, string(b), "acidburn")
 	assert.NotContains(t, string(b), "Acid Burn")
+	assert.NotContains(t, string(b), "31337")
+	assert.NotContains(t, string(b), "/admin")
 
 	// None of the Tailscale headers should exist
-	assert.NotContains(t, string(b), "Tailscale")
+	assert.NotContains(t, strings.ToLower(string(b)), "tailscale")
 }
 
 func Test_Run_SendsErrorToClientIfUpstreamUnreachable(t *testing.T) {
@@ -380,6 +394,49 @@ func Test_Run_OnError_ServesErrorPageFromUpstream(t *testing.T) {
 	defer res.Body.Close()
 	assert.Contains(t, string(b), "This is the upstream on "+errorUpstream)
 	assert.NotContains(t, string(b), "The server was unable to complete your request")
+}
+
+func Test_Run_OnError_DoesNotPassClientForwardedHeadersForRejectedUpgrade(t *testing.T) {
+	// ReverseProxy rejects an invalid Upgrade before rewriting the request, and passes the client's
+	// own request to the error handler. The error upstream must still only see Centauri's headers.
+	errorUpstream := startStaticServer(t)
+
+	c := startCentauri(
+		t,
+		"CONFIG",
+		writeConfig(t, "on-error.conf", "ERROR_UPSTREAM", errorUpstream),
+		"PROVIDER",
+		"selfsigned",
+	)
+
+	time.Sleep(2 * time.Second)
+
+	conn, err := tls.Dial(
+		"tcp",
+		fmt.Sprintf("127.0.0.1:%d", c.httpsPort),
+		&tls.Config{
+			ServerName:         "example.com",
+			InsecureSkipVerify: true,
+		},
+	)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = fmt.Fprint(
+		conn,
+		"GET /test HTTP/1.1\r\nHost: example.com\r\nConnection: close, Upgrade\r\nUpgrade: \xff\r\n"+
+			"X-Forwarded-For: 6.6.6.6\r\nX-Forwarded-Host: malicious.example.com\r\nX-Real-IP: 6.6.6.6\r\n\r\n",
+	)
+	require.NoError(t, err)
+
+	b, err := io.ReadAll(conn)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(b), "HTTP/1.1 502 "), "unexpected response: %s", b)
+	assert.Contains(t, string(b), "This is the upstream on "+errorUpstream)
+	assert.Contains(t, string(b), "X-Forwarded-For: 127.0.0.1\n")
+	assert.Contains(t, string(b), "X-Forwarded-Host: example.com\n")
+	assert.NotContains(t, string(b), "6.6.6.6")
+	assert.NotContains(t, string(b), "malicious.example.com")
 }
 
 func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {

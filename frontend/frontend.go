@@ -40,7 +40,6 @@ type Context struct {
 	Manager     *proxy.Manager
 	Rewriter    *proxy.Rewriter
 	Recorder    *metrics.Recorder
-	DialContext proxy.DialContextFunc
 	ErrChan     chan<- error
 	IdleTimeout time.Duration
 }
@@ -54,13 +53,7 @@ func (fc *Context) createProxy() http.Handler {
 			ModifyResponse: fc.Recorder.TrackResponse(fc.Rewriter.RewriteResponse),
 			ErrorHandler:   fc.Recorder.TrackBadGateway(fc.Rewriter.RewriteError(handleError)),
 			BufferPool:     newBufferPool(),
-			Transport: &http.Transport{
-				DialContext:         fc.DialContext,
-				ForceAttemptHTTP2:   false,
-				DisableCompression:  true,
-				MaxIdleConnsPerHost: 100,
-				IdleConnTimeout:     90 * time.Second,
-			},
+			Transport:      fc.Rewriter.Transport(),
 		},
 		http.HandlerFunc(handleUnrouted),
 	)

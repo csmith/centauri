@@ -211,11 +211,12 @@ Configures the output format for Centauri's logs.
 
 - **Default**: -
 
-A comma-separated list of CIDR ranges to trust `X-Forwarded-For`, `X-Forwarded-Host`, 
-and `X-Forwarded-Proto` headers from. When a request comes from a trusted downstream,
-existing `X-Forwarded-*` headers will be preserved and the current connection's IP
-will be appended to `X-Forwarded-For`. When a request comes from an untrusted source,
-all `X-Forwarded-*` headers will be replaced with values based on the current connection.
+A comma-separated list of CIDR ranges to trust headers starting with `X-Forwarded-`
+(such as `X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Port`) from. When a
+request comes from a trusted downstream, these headers are passed on to the upstream,
+and the current connection's IP is appended to `X-Forwarded-For`. When a request comes
+from an untrusted source, they are all removed, and `X-Forwarded-For`, `X-Forwarded-Host`
+and `X-Forwarded-Proto` are set based on the current connection.
 
 Only list the addresses of the proxies in front of Centauri, e.g. `10.0.0.5/32`.
 Any client in a trusted range can set these headers to whatever it likes.

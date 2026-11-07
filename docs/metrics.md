@@ -16,10 +16,11 @@ The following Centauri-specific metrics are exported:
 
   Requests that the client cancels (e.g. by disconnecting) before the
   upstream responds are not counted, as no response reaches the client.
-- `centauri_upstream_dial_blocked_total` - counter of connections Centauri
-  refused to open because the address wasn't a configured upstream. This
-  should always be zero; anything else indicates a bug, and each occurrence
-  is also logged as an error.
+- `centauri_upstream_blocked_total` - counter of requests or connections to
+  upstreams that Centauri refused. This should always be zero; anything else
+  indicates a bug, and each occurrence is also logged as an error. Labels:
+    - `reason`: `dial` if the connection wasn't to a configured upstream;
+      `unsanitised` if the request hadn't had client-supplied headers removed.
 
 In addition, the built-in Prometheus collectors for Go and process specific
 metrics are enabled.

@@ -16,7 +16,7 @@ type Recorder struct {
 	registry        *prometheus.Registry
 	helloCounter    *prometheus.CounterVec
 	responseCounter *prometheus.CounterVec
-	blockedDials    prometheus.Counter
+	blockedUpstream *prometheus.CounterVec
 }
 
 // NewRecorder creates a new Recorder. Responses are attributed to the route in the
@@ -35,12 +35,16 @@ func NewRecorder() *Recorder {
 			Help: "The total number of HTTP responses sent to clients",
 		}, []string{"route", "status"}),
 
-		blockedDials: prometheus.NewCounter(
+		blockedUpstream: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "centauri_upstream_dial_blocked_total",
-				Help: "The total number of connections refused because they were not to a configured upstream",
+				Name: "centauri_upstream_blocked_total",
+				Help: "The total number of requests or connections to upstreams that were refused",
 			},
+			[]string{"reason"},
 		),
+	}
+	for _, reason := range []proxy.BlockReason{proxy.BlockedDial, proxy.BlockedUnsanitised} {
+		r.blockedUpstream.WithLabelValues(string(reason))
 	}
 	r.registerMetrics()
 	return r
@@ -57,8 +61,8 @@ func (r *Recorder) registerMetrics() {
 		slog.Error("Failed to register response counter", "error", err)
 	}
 
-	if err := r.registry.Register(r.blockedDials); err != nil {
-		slog.Error("Failed to register blocked dial counter", "error", err)
+	if err := r.registry.Register(r.blockedUpstream); err != nil {
+		slog.Error("Failed to register blocked upstream counter", "error", err)
 	}
 
 	// Prometheus-supplied general process metrics
@@ -110,9 +114,9 @@ func (r *Recorder) TrackResponse(fn func(*http.Response) error) func(*http.Respo
 	}
 }
 
-// TrackBlockedDial records a connection being refused because it was not to a configured upstream.
-func (r *Recorder) TrackBlockedDial() {
-	r.blockedDials.Inc()
+// TrackBlockedUpstream records a request or connection to an upstream being refused.
+func (r *Recorder) TrackBlockedUpstream(reason proxy.BlockReason) {
+	r.blockedUpstream.WithLabelValues(string(reason)).Inc()
 }
 
 // TrackHello wraps the GetCertificate field of tls.Config, recording whether

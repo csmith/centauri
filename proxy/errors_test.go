@@ -14,7 +14,7 @@ import (
 
 // newTestRewriter creates a Rewriter with a working error client.
 func newTestRewriter() *Rewriter {
-	return &Rewriter{errorClient: newErrorClient(nil)}
+	return NewRewriter(nil, nil)
 }
 
 // newRoutedRequest creates a request as it might be sent to an upstream, after being routed using
@@ -77,6 +77,9 @@ func Test_Rewriter_RewriteResponse_ReplacesErrorResponsesFromUpstream(t *testing
 func Test_Rewriter_RewriteResponse_StripsHopByHopHeadersFromReplacement(t *testing.T) {
 	errorUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Keep-Alive", "timeout=5")
+		w.Header().Set("Proxy-Connection", "keep-alive")
+		w.Header().Set("Connection", "X-Hop")
+		w.Header().Set("X-Hop", "value")
 		w.Header().Set("X-Kept", "value")
 		_, _ = w.Write([]byte("replacement"))
 	}))
@@ -93,6 +96,8 @@ func Test_Rewriter_RewriteResponse_StripsHopByHopHeadersFromReplacement(t *testi
 	require.NoError(t, rewriter.RewriteResponse(response))
 
 	assert.Empty(t, response.Header.Get("Keep-Alive"))
+	assert.Empty(t, response.Header.Get("Proxy-Connection"))
+	assert.Empty(t, response.Header.Get("X-Hop"))
 	assert.Equal(t, "value", response.Header.Get("X-Kept"))
 }
 

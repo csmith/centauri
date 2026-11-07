@@ -11,13 +11,15 @@ Centauri will automatically set the following headers:
 - `Tailscale-User-Name` - display name of the Tailscale user making the request, if applicable
 - `Tailscale-User-Profile-Pic` - profile picture of the Tailscale user making the request, if applicable
 
-If the client sends any of these headers, they will be ignored and not
-passed on to the upstream. Centauri will also actively remove any of the
-following, despite not using them itself:
+Centauri removes any client-supplied headers that upstreams might trust
+to identify the client or the original request, before setting its own
+values for the ones above. This includes any `X-Forwarded-*` or `Tailscale-*`
+header, and others such as `X-Real-IP`, `Forwarded` and `CF-Connecting-IP`.
+Headers with an underscore in their name are always removed, as some
+upstreams treat them as equivalent to the same name with hyphens.
 
-- `X-Real-IP`
-- `True-Client-IP`
-- `Forwarded`
+If the request comes from a [trusted downstream](setup.md#trusted_downstreams),
+its `X-Forwarded-*` headers are passed on as described there.
 
 ## Can Centauri select upstreams based on {url,port,cookies,etc}?
 

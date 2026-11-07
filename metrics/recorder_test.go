@@ -149,11 +149,21 @@ centauri_tls_hello_total{known="true"} 2
 	assert.NoError(t, testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_tls_hello_total"))
 }
 
-func Test_Recorder_TracksBlockedDials(t *testing.T) {
+func Test_Recorder_TracksBlockedUpstreams(t *testing.T) {
 	rec := NewRecorder()
 
-	rec.TrackBlockedDial()
-	rec.TrackBlockedDial()
+	rec.TrackBlockedUpstream(proxy.BlockedDial)
+	rec.TrackBlockedUpstream(proxy.BlockedDial)
 
-	assert.InDelta(t, 2.0, testutil.ToFloat64(rec.blockedDials), 0)
+	expected := `
+# HELP centauri_upstream_blocked_total The total number of requests or connections to upstreams that were refused
+# TYPE centauri_upstream_blocked_total counter
+centauri_upstream_blocked_total{reason="dial"} 2
+centauri_upstream_blocked_total{reason="unsanitised"} 0
+`
+
+	assert.NoError(
+		t,
+		testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_upstream_blocked_total"),
+	)
 }

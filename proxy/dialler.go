@@ -6,15 +6,72 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
+	"time"
 )
+
+// BlockReason describes why a request to an upstream was refused.
+type BlockReason string
+
+const (
+	// BlockedDial means a connection was to an address that isn't an upstream of the request's route.
+	BlockedDial BlockReason = "dial"
+	// BlockedUnsanitised means a request's headers hadn't been sanitised.
+	BlockedUnsanitised BlockReason = "unsanitised"
+)
+
+// ErrUnsanitised is returned by the upstream transport for requests whose headers haven't been
+// sanitised.
+var ErrUnsanitised = errors.New("request to upstream without sanitised headers blocked")
+
+// SECURITY INVARIANT: every request to an upstream, including on_error fetches and the redirects
+// they follow, is made with an upstreamTransport. It refuses requests that haven't been through
+// header sanitising, and connects using an AllowlistDialer.
+type upstreamTransport struct {
+	next    http.RoundTripper
+	onBlock func(BlockReason)
+}
+
+// newUpstreamTransport creates the transport used for all requests to upstreams. If onBlock is
+// non-nil it is called whenever a request or connection is refused.
+func newUpstreamTransport(onBlock func(BlockReason)) *upstreamTransport {
+	dialer := &AllowlistDialer{
+		OnBlock: func() {
+			if onBlock != nil {
+				onBlock(BlockedDial)
+			}
+		},
+	}
+	return &upstreamTransport{
+		onBlock: onBlock,
+		next: &http.Transport{
+			DialContext:         dialer.DialContext,
+			ForceAttemptHTTP2:   false,
+			DisableCompression:  true,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+}
+
+func (t *upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !isSanitised(req.Context()) {
+		slog.Error("Blocked request to upstream without sanitised headers", "host", req.Host, "upstream", req.URL.Host)
+		if t.onBlock != nil {
+			t.onBlock(BlockedUnsanitised)
+		}
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		return nil, ErrUnsanitised
+	}
+	return t.next.RoundTrip(req)
+}
 
 // ErrDialNotAllowed is returned by AllowlistDialer when asked to connect to an address its policy
 // does not allow.
 var ErrDialNotAllowed = errors.New("dial to non-upstream address blocked")
-
-// DialContextFunc is the signature of http.Transport.DialContext.
-type DialContextFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // AllowlistDialer only opens connections to the upstream chosen for a request, or to the
 // on_error upstreams of its route, as given by the Decision the Router attaches to the request's

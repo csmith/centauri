@@ -6,8 +6,17 @@
 
 - Centauri now refuses to connect to anything other than the upstreams
   (including `on_error` upstreams) in its config. Any attempt to do so is
-  logged as an error and counted in the new
-  `centauri_upstream_dial_blocked_total` metric.
+  logged as an error and counted in the new `centauri_upstream_blocked_total`
+  metric.
+- Centauri now removes more client-supplied headers before proxying: any
+  `X-Forwarded-*` or `Tailscale-*` header, any header with an underscore in
+  its name, and others used to identify the client or original URL, such as
+  `X-Client-IP`, `CF-Connecting-IP` and `X-Original-URL`. Requests that
+  haven't had their headers sanitised are refused, logged as an error and
+  counted in `centauri_upstream_blocked_total`.
+- `X-Forwarded-*` headers other than `-For`, `-Host` and `-Proto` (e.g.
+  `X-Forwarded-Port`) are now only passed on from trusted downstreams.
+  Previously they were passed on from any client.
 - Redirects from `on_error` upstreams are now only followed if they stay on
   the same upstream. Previously Centauri would follow redirects to any host.
 - Upstream addresses (including `on_error` upstreams) are now validated when
@@ -31,6 +40,10 @@
 
 ### Fixed
 
+- Fixed `on_error` upstreams receiving the client's own `X-Forwarded-*`
+  headers when the client sent an invalid `Upgrade` header.
+- Fixed `on_error` responses passing on `Proxy-Connection` and headers named
+  in their `Connection` header to clients.
 - Fixed requests cancelled by the client while waiting for the upstream
   being counted as `502` responses in `centauri_response_total` and logged
   as upstream failures. They are now ignored by the metric, logged at debug

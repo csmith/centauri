@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 )
 
@@ -16,22 +17,13 @@ const errorFetchTimeout = 5 * time.Second
 // maxErrorRedirects matches the limit http.Client applies by default.
 const maxErrorRedirects = 10
 
-// forwardedHeaders are the headers set by our decorators that are copied to error upstreams, so
-// that they see the same information about the original request as regular upstreams do.
-var forwardedHeaders = []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
-
-// newErrorClient creates the client used to fetch responses from error upstreams. It is separate
-// from the transport used for proxied requests: error fetches are rare and want a hard timeout
-// that regular proxying must not have. Redirects are only followed if they stay on the same
-// upstream.
-func newErrorClient(dialContext DialContextFunc) *http.Client {
+// newErrorClient creates the client used to fetch responses from error upstreams. It has a hard
+// timeout, and only follows redirects that stay on the same upstream.
+func newErrorClient(transport http.RoundTripper) *http.Client {
 	return &http.Client{
 		Timeout:       errorFetchTimeout,
 		CheckRedirect: checkErrorRedirect,
-		Transport: &http.Transport{
-			DialContext:        dialContext,
-			DisableCompression: true,
-		},
+		Transport:     transport,
 	}
 }
 
@@ -118,17 +110,13 @@ func (r *Rewriter) fetchErrorPage(status int, original *http.Request) *http.Resp
 		target.RawQuery = mapping.RawQuery
 	}
 
-	request, err := http.NewRequestWithContext(original.Context(), http.MethodGet, target.String(), nil)
+	// The request only carries the X-Forwarded-* headers set here, so is marked as sanitised.
+	request, err := http.NewRequestWithContext(withSanitised(original.Context()), http.MethodGet, target.String(), nil)
 	if err != nil {
 		slog.Warn("Failed to create error page request", "upstream", mapping.Upstream, "error", err)
 		return nil
 	}
-
-	for i := range forwardedHeaders {
-		if value := original.Header.Get(forwardedHeaders[i]); value != "" {
-			request.Header.Set(forwardedHeaders[i], value)
-		}
-	}
+	request.Header = r.errorPageForwardedHeaders(original)
 
 	response, err := r.errorClient.Do(request)
 	if err != nil {
@@ -136,6 +124,25 @@ func (r *Rewriter) fetchErrorPage(status int, original *http.Request) *http.Resp
 		return nil
 	}
 	return response
+}
+
+// errorPageForwardedHeaders returns the X-Forwarded-* headers to send to an error upstream, so that
+// it sees the same information about the original request as the regular upstream did. If original
+// was sent to the upstream, its headers were set by RewriteRequest and are reused. Otherwise it is
+// the client's request (for example, if ReverseProxy rejected it before rewriting), and they are
+// derived from it in the same way.
+func (r *Rewriter) errorPageForwardedHeaders(original *http.Request) http.Header {
+	if !isSanitised(original.Context()) {
+		return r.forwarding.headers(original, original)
+	}
+
+	headers := make(http.Header)
+	for name, values := range original.Header {
+		if forwardingHeader(name) {
+			headers[name] = slices.Clone(values)
+		}
+	}
+	return headers
 }
 
 // copyHeaders copies all headers from src to dst, appending to any existing values.
@@ -151,8 +158,12 @@ func copyHeaders(dst, src http.Header) {
 // error upstream, and must not be passed on to the client. This mirrors what
 // httputil.ReverseProxy does for regular upstream responses.
 func removeHopByHopHeaders(header http.Header) {
+	for name := range connectionHeaders(header) {
+		header.Del(name)
+	}
 	for _, name := range []string{
 		"Connection",
+		"Proxy-Connection",
 		"Keep-Alive",
 		"Proxy-Authenticate",
 		"Proxy-Authorization",

@@ -3,68 +3,109 @@ package proxy
 import (
 	"crypto/tls"
 	"github.com/stretchr/testify/assert"
-	"maps"
 	"net"
 	"net/http"
 	"net/url"
 	"testing"
 )
 
-func Test_BannedHeaderDecorator_removesHeaders(t *testing.T) {
-	decorator := bannedHeaderDecorator{
-		headers: []string{
-			"x-test-1",
-			"x-test-2",
-		},
-	}
-
+func Test_bannedHeader(t *testing.T) {
 	tests := []struct {
-		name     string
-		given    http.Header
-		expected http.Header
+		name   string
+		banned bool
 	}{
-		{
-			name:     "No headers",
-			given:    map[string][]string{},
-			expected: map[string][]string{},
-		},
-		{
-			name: "No matching headers",
-			given: map[string][]string{
-				"Some-Other-Header": {"Foo", "Bar"},
-			},
-			expected: map[string][]string{
-				"Some-Other-Header": {"Foo", "Bar"},
-			},
-		},
-		{
-			name: "Multiple values",
-			given: map[string][]string{
-				"X-Test-1": {"Foo", "Bar"},
-			},
-			expected: map[string][]string{},
-		},
-		{
-			name: "Multiple headers",
-			given: map[string][]string{
-				"X-Test-1": {"Foo", "Bar"},
-				"X-Test-2": {"Baz"},
-				"X-Test-3": {"Quux"},
-			},
-			expected: map[string][]string{
-				"X-Test-3": {"Quux"},
-			},
-		},
+		{"X-Real-IP", true},
+		{"x-real-ip", true},
+		{"X_Real_IP", true},
+		{"Forwarded", true},
+		{"True-Client-IP", true},
+		{"CF-Connecting-IP", true},
+		{"X-Original-URL", true},
+		{"X-Forwarded-For", true},
+		{"X-Forwarded-Port", true},
+		{"x-forwarded-prefix", true},
+		{"Tailscale-User-Login", true},
+		{"Tailscale-App-Capabilities", true},
+		{"Tailscale_User_Login", true},
+		{"Some_Header", true},
+		{"_", true},
+		{"X-Real-IP-Info", false},
+		{"Forwarded-Thing", false},
+		{"X-Forwarded", false},
+		{"Tailscale", false},
+		{"Accept", false},
+		{"Cookie", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reqIn := &http.Request{Header: tt.given}
-			reqOut := &http.Request{Header: make(http.Header)}
-			maps.Copy(reqOut.Header, tt.given)
-			decorator.Decorate(reqIn, reqOut)
-			assert.Equal(t, tt.expected, reqOut.Header)
+			assert.Equal(t, tt.banned, bannedHeader(tt.name))
 		})
+	}
+}
+
+func Test_sanitiseHeaders(t *testing.T) {
+	headers := http.Header{
+		"X-Real-Ip":        {"1.2.3.4"},
+		"X_real_ip":        {"1.2.3.4"},
+		"X-Forwarded-Port": {"443"},
+		"Accept":           {"text/html"},
+		"Some-Header":      {"a", "b"},
+	}
+
+	removed := sanitiseHeaders(headers)
+
+	assert.ElementsMatch(t, []string{"X-Real-Ip", "X_real_ip", "X-Forwarded-Port"}, removed)
+	assert.Equal(t, http.Header{"Accept": {"text/html"}, "Some-Header": {"a", "b"}}, headers)
+}
+
+func Fuzz_sanitiseHeaders(f *testing.F) {
+	f.Add("X-Real-IP", "Accept")
+	f.Add("Tailscale_User_Login", "X-Forwarded-Port")
+	f.Fuzz(
+		func(t *testing.T, a, b string) {
+			headers := http.Header{a: {"value"}, b: {"value"}, http.CanonicalHeaderKey(a): {"value"}}
+			sanitiseHeaders(headers)
+			for name := range headers {
+				assert.False(t, bannedHeader(name), name)
+			}
+		},
+	)
+}
+
+func Test_XForwardedForDecorator_passesOtherForwardedHeadersFromTrustedDownstreams(t *testing.T) {
+	_, trustedNet, _ := net.ParseCIDR("192.168.1.0/24")
+	decorator := &xForwardedForDecorator{trustedDownstreams: []net.IPNet{*trustedNet}}
+
+	for _, remoteAddr := range []string{"192.168.1.10:5678", "10.0.0.1:5678"} {
+		reqIn := &http.Request{
+			Host:       "example.com",
+			RemoteAddr: remoteAddr,
+			Header: http.Header{
+				"X-Forwarded-Port":   {"8443"},
+				"X-Forwarded-Prefix": {"/a", "/b"},
+				"X_forwarded_server": {"underscore"},
+				"X-Forwarded-Server": {"hop"},
+				"X-Forwarded-Host":   {"previous-hop.example.com"},
+				"Connection":         {"keep-alive, X-Forwarded-Server, X-Forwarded-Host"},
+				"X-Real-IP":          {"6.6.6.6"},
+			},
+		}
+		reqOut := &http.Request{Host: "example.com", RemoteAddr: remoteAddr, Header: make(http.Header)}
+
+		decorator.Decorate(reqIn, reqOut)
+
+		if remoteAddr == "192.168.1.10:5678" {
+			assert.Equal(t, []string{"8443"}, reqOut.Header.Values("X-Forwarded-Port"))
+			assert.Equal(t, []string{"/a", "/b"}, reqOut.Header.Values("X-Forwarded-Prefix"))
+		} else {
+			assert.Empty(t, reqOut.Header.Values("X-Forwarded-Port"))
+			assert.Empty(t, reqOut.Header.Values("X-Forwarded-Prefix"))
+		}
+		assert.Empty(t, reqOut.Header.Values("X-Forwarded-Server"))
+		assert.Equal(t, "example.com", reqOut.Header.Get("X-Forwarded-Host"))
+		assert.NotContains(t, reqOut.Header, "X_forwarded_server")
+		assert.Empty(t, reqOut.Header.Values("X-Real-IP"))
 	}
 }
 
