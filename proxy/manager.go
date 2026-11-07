@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -23,7 +22,6 @@ type Manager struct {
 	provider CertificateProvider
 	routes   routeMap
 	fallback *Route
-	lock     *sync.RWMutex
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
@@ -32,7 +30,6 @@ type Manager struct {
 func NewManager(provider CertificateProvider) *Manager {
 	return &Manager{
 		provider: provider,
-		lock:     &sync.RWMutex{},
 	}
 }
 

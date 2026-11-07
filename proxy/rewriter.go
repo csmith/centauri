@@ -28,14 +28,9 @@ func ParseCIDRList(downstreams string) ([]net.IPNet, error) {
 	return res, nil
 }
 
-// routeProvider is the surface we use to interact with the Manager.
-type routeProvider interface {
-	RouteForDomain(string) *Route
-}
-
 // Rewriter facilitates rewriting HTTP requests and responses according to the routes provided by a Manager.
 type Rewriter struct {
-	provider    routeProvider
+	provider    RouteProvider
 	decorators  []Decorator
 	errorClient *http.Client
 }
@@ -61,7 +56,7 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 // RewriteRequest modifies the given request according to the routes provided by the Manager.
 // It satisfies the signature of the Rewrite field of httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
-	route := r.provider.RouteForDomain(r.hostForRequest(p.In))
+	route := r.provider.RouteForDomain(hostForRequest(p.In))
 	if route == nil || len(route.Upstreams) == 0 {
 		// Make sure we're not going to proxy to an absolute url
 		p.Out.URL.Scheme = ""
@@ -109,7 +104,7 @@ func (r *Rewriter) RewriteError(fn func(http.ResponseWriter, *http.Request, erro
 
 // rewriteHeaders adjusts the headers according to the rules in the route.
 func (r *Rewriter) rewriteHeaders(headers http.Header, request *http.Request) {
-	route := r.provider.RouteForDomain(r.hostForRequest(request))
+	route := r.provider.RouteForDomain(hostForRequest(request))
 	if route == nil {
 		return
 	}
@@ -134,13 +129,4 @@ func (r *Rewriter) rewriteHeaders(headers http.Header, request *http.Request) {
 // at random.
 func (r *Rewriter) selectUpstream(route *Route) string {
 	return route.Upstreams[rand.IntN(len(route.Upstreams))].Host
-}
-
-// hostForRequest returns the hostname the given request was for, without any port information.
-func (r *Rewriter) hostForRequest(req *http.Request) string {
-	host, _, err := net.SplitHostPort(req.Host)
-	if err != nil {
-		return req.Host
-	}
-	return host
 }

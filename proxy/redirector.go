@@ -12,11 +12,7 @@ type HttpRedirector struct {
 }
 
 func (h *HttpRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	// Remove any port that may be along for the ride
-	host, _, err := net.SplitHostPort(request.Host)
-	if err != nil {
-		host = request.Host
-	}
+	host := hostForRequest(request)
 
 	// Make sure the host isn't garbage
 	if !isDomainName(host) {
@@ -29,8 +25,8 @@ func (h *HttpRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Req
 	http.Redirect(writer, request, targetUrl.String(), http.StatusPermanentRedirect)
 }
 
-// RouteProvider is the surface used by DomainRedirector to obtain routes for
-// a given domain name.
+// RouteProvider is the surface used by DomainRedirector and Rewriter to obtain
+// routes for a given domain name.
 type RouteProvider interface {
 	RouteForDomain(domain string) *Route
 }
@@ -56,7 +52,7 @@ func NewDomainRedirector(provider RouteProvider, next http.Handler, unrouted htt
 }
 
 func (d *DomainRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	host := d.hostForRequest(request)
+	host := hostForRequest(request)
 	route := d.routeProvider.RouteForDomain(host)
 	if route == nil || len(route.Upstreams) == 0 {
 		slog.Debug("No route found for request", "host", request.Host)
@@ -76,7 +72,7 @@ func (d *DomainRedirector) ServeHTTP(writer http.ResponseWriter, request *http.R
 }
 
 // hostForRequest returns the hostname the given request was for, without any port information.
-func (d *DomainRedirector) hostForRequest(req *http.Request) string {
+func hostForRequest(req *http.Request) string {
 	host, _, err := net.SplitHostPort(req.Host)
 	if err != nil {
 		return req.Host
