@@ -122,7 +122,7 @@ func (x *xForwardedForDecorator) headers(in, out *http.Request) http.Header {
 	}
 
 	// Values from a trusted downstream are read from the copies above, so get the same filtering.
-	if h := headers.Get("X-Forwarded-For"); !trusted || h == "" {
+	if h := strings.Join(headers.Values("X-Forwarded-For"), ", "); !trusted || h == "" {
 		headers.Set("X-Forwarded-For", ip)
 	} else {
 		headers.Set("X-Forwarded-For", fmt.Sprintf("%s, %s", h, ip))

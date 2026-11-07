@@ -258,6 +258,22 @@ func Test_XForwardedForDecorator_withTrustedDownstreams_preservesExistingHeaders
 	assert.Equal(t, "https", reqOut.Header.Get("X-Forwarded-Proto"))
 }
 
+func Test_XForwardedForDecorator_withTrustedDownstreams_keepsEveryForwardedForLine(t *testing.T) {
+	_, trustedNet, _ := net.ParseCIDR("192.168.1.0/24")
+	decorator := &xForwardedForDecorator{trustedDownstreams: []net.IPNet{*trustedNet}}
+
+	reqIn := &http.Request{
+		Host:       "example.com",
+		RemoteAddr: "192.168.1.10:5678",
+		Header:     http.Header{"X-Forwarded-For": {"1.1.1.1", "2.2.2.2, 3.3.3.3"}},
+	}
+	reqOut := &http.Request{Host: "example.com", RemoteAddr: "192.168.1.10:5678", Header: make(http.Header)}
+
+	decorator.Decorate(reqIn, reqOut)
+
+	assert.Equal(t, []string{"1.1.1.1, 2.2.2.2, 3.3.3.3, 192.168.1.10"}, reqOut.Header.Values("X-Forwarded-For"))
+}
+
 func Test_XForwardedForDecorator_withTrustedDownstreams_replacesHeadersFromUntrustedSource(t *testing.T) {
 	_, trustedNet, _ := net.ParseCIDR("192.168.1.0/24")
 	decorator := &xForwardedForDecorator{

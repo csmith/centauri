@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Fixed only the first `X-Forwarded-For` header from a trusted downstream
+  being passed on when it sent more than one.
 - Fixed `on_error` upstreams receiving the client's own `X-Forwarded-*`
   headers when the client sent an invalid `Upgrade` header.
 - Fixed `on_error` responses passing on `Proxy-Connection` and headers named
