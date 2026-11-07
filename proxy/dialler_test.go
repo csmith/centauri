@@ -97,8 +97,8 @@ func Test_AllowlistDialer_allowsRoutedRequestAfterUpstreamRemovedByReload(t *tes
 
 func Test_Route_allowsDial(t *testing.T) {
 	route := &Route{
-		Upstreams:     []Upstream{{Host: "App:8080"}, {Host: "[::1]:9000"}},
-		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: "errors.internal."}},
+		Upstreams:     []Upstream{{Host: "app:8080"}, {Host: "[::1]:9000"}},
+		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: "errors.internal:80"}},
 	}
 
 	tests := []struct {
@@ -114,6 +114,8 @@ func Test_Route_allowsDial(t *testing.T) {
 		{"[::1]:9000", true},
 		{"[::1]:9001", false},
 		{"errors.internal:80", true},
+		{"errors.internal", true},
+		{"Errors.Internal.:80", true},
 		{"errors.internal:443", false},
 		{"other:8080", false},
 	}

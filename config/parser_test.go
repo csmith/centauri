@@ -2,6 +2,13 @@ package config
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"strings"
 	"testing"
 
 	"github.com/csmith/centauri/proxy"
@@ -505,4 +512,103 @@ route example.com
 `)))
 
 	assert.ErrorContains(t, err, "path must begin with a /")
+}
+
+func Test_Parse_NormalisesUpstreamAddresses(t *testing.T) {
+	tests := []struct {
+		upstream string
+		expected string
+	}{
+		{"app", "app:80"},
+		{"App.Internal.:8080", "app.internal:8080"},
+		{"my_app-1:08080", "my_app-1:8080"},
+		{"192.168.1.1:9000", "192.168.1.1:9000"},
+		{"[::1]", "[::1]:80"},
+		{"[0:0::1]:9000", "[::1]:9000"},
+		{"Bücher.internal:8080", "xn--bcher-kva.internal:8080"},
+	}
+	for _, tt := range tests {
+		t.Run(
+			tt.upstream,
+			func(t *testing.T) {
+				routes, _, err := Parse(
+					strings.NewReader("route example.com\n\tupstream " + tt.upstream + "\n\ton_error 502 " + tt.upstream + "/error\n"),
+				)
+				require.NoError(t, err)
+				assert.Equal(t, []proxy.Upstream{{Host: tt.expected}}, routes[0].Upstreams)
+				assert.Equal(t, tt.expected, routes[0].ErrorMappings[0].Upstream)
+			},
+		)
+	}
+}
+
+func Test_Parse_ErrorsOnInvalidUpstreamAddresses(t *testing.T) {
+	tests := []string{
+		"http://app",
+		"user@app",
+		"app:0",
+		"app:99999",
+		"app:-1",
+		"app:",
+		"app:http",
+		"app server",
+		"app..internal",
+		"::1",
+		"[app]:80",
+		"[192.168.1.1]:80",
+		"[::1",
+		"bad host",
+	}
+	for _, upstream := range tests {
+		t.Run(
+			upstream,
+			func(t *testing.T) {
+				_, _, err := Parse(strings.NewReader("route example.com\n\tupstream " + upstream + "\n"))
+				require.ErrorContains(t, err, "line 2: invalid")
+
+				_, _, err = Parse(strings.NewReader("route example.com\n\tupstream app\n\ton_error 502 " + upstream + "\n"))
+				require.ErrorContains(t, err, "line 3: invalid")
+			},
+		)
+	}
+}
+
+func Test_Parse_ErrorsOnUpstreamWithPath(t *testing.T) {
+	_, _, err := Parse(strings.NewReader("route example.com\n\tupstream app/path\n"))
+
+	assert.ErrorContains(t, err, "line 2: invalid")
+}
+
+func Test_Parse_NonASCIIUpstreamIsAllowedByDialler(t *testing.T) {
+	routes, _, err := Parse(strings.NewReader("route example.com\n\tupstream bücher.internal:8080\n"))
+	require.NoError(t, err)
+
+	manager := proxy.NewManager(nil)
+	require.NoError(t, manager.SetRoutes(t.Context(), routes, nil))
+
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil)
+	proxyRequest := &httputil.ProxyRequest{In: request, Out: request.Clone(t.Context())}
+	proxy.NewRewriter(manager, nil, nil).RewriteRequest(proxyRequest)
+
+	errNoDNS := errors.New("no dns in tests")
+	blocked := false
+	dialer := &proxy.AllowlistDialer{
+		Dialer: net.Dialer{
+			Resolver: &net.Resolver{
+				PreferGo: true,
+				Dial: func(context.Context, string, string) (net.Conn, error) {
+					return nil, errNoDNS
+				},
+			},
+		},
+		OnBlock: func() { blocked = true },
+	}
+
+	response, err := (&http.Transport{DialContext: dialer.DialContext}).RoundTrip(proxyRequest.Out)
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	require.ErrorContains(t, err, errNoDNS.Error())
+	require.NotErrorIs(t, err, proxy.ErrDialNotAllowed)
+	assert.False(t, blocked)
 }

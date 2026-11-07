@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/csmith/centauri/proxy"
+	"golang.org/x/net/idna"
 )
 
 // Parse reads a configuration file from the given reader, and returns the routes that it contains.
@@ -46,7 +50,12 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				lineErr = fmt.Errorf("upstream without route: %s", line)
 				break
 			}
-			route.Upstreams = append(route.Upstreams, proxy.Upstream{Host: args})
+			host, err := parseUpstreamAddress(args)
+			if err != nil {
+				lineErr = err
+				break
+			}
+			route.Upstreams = append(route.Upstreams, proxy.Upstream{Host: host})
 		case "header":
 			if route == nil {
 				lineErr = fmt.Errorf("header without route: %s", line)
@@ -148,6 +157,10 @@ func parseOnError(args string, route *proxy.Route) error {
 	if strings.ContainsAny(host, "?#") {
 		return fmt.Errorf("on_error path must begin with a /: %s", parts[1])
 	}
+	host, err = parseUpstreamAddress(host)
+	if err != nil {
+		return err
+	}
 
 	mapping := proxy.ErrorMapping{
 		Status:   status,
@@ -165,6 +178,77 @@ func parseOnError(args string, route *proxy.Route) error {
 
 	route.ErrorMappings = append(route.ErrorMappings, mapping)
 	return nil
+}
+
+// parseUpstreamAddress validates a host[:port] upstream address and returns it in the canonical
+// form the proxy dials: lowercase ASCII (non-ASCII names are converted to punycode), no trailing
+// dot, IP addresses in their standard form, and an explicit port (defaulting to 80).
+func parseUpstreamAddress(addr string) (string, error) {
+	if addr == "" {
+		return "", errors.New("no upstream address specified")
+	}
+	if strings.Contains(addr, "://") {
+		return "", fmt.Errorf("invalid upstream address %q: must not include a scheme", addr)
+	}
+
+	host, port := addr, "80"
+	bracketed := strings.HasPrefix(addr, "[")
+	if bracketed && strings.HasSuffix(addr, "]") {
+		host = addr[1 : len(addr)-1]
+	} else if strings.Contains(addr, ":") {
+		var err error
+		if host, port, err = net.SplitHostPort(addr); err != nil {
+			return "", fmt.Errorf("invalid upstream address %q: must be host or host:port", addr)
+		}
+	}
+
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return "", fmt.Errorf("invalid port in upstream address %q: must be 1-65535", addr)
+	}
+	port = strconv.FormatUint(portNumber, 10)
+
+	if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() == bracketed {
+		return net.JoinHostPort(ip.String(), port), nil
+	} else if bracketed {
+		return "", fmt.Errorf("invalid upstream address %q: only IPv6 addresses may be in brackets", addr)
+	}
+
+	host, err = normaliseHostname(host)
+	if err != nil {
+		return "", fmt.Errorf("invalid host in upstream address %q: %w", addr, err)
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+func normaliseHostname(host string) (string, error) {
+	host = strings.TrimSuffix(host, ".")
+	for _, r := range host {
+		if r > unicode.MaxASCII {
+			ascii, err := idna.Lookup.ToASCII(host)
+			if err != nil {
+				return "", err
+			}
+			host = ascii
+			break
+		}
+	}
+	host = strings.ToLower(host)
+
+	if host == "" || len(host) > 253 {
+		return "", errors.New("must be 1-253 characters")
+	}
+	for label := range strings.SplitSeq(host, ".") {
+		if label == "" || len(label) > 63 {
+			return "", errors.New("each label must be 1-63 characters")
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+				return "", fmt.Errorf("invalid character %q", r)
+			}
+		}
+	}
+	return host, nil
 }
 
 func parseHeader(args string, route *proxy.Route) error {

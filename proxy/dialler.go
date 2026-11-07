@@ -54,9 +54,7 @@ func routeFromContext(ctx context.Context) *Route {
 	return route
 }
 
-// normaliseAddress converts an upstream or dial address to a canonical host:port form, so
-// that the same address written in different ways compares equal. Hosts are lowercased with
-// any trailing dot removed, and a missing port defaults to 80 as it does for http URLs.
+// normaliseAddress converts an address to the host:port form the config parser stores upstreams in.
 func normaliseAddress(addr string) string {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {

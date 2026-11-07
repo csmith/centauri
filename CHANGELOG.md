@@ -10,6 +10,10 @@
   `centauri_upstream_dial_blocked_total` metric.
 - Redirects from `on_error` upstreams are now only followed if they stay on
   the same upstream. Previously Centauri would follow redirects to any host.
+- Upstream addresses (including `on_error` upstreams) are now validated when
+  the config is loaded. Addresses with a scheme, path, username or invalid
+  port (e.g. `http://app` or `app:99999`) are rejected with an error giving
+  the line number, instead of failing when a request is proxied.
 
 ### Fixed
 

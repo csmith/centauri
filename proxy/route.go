@@ -47,12 +47,12 @@ func (r *Route) ErrorMappingForStatus(status int) *ErrorMapping {
 func (r *Route) allowsDial(addr string) bool {
 	addr = normaliseAddress(addr)
 	for i := range r.Upstreams {
-		if normaliseAddress(r.Upstreams[i].Host) == addr {
+		if r.Upstreams[i].Host == addr {
 			return true
 		}
 	}
 	for i := range r.ErrorMappings {
-		if normaliseAddress(r.ErrorMappings[i].Upstream) == addr {
+		if r.ErrorMappings[i].Upstream == addr {
 			return true
 		}
 	}

@@ -40,6 +40,13 @@ Provides the hostname/IP and port of the upstream server the request will be
 proxied to. Routes must have at least one upstream. If they have more than one,
 an upstream will be picked at random for each request.
 
+The address must be a hostname, IPv4 address or bracketed IPv6 address (e.g.
+`[::1]:8080`), optionally followed by a port. If no port is given, port 80 is
+used. Schemes, paths and usernames aren't allowed, and invalid addresses are
+rejected when the config is loaded. Hostnames are case-insensitive, and
+non-ASCII hostnames are converted to their ASCII (punycode) form. The same rules
+apply to the upstreams of [`on_error`](#on_error) directives.
+
 ### `on_error`
 
 ```
