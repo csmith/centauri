@@ -17,7 +17,8 @@
 - Route domains are now validated when the config is parsed, so `-validate`
   rejects invalid domains (e.g. `*.example.com`) with an error giving the line
   number, instead of them only failing when the routes are applied. Extra
-  spaces between domains are now ignored, and trailing dots are removed.
+  spaces between domains (in both `route` and `subject`) are now ignored, and
+  trailing dots are removed from route domains.
 - Each request is now routed once, as soon as it arrives. The route and
   upstream chosen then are used for the whole request, including response
   header rules and `on_error` mappings, even if the config is reloaded while

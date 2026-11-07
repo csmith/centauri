@@ -112,7 +112,7 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				lineErr = fmt.Errorf("no domains specified for subject in route %s", route.Domains)
 				break
 			}
-			route.Subject = append(route.Subject, strings.Split(args, " ")...)
+			route.Subject = append(route.Subject, strings.Fields(args)...)
 		case "#":
 			// Ignore comments
 		default:

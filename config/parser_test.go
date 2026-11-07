@@ -436,6 +436,13 @@ route example.com
 	assert.Equal(t, []string{"foo", "bar", "baz"}, routes[0].Subject)
 }
 
+func Test_Parse_Subject_IgnoresExtraSpaces(t *testing.T) {
+	routes, _, err := Parse(strings.NewReader("route example.com\n\tupstream localhost:8080\n\tsubject foo  bar\n"))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"foo", "bar"}, routes[0].Subject)
+}
+
 func Test_Parse_Subject_MultipleLines(t *testing.T) {
 	routes, _, err := Parse(bytes.NewBuffer([]byte(`
 route example.com
