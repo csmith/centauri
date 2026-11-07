@@ -485,13 +485,13 @@ func Test_Manager_MonitorCertificates_checksPeriodicallyUntilCancelled(t *testin
 		}()
 
 		time.Sleep(10 * time.Millisecond)
-		assert.Equal(t, "example.com", certManager.subject)
-
 		cancel()
 		select {
 		case <-done:
 		case <-time.After(time.Minute):
 			t.Fatal("MonitorCertificates did not return after cancellation")
 		}
+
+		assert.Equal(t, "example.com", certManager.subject)
 	})
 }
