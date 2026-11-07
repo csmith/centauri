@@ -10,7 +10,7 @@ import (
 // Provider defines the interface for providing certificates to a WildcardResolver.
 type Provider interface {
 	GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
-	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
+	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 }
 
 // WildcardResolver wraps around a certificate provider and modifies the domain and altNames
@@ -50,7 +50,11 @@ func (w *WildcardResolver) GetCertificate(ctx context.Context, preferredSupplier
 
 // GetExistingCertificate returns an existing, saved certificate from the upstream provider that will cover the
 // given subject and altNames, taking into account the configured wildcard domains.
-func (w *WildcardResolver) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
+func (w *WildcardResolver) GetExistingCertificate(
+	preferredSupplier string,
+	subject string,
+	altNames []string,
+) (*tls.Certificate, error) {
 	return w.upstream.GetExistingCertificate(preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
 }
 

@@ -101,10 +101,9 @@ func Test_NewProvider_servesStoredCertificatesFromTheStore(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cert, needsRenewal, err := provider2.GetExistingCertificate("", "example.com", nil)
+	cert, err := provider2.GetExistingCertificate("", "example.com", nil)
 	require.NoError(t, err)
-	require.NotNil(t, cert)
-	assert.False(t, needsRenewal)
+	assert.NotNil(t, cert)
 }
 
 func Test_NewProvider_appliesWildcardDomains(t *testing.T) {

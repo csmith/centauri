@@ -3,6 +3,7 @@ package certificate
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -79,22 +80,24 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 }
 
 // GetExistingCertificate returns a previously saved certificate with the given subject and alternate names if it is
-// still valid. It also indicates whether the certificate is in need of renewal or not. Certificates should be renewed
-// by calling GetCertificate, which will block and return the new certificate.
-func (m *Manager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
-	supplier, supplierName, err := m.supplier(preferredSupplier)
+// still valid. Certificates should be renewed by calling GetCertificate, which will block and return the new
+// certificate.
+func (m *Manager) GetExistingCertificate(
+	preferredSupplier string,
+	subject string,
+	altNames []string,
+) (*tls.Certificate, error) {
+	_, supplierName, err := m.supplier(preferredSupplier)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	if cert := m.store.GetCertificate(supplierName, subject, altNames); cert == nil {
-		return nil, true, fmt.Errorf("no stored certificate found")
+		return nil, errors.New("no stored certificate found")
 	} else if !cert.ValidFor(0) || (cert.RequiresStaple() && !cert.HasStapleFor(0)) {
-		return nil, true, fmt.Errorf("certificate has expired")
+		return nil, errors.New("certificate has expired")
 	} else {
-		key, err := cert.keyPair()
-		needRenewal := cert.ShouldRenew(supplier.MinCertificateValidity()) || (cert.RequiresStaple() && !cert.HasStapleFor(supplier.MinStapleValidity()))
-		return key, needRenewal, err
+		return cert.keyPair()
 	}
 }
 

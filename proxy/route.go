@@ -15,8 +15,7 @@ type Route struct {
 	Provider          string
 	RedirectToPrimary bool
 
-	certificate       atomic.Pointer[tls.Certificate]
-	certificateStatus atomic.Int32
+	certificate atomic.Pointer[tls.Certificate]
 }
 
 func (r *Route) Certificate() *tls.Certificate {
@@ -25,14 +24,6 @@ func (r *Route) Certificate() *tls.Certificate {
 
 func (r *Route) setCertificate(cert *tls.Certificate) {
 	r.certificate.Store(cert)
-}
-
-func (r *Route) CertificateStatus() CertificateStatus {
-	return CertificateStatus(r.certificateStatus.Load())
-}
-
-func (r *Route) setCertificateStatus(status CertificateStatus) {
-	r.certificateStatus.Store(int32(status))
 }
 
 func (r *Route) CertificateNames() (string, []string) {
@@ -57,17 +48,6 @@ func (r *Route) ErrorMappingForStatus(status int) *ErrorMapping {
 type Upstream struct {
 	Host string
 }
-
-// CertificateStatus describes the current status of the route's certificate
-type CertificateStatus int
-
-const (
-	CertificateNotChecked   CertificateStatus = iota // The route has just been initialised, so we don't yet know
-	CertificateMissing                               // The certificate is required and no valid one is held
-	CertificateExpiringSoon                          // We have a certificate but it needs to be renewed
-	CertificateGood                                  // We have a certificate and it is in good order
-	CertificateNotRequired                           // We don't have a certificate and are happy about it
-)
 
 // HeaderOp determines how a header should be modified.
 type HeaderOp int

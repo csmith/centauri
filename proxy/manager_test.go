@@ -14,7 +14,6 @@ import (
 type fakeCertManager struct {
 	existingCert      *tls.Certificate
 	certificate       *tls.Certificate
-	needsRenewal      bool
 	existingErr       error
 	err               error
 	preferredSupplier string
@@ -29,16 +28,20 @@ func (f *fakeCertManager) GetCertificate(_ context.Context, preferredSupplier st
 	return f.certificate, f.err
 }
 
-func (f *fakeCertManager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
+func (f *fakeCertManager) GetExistingCertificate(
+	preferredSupplier string,
+	subject string,
+	altNames []string,
+) (*tls.Certificate, error) {
 	f.preferredSupplier = preferredSupplier
 	f.subject = subject
 	f.altNames = altNames
-	return f.existingCert, f.needsRenewal, f.existingErr
+	return f.existingCert, f.existingErr
 }
 
 var dummyCert = &tls.Certificate{}
 
-func Test_Manager_SetRoutes_setsStatusIfNoCertificateFound(t *testing.T) {
+func Test_Manager_SetRoutes_doesNotServeRouteIfNoCertificateFound(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			err:         fmt.Errorf("ruh roh"),
@@ -55,16 +58,15 @@ func Test_Manager_SetRoutes_setsStatusIfNoCertificateFound(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateMissing, route.CertificateStatus())
+		assert.Nil(t, manager.RouteForDomain("example.com"))
 	})
 }
 
-func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andNotExpiring(t *testing.T) {
+func Test_Manager_SetRoutes_servesRouteIfOldCertificateFound(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			err:          fmt.Errorf("ruh roh"),
 			existingCert: dummyCert,
-			needsRenewal: false,
 		}
 
 		route := &Route{
@@ -77,29 +79,8 @@ func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andNotExpiring(t *te
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateGood, route.CertificateStatus())
-	})
-}
-
-func Test_Manager_SetRoutes_setsStatusIfOldCertificateFound_andExpiring(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		certManager := &fakeCertManager{
-			err:          fmt.Errorf("ruh roh"),
-			existingCert: dummyCert,
-			needsRenewal: true,
-		}
-
-		route := &Route{
-			Domains: []string{"example.com"},
-		}
-
-		manager := NewManager(certManager)
-		err := manager.SetRoutes(t.Context(), []*Route{route}, nil)
-		synctest.Wait()
-		assert.NoError(t, err)
-		assert.Equal(t, "example.com", certManager.subject)
-		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, CertificateExpiringSoon, route.CertificateStatus())
+		assert.Equal(t, route, manager.RouteForDomain("example.com"))
+		assert.Equal(t, dummyCert, route.Certificate())
 	})
 }
 
@@ -315,7 +296,7 @@ func Test_Manager_SetRoutes_removesPreviousRoutes(t *testing.T) {
 	})
 }
 
-func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andNoPreviousCertificateExists(t *testing.T) {
+func Test_Manager_CheckCertificates_doesNotServeUncertifiedRouteIfGetCertificateFails(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			certificate: dummyCert,
@@ -333,16 +314,15 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andNoPreviou
 		certManager.err = fmt.Errorf("ruh roh")
 		certManager.existingErr = fmt.Errorf("ruh roh")
 		manager.CheckCertificates(t.Context())
-		assert.Equal(t, CertificateMissing, route.CertificateStatus())
+		assert.Nil(t, manager.RouteForDomain("example.com"))
 	})
 }
 
-func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andPreviousCertificateExists_andNeedsRenewal(t *testing.T) {
+func Test_Manager_CheckCertificates_servesRouteIfGetCertificateFails_andPreviousCertificateExists(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			certificate:  dummyCert,
 			existingCert: dummyCert,
-			needsRenewal: true,
 		}
 
 		route := &Route{
@@ -355,7 +335,7 @@ func Test_Manager_CheckCertificates_setsStatusIfGetCertificateFails_andPreviousC
 
 		certManager.err = fmt.Errorf("ruh roh")
 		manager.CheckCertificates(t.Context())
-		assert.Equal(t, CertificateExpiringSoon, route.CertificateStatus())
+		assert.Equal(t, route, manager.RouteForDomain("example.com"))
 	})
 }
 
@@ -443,12 +423,10 @@ func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 		assert.Equal(t, newCert, manager.RouteForDomain("test.example.com").Certificate())
 		assert.Equal(t, newCert, manager.RouteForDomain("test.deep.example.com").Certificate())
 		assert.Equal(t, newCert, manager.RouteForDomain("test.example.net").Certificate())
-		assert.Equal(t, CertificateGood, manager.RouteForDomain("example.com").CertificateStatus())
-		assert.Equal(t, CertificateGood, manager.RouteForDomain("test.example.com").CertificateStatus())
 	})
 }
 
-func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
+func Test_Manager_CheckCertificates_servesRoutesIfNoProvider(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		manager := NewManager(nil)
 		_ = manager.SetRoutes(
@@ -462,8 +440,8 @@ func Test_Manager_CheckCertificates_setsStatusIfNoProvider(t *testing.T) {
 		synctest.Wait()
 
 		manager.CheckCertificates(t.Context())
-		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("example.com").CertificateStatus())
-		assert.Equal(t, CertificateNotRequired, manager.RouteForDomain("test.example.com").CertificateStatus())
+		assert.NotNil(t, manager.RouteForDomain("example.com"))
+		assert.NotNil(t, manager.RouteForDomain("test.example.net"))
 	})
 }
 

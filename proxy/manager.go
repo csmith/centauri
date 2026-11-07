@@ -13,7 +13,7 @@ import (
 // CertificateProvider defines the interface for providing certificates to a Manager.
 type CertificateProvider interface {
 	GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
-	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error)
+	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 }
 
 // Manager is responsible for maintaining a set of routes, mapping domains to those routes, and refreshing the
@@ -61,26 +61,16 @@ func (m *Manager) SetRoutes(ctx context.Context, newRoutes []*Route, fallback *R
 // immediately without waiting for certificate renewals.
 func (m *Manager) loadCertificate(route *Route) {
 	if m.provider == nil {
-		route.setCertificateStatus(CertificateNotRequired)
 		return
 	}
 
 	primary, alts := route.CertificateNames()
-	cert, needsRenewal, err := m.provider.GetExistingCertificate(route.Provider, primary, alts)
-	if err == nil {
-		route.setCertificate(cert)
-		if needsRenewal {
-			slog.Debug("Existing certificate found but it expires soon", "route", route.Domains[0])
-			route.setCertificateStatus(CertificateExpiringSoon)
-		} else {
-			slog.Debug("Existing certificate found", "route", route.Domains[0])
-			route.setCertificateStatus(CertificateGood)
-		}
-	} else {
+	cert, err := m.provider.GetExistingCertificate(route.Provider, primary, alts)
+	if err != nil {
 		slog.Info("No existing certificate found, route will not be served until cert is obtained", "route", route.Domains[0])
-		route.setCertificate(nil)
-		route.setCertificateStatus(CertificateMissing)
+		cert = nil
 	}
+	route.setCertificate(cert)
 }
 
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
@@ -88,7 +78,7 @@ func (m *Manager) loadCertificate(route *Route) {
 func (m *Manager) RouteForDomain(domain string) *Route {
 	route := m.routeFor(domain)
 
-	if route == nil || route.CertificateStatus() <= CertificateMissing {
+	if route == nil || (m.provider != nil && route.Certificate() == nil) {
 		return nil
 	}
 
@@ -122,15 +112,13 @@ func (m *Manager) routeFor(domain string) *Route {
 // CheckCertificates checks and updates the certificates required for registered routes.
 // It should be called periodically to renew certificates and obtain new OCSP staples.
 func (m *Manager) CheckCertificates(ctx context.Context) {
+	if m.provider == nil {
+		return
+	}
+
 	routes := m.routes.Routes()
 	for i := range routes {
-		route := routes[i]
-
-		if m.provider == nil {
-			route.setCertificateStatus(CertificateNotRequired)
-		} else {
-			m.updateCert(ctx, route)
-		}
+		m.updateCert(ctx, routes[i])
 	}
 }
 
@@ -162,7 +150,6 @@ func (m *Manager) updateCert(ctx context.Context, route *Route) {
 	}
 
 	route.setCertificate(cert)
-	route.setCertificateStatus(CertificateGood)
 }
 
 // routeMap maintains a map of domain names to routes, using copy-on-write

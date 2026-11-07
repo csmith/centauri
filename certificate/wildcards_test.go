@@ -12,7 +12,6 @@ import (
 type fakeCertManager struct {
 	certificate  *tls.Certificate
 	existingCert *tls.Certificate
-	needsRenewal bool
 	err          error
 	supplier     string
 	subject      string
@@ -26,11 +25,15 @@ func (f *fakeCertManager) GetCertificate(_ context.Context, preferredSupplier st
 	return f.certificate, f.err
 }
 
-func (f *fakeCertManager) GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, bool, error) {
+func (f *fakeCertManager) GetExistingCertificate(
+	preferredSupplier string,
+	subject string,
+	altNames []string,
+) (*tls.Certificate, error) {
 	f.supplier = preferredSupplier
 	f.subject = subject
 	f.altNames = altNames
-	return f.existingCert, f.needsRenewal, f.err
+	return f.existingCert, f.err
 }
 
 var dummyCert = &tls.Certificate{}
@@ -114,17 +117,15 @@ func Test_WildcardResolver_GetExistingCertificate_passesRequestThroughIfNoDomain
 	upstream := &fakeCertManager{
 		existingCert: dummyCert,
 		err:          fmt.Errorf("an upstream error, oh my"),
-		needsRenewal: true,
 	}
 	resolver := NewWildcardResolver(upstream, nil)
-	cert, r, err := resolver.GetExistingCertificate("supplier", "example.com", []string{"foo.example.com", "bar.example.com"})
+	cert, err := resolver.GetExistingCertificate("supplier", "example.com", []string{"foo.example.com", "bar.example.com"})
 
 	assert.Equal(t, upstream.existingCert, cert)
 	assert.Equal(t, upstream.err, err)
 	assert.Equal(t, "supplier", upstream.supplier)
 	assert.Equal(t, "example.com", upstream.subject)
 	assert.Equal(t, []string{"foo.example.com", "bar.example.com"}, upstream.altNames)
-	assert.True(t, r)
 }
 
 func Test_WildcardResolver_GetExistingCertificate_modifiesWildcardDomains(t *testing.T) {
@@ -133,7 +134,7 @@ func Test_WildcardResolver_GetExistingCertificate_modifiesWildcardDomains(t *tes
 		err:          fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, _, err := resolver.GetExistingCertificate("supplier", "foo.example.com", []string{"bar.example.org"})
+	cert, err := resolver.GetExistingCertificate("supplier", "foo.example.com", []string{"bar.example.org"})
 
 	assert.Equal(t, upstream.existingCert, cert)
 	assert.Equal(t, upstream.err, err)
@@ -148,7 +149,7 @@ func Test_WildcardResolver_GetExistingCertificate_doesNotModifySubdomains(t *tes
 		err:          fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, _, err := resolver.GetExistingCertificate("supplier", "foo.bar.example.com", []string{"foo.bar.example.org"})
+	cert, err := resolver.GetExistingCertificate("supplier", "foo.bar.example.com", []string{"foo.bar.example.org"})
 
 	assert.Equal(t, upstream.existingCert, cert)
 	assert.Equal(t, upstream.err, err)
@@ -163,7 +164,7 @@ func Test_WildcardResolver_GetExistingCertificate_doesNotModifyRootDomains(t *te
 		err:          fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, _, err := resolver.GetExistingCertificate("supplier", "example.com", []string{"example.org"})
+	cert, err := resolver.GetExistingCertificate("supplier", "example.com", []string{"example.org"})
 
 	assert.Equal(t, upstream.existingCert, cert)
 	assert.Equal(t, upstream.err, err)
@@ -178,7 +179,7 @@ func Test_WildcardResolver_GetExistingCertificate_doesNotModifyOtherDomains(t *t
 		err:          fmt.Errorf("an upstream error, oh my"),
 	}
 	resolver := NewWildcardResolver(upstream, []string{"example.com", ".example.org"})
-	cert, _, err := resolver.GetExistingCertificate("supplier", "example.net", []string{"example.org.example.net"})
+	cert, err := resolver.GetExistingCertificate("supplier", "example.net", []string{"example.org.example.net"})
 
 	assert.Equal(t, upstream.existingCert, cert)
 	assert.Equal(t, upstream.err, err)

@@ -616,12 +616,11 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenValid(t *testing.
 		true,
 	)
 
-	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
-	assert.False(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *testing.T) {
@@ -644,12 +643,11 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenExpiringSoon(t *t
 		true,
 	)
 
-	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
-	assert.True(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t *testing.T) {
@@ -672,39 +670,11 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t
 		true,
 	)
 
-	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.NoError(t, err)
 	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
 	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
-	assert.True(t, r)
-}
-
-func Test_Manager_GetExistingCertificate_ignoresExpiringStapleIfNotRequiredByCert(t *testing.T) {
-	cert := &Details{
-		NotAfter:       time.Now().Add(time.Hour * 36),
-		NextOcspUpdate: time.Now().Add(time.Minute * 30),
-		Certificate:    certPem,
-		PrivateKey:     keyPem,
-		OcspResponse:   []byte(ocspResponse),
-		requiresStaple: &fs,
-	}
-
-	store := &fakeStore{certificate: cert}
-	supplier := &fakeSupplier{}
-
-	manager := NewManager(
-		store,
-		map[string]Supplier{"test": supplier},
-		[]string{"test"},
-		true,
-	)
-
-	c, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
-	require.NoError(t, err)
-	assert.Equal(t, cert.Certificate, string(certcrypto.PEMEncode(certcrypto.DERCertificateBytes(c.Certificate[0]))))
-	assert.Equal(t, cert.PrivateKey, string(certcrypto.PEMEncode(c.PrivateKey)))
-	assert.False(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
@@ -727,9 +697,8 @@ func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
 		true,
 	)
 
-	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
-	assert.True(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
@@ -752,9 +721,8 @@ func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
 		true,
 	)
 
-	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
-	assert.True(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testing.T) {
@@ -768,9 +736,8 @@ func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testin
 		true,
 	)
 
-	_, r, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
 	require.Error(t, err)
-	assert.True(t, r)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T) {
@@ -784,7 +751,6 @@ func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T)
 		true,
 	)
 
-	_, r, err := manager.GetExistingCertificate("blah", "example.com", []string{"example.net"})
+	_, err := manager.GetExistingCertificate("blah", "example.com", []string{"example.net"})
 	require.Error(t, err)
-	assert.False(t, r)
 }
