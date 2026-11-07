@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Fixed `redirect-to-primary` causing a redirect loop when the primary domain
+  was written with capital letters in the config.
+
 ## 2.9.3 - 2026-11-06
 
 - Dependency updates

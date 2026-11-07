@@ -37,7 +37,7 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				routes = append(routes, route)
 			}
 			route = &proxy.Route{
-				Domains:   strings.Split(args, " "),
+				Domains:   strings.Split(strings.ToLower(args), " "),
 				Upstreams: []proxy.Upstream{},
 			}
 			routeLine = lineNumber

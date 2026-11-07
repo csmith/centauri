@@ -6,6 +6,7 @@ import (
 
 	"github.com/csmith/centauri/proxy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Parse_ReturnsEmptySliceForEmptyFile(t *testing.T) {
@@ -225,6 +226,15 @@ rOuTe example.net
 	assert.Equal(t, "x-test-4", routes[1].Headers[1].Name)
 	assert.Equal(t, "baz", routes[1].Headers[1].Value)
 	assert.Equal(t, proxy.HeaderOpReplace, routes[1].Headers[1].Operation)
+}
+
+func Test_Parse_LowercasesDomains(t *testing.T) {
+	routes, _, err := Parse(
+		bytes.NewBufferString("route Example.com WWW.example.COM\n\tupstream localhost:8080\n\tredirect-to-primary\n"),
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"example.com", "www.example.com"}, routes[0].Domains)
 }
 
 func Test_Parse_MultipleUpstreams(t *testing.T) {

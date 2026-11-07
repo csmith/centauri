@@ -277,6 +277,37 @@ func Test_DomainRedirector_PassesThroughWhenAlreadyOnPrimaryDomain(t *testing.T)
 	assert.Equal(t, 0, writer.statusCode)
 }
 
+func Test_DomainRedirector_PassesThroughWhenOnPrimaryDomainWithDifferentCase(t *testing.T) {
+	provider := &mockRouteProvider{
+		routes: map[string]*Route{
+			"Example.COM": {
+				Domains:           []string{"example.com", "www.example.com"},
+				Upstreams:         []Upstream{{Host: "upstream:8080"}},
+				RedirectToPrimary: true,
+			},
+		},
+	}
+	nextHandler := &mockNextHandler{}
+	unroutedHandler := &mockNextHandler{}
+
+	u, _ := url.Parse("/foo/bar")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+		Host:       "Example.COM",
+	}
+
+	writer := &fakeResponseWriter{
+		header: make(http.Header),
+	}
+
+	NewDomainRedirector(provider, nextHandler, unroutedHandler).ServeHTTP(writer, request)
+
+	assert.True(t, nextHandler.called)
+	assert.Equal(t, 0, writer.statusCode)
+}
+
 func Test_DomainRedirector_RedirectsToHttpsWhenTlsPresent(t *testing.T) {
 	provider := &mockRouteProvider{
 		routes: map[string]*Route{

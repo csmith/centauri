@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // HttpRedirector is a http.Handler that redirects all requests to HTTPS.
@@ -57,7 +58,7 @@ func (d *DomainRedirector) ServeHTTP(writer http.ResponseWriter, request *http.R
 	if route == nil || len(route.Upstreams) == 0 {
 		slog.Debug("No route found for request", "host", request.Host)
 		d.unrouted.ServeHTTP(writer, request)
-	} else if route.RedirectToPrimary && route.Domains[0] != host {
+	} else if route.RedirectToPrimary && !strings.EqualFold(route.Domains[0], host) {
 		newAddress := request.URL
 		newAddress.Host = route.Domains[0]
 		if request.TLS != nil {
