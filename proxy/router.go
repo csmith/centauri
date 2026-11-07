@@ -188,7 +188,13 @@ func (h *HttpRedirector) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	targetUrl := url.URL{Scheme: "https", Host: host, Path: request.URL.Path, RawQuery: request.URL.RawQuery}
+	targetUrl := url.URL{
+		Scheme:   "https",
+		Host:     host,
+		Path:     request.URL.Path,
+		RawPath:  request.URL.RawPath,
+		RawQuery: request.URL.RawQuery,
+	}
 	http.Redirect(writer, request, targetUrl.String(), http.StatusPermanentRedirect)
 }
 

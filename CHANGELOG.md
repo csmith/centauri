@@ -31,6 +31,8 @@
 - Fixed a data race on the fallback route when the config is reloaded.
 - Fixed the network config source sometimes leaving its connection open
   when stopped while reconnecting to the config server.
+- Fixed HTTP-to-HTTPS redirects decoding encoded characters in the path
+  (e.g. `/a%2Fb` was redirected to `/a/b`).
 
 ## 2.9.3 - 2026-11-06
 

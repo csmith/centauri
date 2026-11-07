@@ -135,6 +135,26 @@ func Test_HttpRedirector_PreservesQueryString(t *testing.T) {
 	assert.Equal(t, "https://example.com/foo/bar?baz=quux", writer.header.Get("Location"))
 }
 
+func Test_HttpRedirector_PreservesEncodedPath(t *testing.T) {
+	u, _ := url.Parse("/a%2Fb/c%3Bd")
+	request := &http.Request{
+		URL:        u,
+		Header:     make(http.Header),
+		RemoteAddr: "127.0.0.1:11003",
+		Host:       "example.com",
+	}
+
+	writer := &fakeResponseWriter{
+		header: make(http.Header),
+	}
+
+	redirector := &HttpRedirector{}
+	redirector.ServeHTTP(writer, request)
+
+	assert.Equal(t, http.StatusPermanentRedirect, writer.statusCode)
+	assert.Equal(t, "https://example.com/a%2Fb/c%3Bd", writer.header.Get("Location"))
+}
+
 func Test_HttpRedirector_StripsPort(t *testing.T) {
 	u, _ := url.Parse("/foo/bar")
 	request := &http.Request{
