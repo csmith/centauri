@@ -141,7 +141,7 @@ func (m *Manager) obtain(ctx context.Context, supplier Supplier, supplierName st
 	m.updateRenewalInfo(ctx, supplier, cert, false)
 
 	if err := m.store.SaveCertificate(cert); err != nil {
-		return nil, fmt.Errorf("failed to save certificate for %s: %s", subject, err)
+		return nil, fmt.Errorf("failed to save certificate for %s: %w", subject, err)
 	}
 
 	return cert.keyPair()
@@ -154,7 +154,7 @@ func (m *Manager) staple(ctx context.Context, supplier Supplier, cert *Details) 
 	}
 
 	if err := m.store.SaveCertificate(cert); err != nil {
-		return nil, fmt.Errorf("failed to save certificate for %s: %s", cert.Subject, err)
+		return nil, fmt.Errorf("failed to save certificate for %s: %w", cert.Subject, err)
 	}
 
 	return cert.keyPair()
