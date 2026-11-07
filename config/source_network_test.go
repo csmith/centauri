@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"encoding/binary"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -212,4 +213,97 @@ func Test_NetworkSource_InitialConfigTimeout(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Expected timeout for initial config read")
 	}
+}
+
+func Test_NetworkSource_StopClosesReconnectedConnection(t *testing.T) {
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	reconnected := make(chan net.Conn, 1)
+	go func() {
+		first, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		_ = first.Close()
+
+		second, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		reconnected <- second
+	}()
+
+	source := NewNetworkSource(listener.Addr().String())
+	source.reconnectInterval = 10 * time.Millisecond
+
+	errChan := make(chan error, 1)
+	require.NoError(t, source.Start(t.Context(), noopUpdater, errChan))
+
+	var conn net.Conn
+	select {
+	case conn = <-reconnected:
+		defer conn.Close()
+	case err := <-errChan:
+		t.Fatalf("Unexpected error: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for reconnection")
+	}
+
+	stopCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	source.Stop(stopCtx)
+	require.NoError(t, stopCtx.Err(), "Stop should return once the source has finished")
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, err = conn.Read(make([]byte, 1))
+	require.ErrorIs(t, err, io.EOF, "reconnected connection should be closed by Stop")
+	assert.Empty(t, errChan)
+}
+
+func Test_NetworkSource_StopDuringReconnectDoesNotConnect(t *testing.T) {
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	firstClosed := make(chan struct{})
+	accepted := make(chan struct{}, 1)
+	go func() {
+		first, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		_ = first.Close()
+		close(firstClosed)
+
+		second, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		_ = second.Close()
+		accepted <- struct{}{}
+	}()
+
+	source := NewNetworkSource(listener.Addr().String())
+	source.reconnectInterval = time.Hour
+
+	errChan := make(chan error, 1)
+	require.NoError(t, source.Start(t.Context(), noopUpdater, errChan))
+
+	<-firstClosed
+	// Give the source a chance to notice the closed connection and start waiting to reconnect.
+	time.Sleep(50 * time.Millisecond)
+
+	stopCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	source.Stop(stopCtx)
+	require.NoError(t, stopCtx.Err(), "Stop should interrupt the reconnect wait")
+
+	select {
+	case <-accepted:
+		t.Fatal("Source reconnected after being stopped")
+	case <-time.After(100 * time.Millisecond):
+	}
+	assert.Empty(t, errChan)
 }

@@ -26,18 +26,16 @@ const (
 // standard routes config format. See docs/network-config.md for details.
 type NetworkSource struct {
 	address              string
-	stopChan             chan struct{}
-	conn                 net.Conn
-	initialConfigRead    bool
 	reconnectInterval    time.Duration
 	initialConfigTimeout time.Duration
+	cancel               context.CancelFunc
+	done                 chan struct{}
 }
 
 // NewNetworkSource creates a source that reads routes from the config server at the given address.
 func NewNetworkSource(address string) *NetworkSource {
 	return &NetworkSource{
 		address:              address,
-		stopChan:             make(chan struct{}, 1),
 		reconnectInterval:    defaultReconnectInterval,
 		initialConfigTimeout: defaultInitialConfigTimeout,
 	}
@@ -48,20 +46,39 @@ func (n *NetworkSource) Start(ctx context.Context, updateRoutes RouteUpdater, er
 		return fmt.Errorf("address must be specified when using network config source")
 	}
 
-	var err error
-	n.conn, err = net.Dial("tcp", n.address)
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "tcp", n.address)
 	if err != nil {
 		return fmt.Errorf("failed to connect to config server: %w", err)
 	}
 
-	go n.run(ctx, updateRoutes, errChan)
+	stopCtx, cancel := context.WithCancel(ctx)
+	n.cancel = cancel
+	n.done = make(chan struct{})
+
+	go func() {
+		defer close(n.done)
+		if err := n.run(ctx, stopCtx, conn, updateRoutes); err != nil {
+			select {
+			case errChan <- err:
+			case <-stopCtx.Done():
+			}
+		}
+	}()
 	return nil
 }
 
+// Stop closes the connection to the config server and waits for the source to finish, or for ctx
+// to be done.
 func (n *NetworkSource) Stop(ctx context.Context) {
-	n.stopChan <- struct{}{}
-	if n.conn != nil {
-		n.conn.Close()
+	if n.cancel == nil {
+		return
+	}
+
+	n.cancel()
+	select {
+	case <-n.done:
+	case <-ctx.Done():
 	}
 }
 
@@ -73,98 +90,121 @@ func (n *NetworkSource) Validate() error {
 	return fmt.Errorf("validation is not supported for network config source")
 }
 
-func (n *NetworkSource) run(ctx context.Context, updateRoutes RouteUpdater, errChan chan<- error) {
+// run reads configs until an unrecoverable error occurs or stopCtx is done. Routes are applied using
+// ctx, so that stopping the source doesn't cancel anything started by updateRoutes.
+func (n *NetworkSource) run(ctx, stopCtx context.Context, conn net.Conn, updateRoutes RouteUpdater) error {
+	stopWatching := closeOnDone(stopCtx, conn)
+	defer func() {
+		stopWatching()
+		_ = conn.Close()
+	}()
+
+	initialConfigRead := false
 	secondChance := false
 	for {
-		select {
-		case <-n.stopChan:
-			return
-		default:
-			if !n.initialConfigRead {
-				if err := n.conn.SetDeadline(time.Now().Add(n.initialConfigTimeout)); err != nil {
-					errChan <- fmt.Errorf("failed to set initial config read timeout: %w", err)
-					return
-				}
-			}
-
-			if err := n.readAndApplyConfig(ctx, updateRoutes); err != nil {
-				slog.Warn("Error reading config from network", "error", err)
-
-				if secondChance {
-					errChan <- fmt.Errorf("failed to read config after reconnection: %w", err)
-					return
-				}
-
-				if err := n.reconnect(); err != nil {
-					errChan <- fmt.Errorf("failed to reconnect to config server: %w", err)
-					return
-				}
-
-				secondChance = true
-			} else {
-				if !n.initialConfigRead {
-					n.initialConfigRead = true
-					if err := n.conn.SetDeadline(time.Time{}); err != nil {
-						errChan <- fmt.Errorf("failed to clear initial config read timeout: %w", err)
-						return
-					}
-				}
-				secondChance = false
+		if !initialConfigRead {
+			if err := conn.SetDeadline(time.Now().Add(n.initialConfigTimeout)); err != nil {
+				return fmt.Errorf("failed to set initial config read timeout: %w", err)
 			}
 		}
+
+		err := n.readAndApplyConfig(ctx, conn, updateRoutes)
+		if stopCtx.Err() != nil {
+			return nil
+		}
+
+		if err == nil {
+			if !initialConfigRead {
+				initialConfigRead = true
+				if err := conn.SetDeadline(time.Time{}); err != nil {
+					return fmt.Errorf("failed to clear initial config read timeout: %w", err)
+				}
+			}
+			secondChance = false
+			continue
+		}
+
+		slog.Warn("Error reading config from network", "error", err)
+		if secondChance {
+			return fmt.Errorf("failed to read config after reconnection: %w", err)
+		}
+
+		stopWatching()
+		_ = conn.Close()
+
+		newConn, err := n.reconnect(stopCtx)
+		if err != nil {
+			if stopCtx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("failed to reconnect to config server: %w", err)
+		}
+
+		conn = newConn
+		stopWatching = closeOnDone(stopCtx, conn)
+		secondChance = true
 	}
 }
 
-func (n *NetworkSource) reconnect() error {
-	if n.conn != nil {
-		n.conn.Close()
+func (n *NetworkSource) reconnect(ctx context.Context) (net.Conn, error) {
+	select {
+	case <-time.After(n.reconnectInterval):
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 
-	time.Sleep(n.reconnectInterval)
-
-	var err error
-	n.conn, err = net.Dial("tcp", n.address)
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "tcp", n.address)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	slog.Info("Reconnected to config server", "address", n.address)
-	return nil
+	return conn, nil
 }
 
-func (n *NetworkSource) readAndApplyConfig(ctx context.Context, updateRoutes RouteUpdater) error {
+// closeOnDone closes conn when ctx is done (immediately, if it already is), interrupting any
+// blocked reads.
+func closeOnDone(ctx context.Context, conn net.Conn) (stop func() bool) {
+	return context.AfterFunc(
+		ctx,
+		func() {
+			_ = conn.Close()
+		},
+	)
+}
+
+func (n *NetworkSource) readAndApplyConfig(ctx context.Context, conn net.Conn, updateRoutes RouteUpdater) error {
 	// Magic header (8 bytes)
 	magic := make([]byte, 8)
-	if _, err := io.ReadFull(n.conn, magic); err != nil {
+	if _, err := io.ReadFull(conn, magic); err != nil {
 		return fmt.Errorf("failed to read magic bytes: %w", err)
 	}
 
 	if string(magic) != magicBytes {
-		n.conn.Close()
 		return fmt.Errorf("invalid magic bytes: got %q, expected %q", string(magic), magicBytes)
 	}
 
 	// Version header (4 bytes)
 	versionHeader := make([]byte, 4)
-	if _, err := io.ReadFull(n.conn, versionHeader); err != nil {
+	if _, err := io.ReadFull(conn, versionHeader); err != nil {
 		return fmt.Errorf("failed to read version header: %w", err)
 	}
 
 	if versionHeader[0] != 0x00 || versionHeader[1] != 0x00 || versionHeader[2] != 0x00 || versionHeader[3] != protocolVersion {
-		n.conn.Close()
 		return fmt.Errorf("unsupported protocol version: %v", versionHeader)
 	}
 
 	// Payload length (4 bytes, big-endian)
 	lengthBytes := make([]byte, 4)
-	if _, err := io.ReadFull(n.conn, lengthBytes); err != nil {
+	if _, err := io.ReadFull(conn, lengthBytes); err != nil {
 		return fmt.Errorf("failed to read payload length: %w", err)
 	}
 
 	payloadLength := binary.BigEndian.Uint32(lengthBytes)
 
 	payload := make([]byte, payloadLength)
-	if _, err := io.ReadFull(n.conn, payload); err != nil {
+	if _, err := io.ReadFull(conn, payload); err != nil {
 		return fmt.Errorf("failed to read payload: %w", err)
 	}
 
