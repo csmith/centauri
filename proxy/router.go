@@ -144,6 +144,23 @@ func (d *Decision) RedirectURL() string {
 	return d.redirect
 }
 
+func (d *Decision) allowsDial(addr string) bool {
+	if d.Outcome() != OutcomeProxy {
+		return false
+	}
+
+	addr = normaliseAddress(addr)
+	if d.upstream.Host == addr {
+		return true
+	}
+	for i := range d.route.ErrorMappings {
+		if d.route.ErrorMappings[i].Upstream == addr {
+			return true
+		}
+	}
+	return false
+}
+
 type decisionContextKey struct{}
 
 func withDecision(ctx context.Context, decision *Decision) context.Context {

@@ -104,11 +104,15 @@ func Test_AllowlistDialer_allowsRoutedRequestAfterUpstreamRemovedByReload(t *tes
 	_ = conn.Close()
 }
 
-func Test_Route_allowsDial(t *testing.T) {
+func Test_Decision_allowsDial(t *testing.T) {
 	route := &Route{
-		Upstreams:     []Upstream{{Host: "app:8080"}, {Host: "[::1]:9000"}},
-		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: "errors.internal:80"}},
+		Upstreams: []Upstream{{Host: "app:8080"}, {Host: "unchosen:8080"}},
+		ErrorMappings: []ErrorMapping{
+			{Status: 502, Upstream: "errors.internal:80"},
+			{Status: 404, Upstream: "[::1]:9000"},
+		},
 	}
+	decision := &Decision{outcome: OutcomeProxy, route: route, upstream: route.Upstreams[0]}
 
 	tests := []struct {
 		addr    string
@@ -120,6 +124,7 @@ func Test_Route_allowsDial(t *testing.T) {
 		{"app:8081", false},
 		{"app:22", false},
 		{"app", false},
+		{"unchosen:8080", false},
 		{"[::1]:9000", true},
 		{"[::1]:9001", false},
 		{"errors.internal:80", true},
@@ -132,8 +137,17 @@ func Test_Route_allowsDial(t *testing.T) {
 		t.Run(
 			tt.addr,
 			func(t *testing.T) {
-				assert.Equal(t, tt.allowed, route.allowsDial(tt.addr))
+				assert.Equal(t, tt.allowed, decision.allowsDial(tt.addr))
 			},
 		)
 	}
+}
+
+func Test_Decision_allowsDial_refusesIfNotProxying(t *testing.T) {
+	route := &Route{Upstreams: []Upstream{{Host: "app:8080"}}}
+	for _, outcome := range []Outcome{OutcomeUnrouted, OutcomeRedirect} {
+		decision := &Decision{outcome: outcome, route: route, upstream: route.Upstreams[0]}
+		assert.False(t, decision.allowsDial("app:8080"))
+	}
+	assert.False(t, (*Decision)(nil).allowsDial("app:8080"))
 }

@@ -44,21 +44,6 @@ func (r *Route) ErrorMappingForStatus(status int) *ErrorMapping {
 	return nil
 }
 
-func (r *Route) allowsDial(addr string) bool {
-	addr = normaliseAddress(addr)
-	for i := range r.Upstreams {
-		if r.Upstreams[i].Host == addr {
-			return true
-		}
-	}
-	for i := range r.ErrorMappings {
-		if r.ErrorMappings[i].Upstream == addr {
-			return true
-		}
-	}
-	return false
-}
-
 // Upstream represents a configured upstream server for a route.
 type Upstream struct {
 	Host string
