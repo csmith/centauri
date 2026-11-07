@@ -3,15 +3,15 @@ package certificate
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 )
 
-// Store provides functions to get and store certificates.
+// Store provides functions to get and store certificates. GetCertificate returns a nil certificate and no error if
+// no matching certificate is stored.
 type Store interface {
-	GetCertificate(provider string, subject string, altNames []string) *Details
+	GetCertificate(provider string, subject string, altNames []string) (*Details, error)
 	SaveCertificate(cert *Details) error
 	LockCertificate(subjectName string, altNames []string)
 	UnlockCertificate(subjectName string, altNames []string)
@@ -56,7 +56,11 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 	m.store.LockCertificate(subject, altNames)
 	defer m.store.UnlockCertificate(subject, altNames)
 
-	cert := m.store.GetCertificate(supplierName, subject, altNames)
+	cert, err := m.store.GetCertificate(supplierName, subject, altNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load stored certificate for %s: %w", subject, err)
+	}
+
 	if cert == nil {
 		slog.Info("Obtaining new certificate", "domain", subject, "altNames", altNames)
 		return m.obtain(ctx, supplier, supplierName, subject, altNames)
@@ -82,6 +86,9 @@ func (m *Manager) GetCertificate(ctx context.Context, preferredSupplier string, 
 // GetExistingCertificate returns a previously saved certificate with the given subject and alternate names if it is
 // still valid. Certificates should be renewed by calling GetCertificate, which will block and return the new
 // certificate.
+//
+// If there is no stored certificate, or it is no longer valid, then a nil certificate and no error is returned.
+// An error means the certificate couldn't be looked up or loaded (e.g. because the store is unavailable).
 func (m *Manager) GetExistingCertificate(
 	preferredSupplier string,
 	subject string,
@@ -92,13 +99,16 @@ func (m *Manager) GetExistingCertificate(
 		return nil, err
 	}
 
-	if cert := m.store.GetCertificate(supplierName, subject, altNames); cert == nil {
-		return nil, errors.New("no stored certificate found")
-	} else if !cert.ValidFor(0) || (cert.RequiresStaple() && !cert.HasStapleFor(0)) {
-		return nil, errors.New("certificate has expired")
-	} else {
-		return cert.keyPair()
+	cert, err := m.store.GetCertificate(supplierName, subject, altNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load stored certificate for %s: %w", subject, err)
 	}
+
+	if cert == nil || !cert.ValidFor(0) || (cert.RequiresStaple() && !cert.HasStapleFor(0)) {
+		return nil, nil
+	}
+
+	return cert.keyPair()
 }
 
 func (m *Manager) supplier(preferred string) (Supplier, string, error) {

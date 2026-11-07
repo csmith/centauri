@@ -55,14 +55,14 @@ func (j *JsonStore) save() error {
 }
 
 // GetCertificate returns a previously stored certificate for the given provider, subject and alt names, or `nil` if
-// none exists.
+// none exists. It never returns an error.
 //
 // A certificate with an empty provider (i.e. one loaded from a store created before providers were tracked) is
 // treated as a legacy fallback: it will be returned for any provider. This allows existing certificates to continue
 // to be served until they naturally expire and are replaced with provider-specific certificates on the next renewal.
 //
 // Returned certificates are not guaranteed to be valid.
-func (j *JsonStore) GetCertificate(provider string, subjectName string, altNames []string) *Details {
+func (j *JsonStore) GetCertificate(provider string, subjectName string, altNames []string) (*Details, error) {
 	var legacy *Details
 	for i := range j.certificates {
 		if !j.certificates[i].IsFor(subjectName, altNames) {
@@ -70,7 +70,7 @@ func (j *JsonStore) GetCertificate(provider string, subjectName string, altNames
 		}
 
 		if j.certificates[i].Provider == provider {
-			return j.certificates[i]
+			return j.certificates[i], nil
 		}
 
 		if j.certificates[i].Provider == "" {
@@ -78,7 +78,7 @@ func (j *JsonStore) GetCertificate(provider string, subjectName string, altNames
 		}
 	}
 
-	return legacy
+	return legacy, nil
 }
 
 // LockCertificate acquires a lock over the writing of the given certificate. All calls to LockCertificate should

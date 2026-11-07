@@ -61,18 +61,17 @@ func NewRedisStore(client *redis.Client, keyPrefix string) (*RedisStore, error) 
 }
 
 // GetCertificate returns a previously stored certificate for the given provider, subject and alt names, or `nil` if
-// none exists.
+// none exists. An error is returned if the certificates can't be read from Redis.
 //
 // A certificate with an empty provider (i.e. one loaded from a store created before providers were tracked) is
 // treated as a legacy fallback: it will be returned for any provider. This allows existing certificates to continue
 // to be served until they naturally expire and are replaced with provider-specific certificates on the next renewal.
 //
 // Returned certificates are not guaranteed to be valid.
-func (r *RedisStore) GetCertificate(provider string, subjectName string, altNames []string) *Details {
+func (r *RedisStore) GetCertificate(provider string, subjectName string, altNames []string) (*Details, error) {
 	certificates, err := r.allCertificates()
 	if err != nil {
-		slog.Error("Unable to load certificates from redis", "error", err)
-		return nil
+		return nil, fmt.Errorf("unable to load certificates from redis: %w", err)
 	}
 
 	var legacy *Details
@@ -82,7 +81,7 @@ func (r *RedisStore) GetCertificate(provider string, subjectName string, altName
 		}
 
 		if certificates[i].Provider == provider {
-			return certificates[i]
+			return certificates[i], nil
 		}
 
 		if certificates[i].Provider == "" {
@@ -90,7 +89,7 @@ func (r *RedisStore) GetCertificate(provider string, subjectName string, altName
 		}
 	}
 
-	return legacy
+	return legacy, nil
 }
 
 // SaveCertificate adds the given certificate to the store, replacing any previously saved certificate for the same

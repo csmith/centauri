@@ -62,7 +62,7 @@ func Test_RedisStore_LoadSaveGet(t *testing.T) {
 	newStore, err := NewRedisStore(redis.NewClient(&redis.Options{Addr: server.Addr()}), "test")
 	require.NoError(t, err, "second store should load")
 
-	newCert := newStore.GetCertificate("", cert.Subject, cert.AltNames)
+	newCert := mustGetCertificate(t, newStore, "", cert.Subject, cert.AltNames)
 	assert.Equal(t, cert, newCert, "certificates should match")
 }
 
@@ -98,7 +98,7 @@ func Test_RedisStore_saveCertificate_prunesExpiredCerts(t *testing.T) {
 
 	for i := range certs {
 		t.Run(certs[i].Subject, func(t *testing.T) {
-			hasCert := store.GetCertificate("", certs[i].Subject, certs[i].AltNames) != nil
+			hasCert := mustGetCertificate(t, store, "", certs[i].Subject, certs[i].AltNames) != nil
 			expectedCert := strings.Contains(certs[i].Subject, "-valid")
 			assert.Equal(t, expectedCert, hasCert)
 		})
@@ -160,8 +160,8 @@ func Test_RedisStore_GetCertificate_returnsCertWithMatchingProvider(t *testing.T
 	require.NoError(t, store.SaveCertificate(acmeCert))
 	require.NoError(t, store.SaveCertificate(selfSignedCert))
 
-	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, selfSignedCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, acmeCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, selfSignedCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_RedisStore_GetCertificate_returnsLegacyCertAsFallback(t *testing.T) {
@@ -175,8 +175,8 @@ func Test_RedisStore_GetCertificate_returnsLegacyCertAsFallback(t *testing.T) {
 
 	require.NoError(t, store.SaveCertificate(legacyCert))
 
-	assert.Equal(t, legacyCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_RedisStore_GetCertificate_prefersExactProviderMatchOverLegacy(t *testing.T) {
@@ -196,8 +196,8 @@ func Test_RedisStore_GetCertificate_prefersExactProviderMatchOverLegacy(t *testi
 	require.NoError(t, store.SaveCertificate(legacyCert))
 	require.NoError(t, store.SaveCertificate(acmeCert))
 
-	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, acmeCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_RedisStore_GetCertificate_returnsNilIfNoMatchingProvider(t *testing.T) {
@@ -211,7 +211,7 @@ func Test_RedisStore_GetCertificate_returnsNilIfNoMatchingProvider(t *testing.T)
 
 	require.NoError(t, store.SaveCertificate(acmeCert))
 
-	assert.Nil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Nil(t, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_RedisStore_SaveCertificate_doesNotEvictCertsFromOtherProviders(t *testing.T) {
@@ -234,8 +234,8 @@ func Test_RedisStore_SaveCertificate_doesNotEvictCertsFromOtherProviders(t *test
 	stored, err := store.allCertificates()
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(stored))
-	assert.NotNil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
-	assert.NotNil(t, store.GetCertificate("acme", "*.example.com", nil))
+	assert.NotNil(t, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
+	assert.NotNil(t, mustGetCertificate(t, store, "acme", "*.example.com", nil))
 }
 
 func Test_RedisStore_storesAreIsolatedByKeyPrefix(t *testing.T) {
@@ -254,8 +254,8 @@ func Test_RedisStore_storesAreIsolatedByKeyPrefix(t *testing.T) {
 	}
 	require.NoError(t, storeOne.SaveCertificate(cert))
 
-	assert.Equal(t, cert, storeOne.GetCertificate("", "example.com", nil))
-	assert.Nil(t, storeTwo.GetCertificate("", "example.com", nil))
+	assert.Equal(t, cert, mustGetCertificate(t, storeOne, "", "example.com", nil))
+	assert.Nil(t, mustGetCertificate(t, storeTwo, "", "example.com", nil))
 }
 
 func Test_RedisStore_GetCertificate_skipsCorruptEntries(t *testing.T) {
@@ -269,7 +269,7 @@ func Test_RedisStore_GetCertificate_skipsCorruptEntries(t *testing.T) {
 	}
 	require.NoError(t, store.SaveCertificate(cert))
 
-	assert.Equal(t, cert, store.GetCertificate("", "example.com", nil))
+	assert.Equal(t, cert, mustGetCertificate(t, store, "", "example.com", nil))
 }
 
 func Test_RedisStore_pruneScript_onlyDeletesUnchangedEntries(t *testing.T) {
@@ -328,7 +328,8 @@ func Test_RedisStore_operationsAreBounded(t *testing.T) {
 	store := &RedisStore{client: client, keyPrefix: "test", locks: make(map[string]*redisLock)}
 
 	start := time.Now()
-	assert.Nil(t, store.GetCertificate("", "example.com", nil), "no certificate should be returned when redis is unresponsive")
+	_, err = store.GetCertificate("", "example.com", nil)
+	require.Error(t, err, "an error should be returned when redis is unresponsive")
 	assert.Less(t, time.Since(start), 2*time.Second, "GetCertificate should be bounded by the operation timeout")
 
 	start = time.Now()

@@ -48,6 +48,11 @@
 - Fixed self-signed certificates always using the same serial number, which
   made Firefox reject a renewed certificate after an exception had been
   added for the old one.
+- Fixed Redis errors being treated as a missing certificate. Previously a
+  Redis outage could cause Centauri to request an unnecessary new
+  certificate and stop serving the route's existing one until the next
+  certificate check. Routes now keep their current certificate until Redis
+  is reachable again.
 
 ## 2.9.3 - 2026-11-06
 

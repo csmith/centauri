@@ -11,6 +11,9 @@ import (
 )
 
 // CertificateProvider defines the interface for providing certificates to a Manager.
+//
+// GetExistingCertificate should return a nil certificate and no error if there is no usable stored certificate, and
+// only return an error if the lookup itself failed.
 type CertificateProvider interface {
 	GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
 	GetExistingCertificate(preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error)
@@ -48,7 +51,7 @@ func (m *Manager) SetRoutes(ctx context.Context, newRoutes []*Route, fallback *R
 	}
 
 	for i := range newRoutes {
-		m.loadCertificate(newRoutes[i])
+		m.loadCertificate(newRoutes[i], m.currentCertificate(newRoutes[i]))
 	}
 
 	if err := m.routes.Update(newRoutes, fallback); err != nil {
@@ -57,22 +60,6 @@ func (m *Manager) SetRoutes(ctx context.Context, newRoutes []*Route, fallback *R
 
 	go m.CheckCertificates(ctx)
 	return nil
-}
-
-// loadCertificate attempts to load an existing certificate for use with the given route, to enable it to be served
-// immediately without waiting for certificate renewals.
-func (m *Manager) loadCertificate(route *Route) {
-	if m.provider == nil {
-		return
-	}
-
-	primary, alts := route.CertificateNames()
-	cert, err := m.provider.GetExistingCertificate(route.Provider, primary, alts)
-	if err != nil {
-		slog.Info("No existing certificate found, route will not be served until cert is obtained", "route", route.Domains[0])
-		cert = nil
-	}
-	route.setCertificate(cert)
 }
 
 // CertificateForClient returns a certificate (if one exists) for the domain specified in the provided
@@ -120,6 +107,50 @@ func (m *Manager) MonitorCertificates(ctx context.Context, interval time.Duratio
 	}
 }
 
+// loadCertificate attempts to load an existing certificate for use with the given route, to enable it to be served
+// immediately without waiting for certificate renewals. If the lookup fails, the route is given the current
+// certificate instead, so that a temporary problem with the certificate store doesn't stop it being served.
+func (m *Manager) loadCertificate(route *Route, current *tls.Certificate) {
+	if m.provider == nil {
+		return
+	}
+
+	primary, alts := route.CertificateNames()
+	cert, err := m.provider.GetExistingCertificate(route.Provider, primary, alts)
+	if err != nil {
+		slog.Error(
+			"Unable to load existing certificate, keeping current certificate",
+			"route",
+			route.Domains[0],
+			"error",
+			err,
+		)
+		cert = current
+	} else if cert == nil {
+		slog.Info("No existing certificate found, route will not be served until cert is obtained", "route", route.Domains[0])
+	}
+	route.setCertificate(cert)
+}
+
+// currentCertificate returns the certificate currently being served for the given route's certificate names, if any.
+// The route itself need not be registered: routes are recreated whenever the config changes.
+func (m *Manager) currentCertificate(route *Route) *tls.Certificate {
+	if cert := route.Certificate(); cert != nil {
+		return cert
+	}
+
+	primary, alts := route.CertificateNames()
+	for _, existing := range m.routes.Routes() {
+		existingPrimary, existingAlts := existing.CertificateNames()
+		if existing.Provider == route.Provider && existingPrimary == primary && slices.Equal(existingAlts, alts) {
+			if cert := existing.Certificate(); cert != nil {
+				return cert
+			}
+		}
+	}
+	return nil
+}
+
 // routeForDomain returns the route that can currently serve the given domain, or nil if there is none or it
 // doesn't have a certificate yet.
 func (m *Manager) routeForDomain(domain string) *Route {
@@ -138,7 +169,7 @@ func (m *Manager) updateCert(ctx context.Context, route *Route) {
 	cert, err := m.provider.GetCertificate(ctx, route.Provider, primary, alts)
 	if err != nil {
 		slog.Error("Failed to update certificate", "route", route.Domains[0], "error", err)
-		m.loadCertificate(route)
+		m.loadCertificate(route, route.Certificate())
 		return
 	}
 

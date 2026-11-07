@@ -45,8 +45,7 @@ var dummyCert = &tls.Certificate{}
 func Test_Manager_SetRoutes_doesNotServeRouteIfNoCertificateFound(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
-			err:         fmt.Errorf("ruh roh"),
-			existingErr: fmt.Errorf("ruh roh"),
+			err: errors.New("ruh roh"),
 		}
 
 		route := &Route{
@@ -351,12 +350,61 @@ func Test_Manager_CheckCertificates_doesNotServeUncertifiedRouteIfGetCertificate
 		_ = manager.SetRoutes(t.Context(), []*Route{route}, nil)
 		synctest.Wait()
 
-		route.setCertificate(nil)
 		certManager.err = fmt.Errorf("ruh roh")
-		certManager.existingErr = fmt.Errorf("ruh roh")
 		manager.CheckCertificates(t.Context())
 		assert.Nil(t, manager.routeForDomain("example.com"))
 	})
+}
+
+func Test_Manager_SetRoutes_keepsCurrentCertificateForSameNamesIfLookupFails(t *testing.T) {
+	synctest.Test(
+		t,
+		func(t *testing.T) {
+			certManager := &fakeCertManager{
+				certificate: dummyCert,
+			}
+
+			manager := NewManager(certManager)
+			_ = manager.SetRoutes(t.Context(), []*Route{{Domains: []string{"example.com", "www.example.com"}}}, nil)
+			synctest.Wait()
+
+			certManager.err = errors.New("ruh roh")
+			certManager.existingErr = errors.New("store unavailable")
+			sameNames := &Route{Domains: []string{"example.com", "www.example.com"}}
+			otherNames := &Route{Domains: []string{"example.net"}}
+			otherProvider := &Route{Domains: []string{"example.com", "www.example.com"}, Provider: "other"}
+			_ = manager.SetRoutes(t.Context(), []*Route{sameNames, otherNames, otherProvider}, nil)
+			synctest.Wait()
+
+			assert.Same(t, dummyCert, sameNames.Certificate())
+			assert.Nil(t, otherNames.Certificate())
+			assert.Nil(t, otherProvider.Certificate())
+		},
+	)
+}
+
+func Test_Manager_CheckCertificates_keepsCurrentCertificateIfLookupFails(t *testing.T) {
+	synctest.Test(
+		t,
+		func(t *testing.T) {
+			certManager := &fakeCertManager{
+				certificate: dummyCert,
+			}
+
+			route := &Route{
+				Domains: []string{"example.com"},
+			}
+
+			manager := NewManager(certManager)
+			_ = manager.SetRoutes(t.Context(), []*Route{route}, nil)
+			synctest.Wait()
+
+			certManager.err = errors.New("ruh roh")
+			certManager.existingErr = errors.New("store unavailable")
+			manager.CheckCertificates(t.Context())
+			assert.Same(t, dummyCert, route.Certificate())
+		},
+	)
 }
 
 func Test_Manager_CheckCertificates_servesRouteIfGetCertificateFails_andPreviousCertificateExists(t *testing.T) {

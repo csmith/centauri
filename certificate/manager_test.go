@@ -2,6 +2,7 @@ package certificate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -19,17 +20,18 @@ type fakeStore struct {
 	certificate  *Details
 	savedCert    *Details
 	err          error
+	getErr       error
 	locked       bool
 	lockedOnSave bool
 	lockedOnGet  bool
 }
 
-func (f *fakeStore) GetCertificate(provider string, subject string, altNames []string) *Details {
+func (f *fakeStore) GetCertificate(provider string, subject string, altNames []string) (*Details, error) {
 	f.lockedOnGet = f.locked && subject == f.subject && slices.Equal(altNames, f.altNames)
 	f.provider = provider
 	f.subject = subject
 	f.altNames = altNames
-	return f.certificate
+	return f.certificate, f.getErr
 }
 
 func (f *fakeStore) SaveCertificate(cert *Details) error {
@@ -138,6 +140,21 @@ func Test_Manager_GetCertificate_retrievesFromStoreIfValid(t *testing.T) {
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 	assert.Equal(t, "example.com", store.subject)
 	assert.Equal(t, []string{"example.net"}, store.altNames)
+}
+
+func Test_Manager_GetCertificate_doesNotObtainCertificateIfStoreErrors(t *testing.T) {
+	store := &fakeStore{getErr: errors.New("store unavailable")}
+	supplier := &fakeSupplier{certificate: &Details{Certificate: certPem, PrivateKey: keyPem}}
+
+	_, err := NewManager(
+		store,
+		map[string]Supplier{"test": supplier},
+		[]string{"test"},
+		true,
+	).GetCertificate(t.Context(), "", "example.com", []string{"example.net"})
+	require.ErrorIs(t, err, store.getErr)
+	assert.Empty(t, supplier.subject, "should not request a certificate from the supplier")
+	assert.Nil(t, store.savedCert)
 }
 
 func Test_Manager_GetCertificate_updatesStapleIfTooOld(t *testing.T) {
@@ -677,7 +694,7 @@ func Test_Manager_GetExistingCertificate_retrievesFromStoreWhenNeedsStapleSoon(t
 	assert.Equal(t, cert.OcspResponse, c.OCSPStaple)
 }
 
-func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
+func Test_Manager_GetExistingCertificate_returnsNilWhenExpired(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * -12),
 		NextOcspUpdate: time.Now().Add(time.Hour * 2),
@@ -697,11 +714,12 @@ func Test_Manager_GetExistingCertificate_errorsWhenExpired(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
-	require.Error(t, err)
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Nil(t, c)
 }
 
-func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
+func Test_Manager_GetExistingCertificate_returnsNilWhenNotStapled(t *testing.T) {
 	cert := &Details{
 		NotAfter:       time.Now().Add(time.Hour * 36),
 		NextOcspUpdate: time.Now().Add(time.Hour * -2),
@@ -721,11 +739,12 @@ func Test_Manager_GetExistingCertificate_errorsWhenNotStapled(t *testing.T) {
 		true,
 	)
 
-	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
-	require.Error(t, err)
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Nil(t, c)
 }
 
-func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testing.T) {
+func Test_Manager_GetExistingCertificate_returnsNilWhenNoCertificateExists(t *testing.T) {
 	store := &fakeStore{certificate: nil}
 	supplier := &fakeSupplier{}
 
@@ -736,8 +755,9 @@ func Test_Manager_GetExistingCertificate_errorsWhenNoCertificateExists(t *testin
 		true,
 	)
 
-	_, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
-	require.Error(t, err)
+	c, err := manager.GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.NoError(t, err)
+	assert.Nil(t, c)
 }
 
 func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T) {
@@ -753,4 +773,16 @@ func Test_Manager_GetExistingCertificate_errorsWhenSupplierInvalid(t *testing.T)
 
 	_, err := manager.GetExistingCertificate("blah", "example.com", []string{"example.net"})
 	require.Error(t, err)
+}
+
+func Test_Manager_GetExistingCertificate_errorsWhenStoreErrors(t *testing.T) {
+	store := &fakeStore{getErr: errors.New("store unavailable")}
+
+	_, err := NewManager(
+		store,
+		map[string]Supplier{"test": &fakeSupplier{}},
+		[]string{"test"},
+		true,
+	).GetExistingCertificate("", "example.com", []string{"example.net"})
+	require.ErrorIs(t, err, store.getErr)
 }

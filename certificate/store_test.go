@@ -47,7 +47,7 @@ func Test_Store_LoadSaveGet(t *testing.T) {
 	newStore, err := NewStore(path)
 	require.NoError(t, err, "second store should load")
 
-	newCert := newStore.GetCertificate("", cert.Subject, cert.AltNames)
+	newCert := mustGetCertificate(t, newStore, "", cert.Subject, cert.AltNames)
 	assert.Equal(t, cert, newCert, "certificates should match")
 }
 
@@ -85,7 +85,7 @@ func Test_Store_saveCertificate_prunesExpiredCerts(t *testing.T) {
 
 	for i := range certs {
 		t.Run(certs[i].Subject, func(t *testing.T) {
-			hasCert := store.GetCertificate("", certs[i].Subject, certs[i].AltNames) != nil
+			hasCert := mustGetCertificate(t, store, "", certs[i].Subject, certs[i].AltNames) != nil
 			expectedCert := strings.Contains(certs[i].Subject, "-valid")
 			assert.Equal(t, expectedCert, hasCert)
 		})
@@ -149,8 +149,8 @@ func Test_Store_GetCertificate_returnsCertWithMatchingProvider(t *testing.T) {
 	require.NoError(t, store.SaveCertificate(acmeCert))
 	require.NoError(t, store.SaveCertificate(selfSignedCert))
 
-	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, selfSignedCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, acmeCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, selfSignedCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_Store_GetCertificate_returnsLegacyCertAsFallback(t *testing.T) {
@@ -166,8 +166,8 @@ func Test_Store_GetCertificate_returnsLegacyCertAsFallback(t *testing.T) {
 
 	require.NoError(t, store.SaveCertificate(legacyCert))
 
-	assert.Equal(t, legacyCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_Store_GetCertificate_prefersExactProviderMatchOverLegacy(t *testing.T) {
@@ -189,8 +189,8 @@ func Test_Store_GetCertificate_prefersExactProviderMatchOverLegacy(t *testing.T)
 	require.NoError(t, store.SaveCertificate(legacyCert))
 	require.NoError(t, store.SaveCertificate(acmeCert))
 
-	assert.Equal(t, acmeCert, store.GetCertificate("acme", "*.example.com", nil))
-	assert.Equal(t, legacyCert, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Equal(t, acmeCert, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+	assert.Equal(t, legacyCert, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_Store_GetCertificate_returnsNilIfNoMatchingProvider(t *testing.T) {
@@ -206,7 +206,7 @@ func Test_Store_GetCertificate_returnsNilIfNoMatchingProvider(t *testing.T) {
 
 	require.NoError(t, store.SaveCertificate(acmeCert))
 
-	assert.Nil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
+	assert.Nil(t, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
 }
 
 func Test_Store_SaveCertificate_doesNotEvictCertsFromOtherProviders(t *testing.T) {
@@ -229,6 +229,13 @@ func Test_Store_SaveCertificate_doesNotEvictCertsFromOtherProviders(t *testing.T
 	require.NoError(t, store.SaveCertificate(acmeCert))
 
 	assert.Equal(t, 2, len(store.certificates))
-	assert.NotNil(t, store.GetCertificate("selfsigned", "*.example.com", nil))
-	assert.NotNil(t, store.GetCertificate("acme", "*.example.com", nil))
+	assert.NotNil(t, mustGetCertificate(t, store, "selfsigned", "*.example.com", nil))
+	assert.NotNil(t, mustGetCertificate(t, store, "acme", "*.example.com", nil))
+}
+
+func mustGetCertificate(t *testing.T, store Store, provider string, subject string, altNames []string) *Details {
+	t.Helper()
+	cert, err := store.GetCertificate(provider, subject, altNames)
+	require.NoError(t, err)
+	return cert
 }
