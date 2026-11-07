@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -21,7 +22,6 @@ type CertificateProvider interface {
 type Manager struct {
 	provider CertificateProvider
 	routes   routeMap
-	fallback *Route
 }
 
 // NewManager creates a new route provider. Routes should be set using the SetRoutes method after creation.
@@ -44,15 +44,18 @@ func (m *Manager) SetRoutes(ctx context.Context, newRoutes []*Route, fallback *R
 		slog.Debug("Configuring proxy manager", "routes", len(newRoutes), "fallback", fallback != nil)
 	}
 
+	if fallback != nil && !slices.Contains(newRoutes, fallback) {
+		newRoutes = append(slices.Clone(newRoutes), fallback)
+	}
+
 	for i := range newRoutes {
 		m.loadCertificate(newRoutes[i])
 	}
 
-	if err := m.routes.Update(newRoutes); err != nil {
+	if err := m.routes.Update(newRoutes, fallback); err != nil {
 		return err
 	}
 
-	m.fallback = fallback
 	go m.CheckCertificates(ctx)
 	return nil
 }
@@ -76,7 +79,7 @@ func (m *Manager) loadCertificate(route *Route) {
 // RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
 // nil is returned.
 func (m *Manager) RouteForDomain(domain string) *Route {
-	route := m.routeFor(domain)
+	route := m.routes.Get(domain)
 
 	if route == nil || (m.provider != nil && route.Certificate() == nil) {
 		return nil
@@ -93,20 +96,11 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 		return nil, fmt.Errorf("this manager does not support obtaining certificates")
 	}
 
-	route := m.routeFor(hello.ServerName)
+	route := m.routes.Get(hello.ServerName)
 	if route == nil {
 		return nil, nil
 	}
 	return route.Certificate(), nil
-}
-
-// routeFor looks up a route to be used for the given domain. If there is no direct match and a fallback
-// route is defined, that will be returned.
-func (m *Manager) routeFor(domain string) *Route {
-	if match := m.routes.Get(domain); match != nil {
-		return match
-	}
-	return m.fallback
 }
 
 // CheckCertificates checks and updates the certificates required for registered routes.
@@ -152,18 +146,25 @@ func (m *Manager) updateCert(ctx context.Context, route *Route) {
 	route.setCertificate(cert)
 }
 
-// routeMap maintains a map of domain names to routes, using copy-on-write
-// semantics.
+// routeMap holds the current set of routes. Each update publishes a new immutable snapshot, so
+// readers always see a consistent set of routes, domains and fallback.
 type routeMap struct {
-	domains atomic.Pointer[map[string]*Route]
-	routes  atomic.Pointer[[]*Route]
+	current atomic.Pointer[routeSnapshot]
 }
 
-// Update replaces all known routes with the ones provided.
-func (r *routeMap) Update(routes []*Route) error {
-	newDomains := make(map[string]*Route)
-	newRoutes := make([]*Route, len(routes))
-	copy(newRoutes, routes)
+type routeSnapshot struct {
+	domains  map[string]*Route
+	routes   []*Route
+	fallback *Route
+}
+
+// Update replaces all known routes and the fallback with the ones provided.
+func (r *routeMap) Update(routes []*Route, fallback *Route) error {
+	snapshot := &routeSnapshot{
+		domains:  make(map[string]*Route),
+		routes:   slices.Clone(routes),
+		fallback: fallback,
+	}
 
 	for i := range routes {
 		route := routes[i]
@@ -172,27 +173,30 @@ func (r *routeMap) Update(routes []*Route) error {
 				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
 			}
 
-			newDomains[strings.ToLower(route.Domains[j])] = route
+			snapshot.domains[strings.ToLower(route.Domains[j])] = route
 		}
 	}
 
-	r.domains.Store(&newDomains)
-	r.routes.Store(&newRoutes)
+	r.current.Store(snapshot)
 	return nil
 }
 
-// Get retrieves the route for the given domain, or nil if no such route exists.
+// Get retrieves the route for the given domain, the fallback if there is no match, or nil if
+// there is neither.
 func (r *routeMap) Get(domain string) *Route {
-	if m := r.domains.Load(); m != nil {
-		return (*m)[strings.ToLower(domain)]
+	snapshot := r.current.Load()
+	if snapshot == nil {
+		return nil
 	}
-	return nil
+	if route := snapshot.domains[strings.ToLower(domain)]; route != nil {
+		return route
+	}
+	return snapshot.fallback
 }
 
-// Routes returns a snapshot of all registered routes.
 func (r *routeMap) Routes() []*Route {
-	if m := r.routes.Load(); m != nil {
-		return *m
+	if snapshot := r.current.Load(); snapshot != nil {
+		return snapshot.routes
 	}
 	return nil
 }

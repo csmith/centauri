@@ -6,6 +6,7 @@
 
 - Fixed `redirect-to-primary` causing a redirect loop when the primary domain
   was written with capital letters in the config.
+- Fixed a data race on the fallback route when the config is reloaded.
 
 ## 2.9.3 - 2026-11-06
 

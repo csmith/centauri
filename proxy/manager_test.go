@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"testing"
 	"testing/synctest"
@@ -122,6 +123,46 @@ func Test_Manager_RouteForDomain_returnsFallbackIfSpecified(t *testing.T) {
 		res := manager.RouteForDomain("example.net")
 		assert.Equal(t, route, res)
 	})
+}
+
+func Test_Manager_SetRoutes_obtainsCertificateForFallbackNotInRoutes(t *testing.T) {
+	synctest.Test(
+		t,
+		func(t *testing.T) {
+			manager := NewManager(
+				&fakeCertManager{
+					existingErr: errors.New("ruh roh"),
+					certificate: dummyCert,
+				},
+			)
+			fallback := &Route{Domains: []string{"fallback.example.com"}}
+			_ = manager.SetRoutes(t.Context(), nil, fallback)
+			synctest.Wait()
+
+			assert.Equal(t, fallback, manager.RouteForDomain("example.net"))
+		},
+	)
+}
+
+func Test_Manager_SetRoutes_concurrentWithLookupsOfFallback(t *testing.T) {
+	manager := NewManager(nil)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 1000 {
+			_ = manager.SetRoutes(t.Context(), nil, &Route{Domains: []string{"example.com"}})
+		}
+	}()
+
+	for {
+		select {
+		case <-done:
+			assert.NotNil(t, manager.RouteForDomain("example.net"))
+			return
+		default:
+			manager.RouteForDomain("example.net")
+		}
+	}
 }
 
 func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
