@@ -4,10 +4,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"slices"
 	"sort"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 // Details contains the details of a certificate we've previously obtained and saved for future use.
@@ -63,7 +62,7 @@ func (s *Details) IsFor(subject string, altNames []string) bool {
 	sort.Strings(altNames1)
 	sort.Strings(altNames2)
 
-	return slices.Compare(altNames1, altNames2) == 0
+	return slices.Equal(altNames1, altNames2)
 }
 
 // keyPair returns this certificate's public and private key and OCSP staple as a tls.Certificate.
