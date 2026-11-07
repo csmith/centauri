@@ -20,6 +20,9 @@
   it is in flight.
 - Hosts with a trailing dot (e.g. `example.com.`) now match the same route as
   those without.
+- The `TRUSTED_DOWNSTREAMS` documentation no longer suggests trusting all
+  private networks, and warns that Docker can make public clients appear to
+  come from a private address.
 
 ### Fixed
 

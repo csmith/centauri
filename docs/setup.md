@@ -217,7 +217,15 @@ existing `X-Forwarded-*` headers will be preserved and the current connection's 
 will be appended to `X-Forwarded-For`. When a request comes from an untrusted source,
 all `X-Forwarded-*` headers will be replaced with values based on the current connection.
 
-Example: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` to trust RFC 1918 private networks.
+Only list the addresses of the proxies in front of Centauri, e.g. `10.0.0.5/32`.
+Any client in a trusted range can set these headers to whatever it likes.
+
+When running under Docker, some connections are relayed by Docker's userland
+proxy and appear to come from the network's gateway (e.g. `172.18.0.1`). This
+includes IPv6 connections to a published port when the container network has
+no IPv6, connections from the host's loopback, and all connections on Docker
+Desktop. Don't trust a range that includes the gateway, or those clients will
+be trusted too.
 
 ### `IDLE_TIMEOUT`
 
