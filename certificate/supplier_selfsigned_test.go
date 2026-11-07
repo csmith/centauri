@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-acme/lego/v5/certcrypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_SelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testing.T) {
@@ -19,4 +20,20 @@ func Test_SelfSignedSupplier_GetCertificate_returnsCertWithCorrectNames(t *testi
 
 	assert.Equal(t, "subject.example.com", cert.Subject.CommonName)
 	assert.Equal(t, []string{"subject.example.com", "alt1.example.com", "alt2.example.com"}, cert.DNSNames)
+}
+
+func Test_SelfSignedSupplier_GetCertificate_usesDifferentSerials(t *testing.T) {
+	supplier := &SelfSignedSupplier{}
+
+	first, err := supplier.GetCertificate(t.Context(), "example.com", nil, false)
+	require.NoError(t, err)
+	second, err := supplier.GetCertificate(t.Context(), "example.com", nil, false)
+	require.NoError(t, err)
+
+	firstCert, err := certcrypto.ParsePEMCertificate([]byte(first.Certificate))
+	require.NoError(t, err)
+	secondCert, err := certcrypto.ParsePEMCertificate([]byte(second.Certificate))
+	require.NoError(t, err)
+
+	assert.NotEqual(t, firstCert.SerialNumber, secondCert.SerialNumber)
 }

@@ -27,8 +27,13 @@ func (s *SelfSignedSupplier) GetCertificate(_ context.Context, subject string, a
 		return nil, err
 	}
 
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+
 	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			Organization: []string{"Centauri"},
 			CommonName:   subject,

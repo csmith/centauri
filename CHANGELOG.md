@@ -33,6 +33,9 @@
   when stopped while reconnecting to the config server.
 - Fixed HTTP-to-HTTPS redirects decoding encoded characters in the path
   (e.g. `/a%2Fb` was redirected to `/a/b`).
+- Fixed self-signed certificates always using the same serial number, which
+  made Firefox reject a renewed certificate after an exception had been
+  added for the old one.
 
 ## 2.9.3 - 2026-11-06
 
