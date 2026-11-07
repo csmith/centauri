@@ -35,8 +35,9 @@ type Rewriter struct {
 	errorClient *http.Client
 }
 
-// NewRewriter creates a new Rewriter backed by the given route manager.
-func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet) *Rewriter {
+// NewRewriter creates a new Rewriter backed by the given route manager. Connections to error
+// upstreams are made using dialContext.
+func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet, dialContext DialContextFunc) *Rewriter {
 	return &Rewriter{
 		provider: manager,
 		decorators: []Decorator{
@@ -44,7 +45,7 @@ func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet) *Rewriter {
 			NewBannedHeaderDecorator(),
 			NewUserAgentDecorator(),
 		},
-		errorClient: newErrorClient(),
+		errorClient: newErrorClient(dialContext),
 	}
 }
 
@@ -68,6 +69,7 @@ func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 		r.decorators[i].Decorate(p.In, p.Out)
 	}
 
+	p.Out = p.Out.WithContext(withRoute(p.Out.Context(), route))
 	p.Out.URL.Scheme = "http"
 	p.Out.URL.Host = r.selectUpstream(route)
 }

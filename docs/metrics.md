@@ -13,6 +13,10 @@ The following Centauri-specific metrics are exported:
   excluding automatic redirects from HTTP->HTTPS. Labels:
     - `route`: the name (first listed domain) of the route the response was for
     - `status`: the HTTP response status sent to the client
+- `centauri_upstream_dial_blocked_total` - counter of connections Centauri
+  refused to open because the address wasn't a configured upstream. This
+  should always be zero; anything else indicates a bug, and each occurrence
+  is also logged as an error.
 
 In addition, the built-in Prometheus collectors for Go and process specific
 metrics are enabled.

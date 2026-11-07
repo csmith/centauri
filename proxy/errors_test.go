@@ -16,7 +16,7 @@ import (
 func newTestRewriter(route *Route) *Rewriter {
 	return &Rewriter{
 		provider:    &fakeProvider{route: route},
-		errorClient: newErrorClient(),
+		errorClient: newErrorClient(nil),
 	}
 }
 

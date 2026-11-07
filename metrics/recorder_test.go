@@ -129,3 +129,12 @@ centauri_tls_hello_total{known="true"} 2
 
 	assert.NoError(t, testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_tls_hello_total"))
 }
+
+func Test_Recorder_TracksBlockedDials(t *testing.T) {
+	rec := NewRecorder(func(domain string) *proxy.Route { return nil })
+
+	rec.TrackBlockedDial()
+	rec.TrackBlockedDial()
+
+	assert.InDelta(t, 2.0, testutil.ToFloat64(rec.blockedDials), 0)
+}

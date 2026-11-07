@@ -25,11 +25,13 @@ func newTestContext(t *testing.T, routes ...*proxy.Route) *Context {
 	manager := proxy.NewManager(nil)
 	require.NoError(t, manager.SetRoutes(t.Context(), routes, nil))
 
+	dialer := &proxy.AllowlistDialer{}
 	return &Context{
-		Manager:  manager,
-		Rewriter: proxy.NewRewriter(manager, nil),
-		Recorder: metrics.NewRecorder(manager.RouteForDomain),
-		ErrChan:  make(chan error, 1),
+		Manager:     manager,
+		Rewriter:    proxy.NewRewriter(manager, nil, dialer.DialContext),
+		Recorder:    metrics.NewRecorder(manager.RouteForDomain),
+		DialContext: dialer.DialContext,
+		ErrChan:     make(chan error, 1),
 	}
 }
 

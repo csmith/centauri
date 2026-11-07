@@ -19,10 +19,11 @@ var forwardedHeaders = []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwar
 // newErrorClient creates the client used to fetch responses from error upstreams. It is separate
 // from the transport used for proxied requests: error fetches are rare and want a hard timeout
 // that regular proxying must not have.
-func newErrorClient() *http.Client {
+func newErrorClient(dialContext DialContextFunc) *http.Client {
 	return &http.Client{
 		Timeout: errorFetchTimeout,
 		Transport: &http.Transport{
+			DialContext:        dialContext,
 			DisableCompression: true,
 		},
 	}
@@ -100,7 +101,12 @@ func (r *Rewriter) fetchErrorPage(status int, original *http.Request) *http.Resp
 		target.RawQuery = mapping.RawQuery
 	}
 
-	request, err := http.NewRequestWithContext(original.Context(), http.MethodGet, target.String(), nil)
+	request, err := http.NewRequestWithContext(
+		withRoute(original.Context(), route),
+		http.MethodGet,
+		target.String(),
+		nil,
+	)
 	if err != nil {
 		slog.Warn("Failed to create error page request", "upstream", mapping.Upstream, "error", err)
 		return nil

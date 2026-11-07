@@ -143,7 +143,9 @@ func run(args []string, signalChan <-chan os.Signal) error {
 	}
 
 	proxyManager := proxy.NewManager(provider)
-	rewriter := proxy.NewRewriter(proxyManager, downstreams)
+	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
+	dialer := &proxy.AllowlistDialer{OnBlock: recorder.TrackBlockedDial}
+	rewriter := proxy.NewRewriter(proxyManager, downstreams, dialer.DialContext)
 
 	if err := configSource.Start(context.Background(), proxyManager.SetRoutes, errChan); err != nil {
 		return fmt.Errorf("failed to start config source: %v", err)
@@ -158,12 +160,11 @@ func run(args []string, signalChan <-chan os.Signal) error {
 		)
 	}
 
-	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
-
 	if err := f.Serve(&frontend.Context{
 		Manager:     proxyManager,
 		Rewriter:    rewriter,
 		Recorder:    recorder,
+		DialContext: dialer.DialContext,
 		ErrChan:     errChan,
 		IdleTimeout: *idleTimeout,
 	}); err != nil {

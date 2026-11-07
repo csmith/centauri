@@ -414,6 +414,52 @@ func Test_Run_OnError_FollowsRedirectFromErrorUpstream(t *testing.T) {
 	assert.Contains(t, string(b), "the error page after a redirect")
 }
 
+func Test_Run_OnError_DoesNotFollowRedirectToUnconfiguredHost(t *testing.T) {
+	// Centauri only connects to configured upstreams, so a redirect from the error upstream to
+	// some other server must not be followed.
+	var otherHit atomic.Bool
+	other := startServer(
+		t,
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				otherHit.Store(true)
+				w.Write([]byte("the other server"))
+			},
+		),
+	)
+
+	c := startCentauri(
+		t,
+		"CONFIG",
+		writeConfig(
+			t,
+			"on-error.conf",
+			"ERROR_UPSTREAM",
+			startServer(
+				t,
+				http.HandlerFunc(
+					func(w http.ResponseWriter, r *http.Request) {
+						http.Redirect(w, r, "http://"+other+"/final", http.StatusFound)
+					},
+				),
+			),
+		),
+		"PROVIDER",
+		"selfsigned",
+	)
+
+	time.Sleep(2 * time.Second)
+
+	res, err := proxyGet(c.httpsPort, "https://example.com/test")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, res.StatusCode)
+
+	b, _ := io.ReadAll(res.Body)
+	defer res.Body.Close()
+	assert.Contains(t, string(b), "The server was unable to complete your request")
+	assert.False(t, otherHit.Load())
+}
+
 func Test_Run_OnError_PassesHeadersFromErrorUpstream(t *testing.T) {
 	// Headers set by the error upstream (such as Content-Type) should be served to the client.
 	errorUpstream := startServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

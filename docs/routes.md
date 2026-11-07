@@ -67,6 +67,8 @@ normal error handling. Responses from the mapped upstream have the route's
 
 If the mapped upstream returns a redirect, Centauri follows it itself and
 serves the final response; the redirect is not passed on to the client.
+Centauri only ever connects to the upstreams in its config, so a redirect to
+any other host isn't followed and the normal error handling is used instead.
 
 ### `provider`
 

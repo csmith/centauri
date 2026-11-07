@@ -17,6 +17,7 @@ type Recorder struct {
 	registry        *prometheus.Registry
 	helloCounter    *prometheus.CounterVec
 	responseCounter *prometheus.CounterVec
+	blockedDials    prometheus.Counter
 }
 
 // NewRecorder creates a new Recorder that will use the given function to map
@@ -35,6 +36,13 @@ func NewRecorder(routeForDomain func(domain string) *proxy.Route) *Recorder {
 			Name: "centauri_response_total",
 			Help: "The total number of HTTP responses sent to clients",
 		}, []string{"route", "status"}),
+
+		blockedDials: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "centauri_upstream_dial_blocked_total",
+				Help: "The total number of connections refused because they were not to a configured upstream",
+			},
+		),
 	}
 	r.registerMetrics()
 	return r
@@ -49,6 +57,10 @@ func (r *Recorder) registerMetrics() {
 
 	if err := r.registry.Register(r.responseCounter); err != nil {
 		slog.Error("Failed to register response counter", "error", err)
+	}
+
+	if err := r.registry.Register(r.blockedDials); err != nil {
+		slog.Error("Failed to register blocked dial counter", "error", err)
 	}
 
 	// Prometheus-supplied general process metrics
@@ -97,6 +109,11 @@ func (r *Recorder) TrackResponse(fn func(*http.Response) error) func(*http.Respo
 
 		return fn(resp)
 	}
+}
+
+// TrackBlockedDial records a connection being refused because it was not to a configured upstream.
+func (r *Recorder) TrackBlockedDial() {
+	r.blockedDials.Inc()
 }
 
 // TrackHello wraps the GetCertificate field of tls.Config, recording whether

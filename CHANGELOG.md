@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changes
+
+- Centauri now refuses to connect to anything other than the upstreams
+  (including `on_error` upstreams) in its config. Any attempt to do so is
+  logged as an error and counted in the new
+  `centauri_upstream_dial_blocked_total` metric. As a result, `on_error`
+  upstreams can no longer redirect Centauri to hosts that aren't configured
+  as upstreams.
+
 ### Fixed
 
 - Fixed `redirect-to-primary` causing a redirect loop when the primary domain
