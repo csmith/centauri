@@ -80,10 +80,11 @@ func (r *Recorder) Handler() http.Handler {
 }
 
 // TrackBadGateway wraps the ErrorHandler field of httputil.ReverseProxy,
-// recording a response with an implied 502 status code.
+// recording a response with an implied 502 status code. Requests cancelled by the client aren't
+// recorded, as no response reaches it.
 func (r *Recorder) TrackBadGateway(fn func(http.ResponseWriter, *http.Request, error)) func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, req *http.Request, err error) {
-		if route := proxy.DecisionFromContext(req.Context()).Route(); route != nil {
+		if route := proxy.DecisionFromContext(req.Context()).Route(); route != nil && !proxy.ClientCancelled(req) {
 			r.responseCounter.With(prometheus.Labels{
 				"route":  route.Domains[0],
 				"status": "502",

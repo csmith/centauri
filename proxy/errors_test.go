@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -299,6 +300,68 @@ func Test_Rewriter_RewriteError_FallsBackWhenErrorUpstreamUnreachable(t *testing
 	handler(recorder, newRoutedRequest(t, route, http.MethodGet), assert.AnError)
 
 	assert.True(t, fallbackCalled)
+}
+
+func Test_Rewriter_RewriteError_SkipsErrorUpstreamWhenClientCancelled(t *testing.T) {
+	route := &Route{
+		Upstreams:     []Upstream{{Host: "upstream:8080"}},
+		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: "error:8080"}},
+	}
+
+	errorFetched := false
+	rewriter := &Rewriter{
+		errorClient: &http.Client{
+			Transport: roundTripperFunc(
+				func(*http.Request) (*http.Response, error) {
+					errorFetched = true
+					return nil, assert.AnError
+				},
+			),
+		},
+	}
+
+	fallbackCalled := false
+	handler := rewriter.RewriteError(
+		func(w http.ResponseWriter, r *http.Request, err error) {
+			fallbackCalled = true
+		},
+	)
+
+	request := newRoutedRequest(t, route, http.MethodGet)
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	handler(httptest.NewRecorder(), request.WithContext(ctx), context.Canceled)
+
+	assert.False(t, errorFetched)
+	assert.True(t, fallbackCalled)
+}
+
+func Test_Rewriter_RewriteError_UsesErrorUpstreamForUpstreamTimeouts(t *testing.T) {
+	errorUpstream := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte("error page"))
+			},
+		),
+	)
+	defer errorUpstream.Close()
+
+	route := &Route{
+		Upstreams:     []Upstream{{Host: "upstream:8080"}},
+		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
+	}
+
+	handler := newTestRewriter().RewriteError(
+		func(w http.ResponseWriter, r *http.Request, err error) {
+			t.Error("fallback should not be called")
+		},
+	)
+
+	recorder := httptest.NewRecorder()
+	handler(recorder, newRoutedRequest(t, route, http.MethodGet), context.DeadlineExceeded)
+
+	assert.Equal(t, http.StatusBadGateway, recorder.Code)
+	assert.Equal(t, "error page", recorder.Body.String())
 }
 
 func Test_Rewriter_RewriteResponse_FollowsRedirectsOnSameUpstream(t *testing.T) {

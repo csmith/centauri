@@ -31,6 +31,10 @@
 
 ### Fixed
 
+- Fixed requests cancelled by the client while waiting for the upstream
+  being counted as `502` responses in `centauri_response_total` and logged
+  as upstream failures. They are now ignored by the metric, logged at debug
+  level, and no longer trigger a fetch from an `on_error` upstream.
 - Fixed the `route` label of `centauri_response_total` being taken from the
   `X-Forwarded-Host` header, which a trusted downstream could set to any
   route. Responses are now counted against the route that served them.

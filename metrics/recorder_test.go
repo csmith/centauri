@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
@@ -54,6 +55,24 @@ centauri_response_total{route="example.com",status="502"} 1
 `
 
 	assert.NoError(t, testutil.CollectAndCompare(rec.registry, bytes.NewBufferString(expected), "centauri_response_total"))
+}
+
+func Test_Recorder_DoesNotTrackBadGatewayWhenClientCancelled(t *testing.T) {
+	rec := NewRecorder()
+
+	req := routedRequest(t, exampleRoute)
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+
+	fnCalled := false
+	rec.TrackBadGateway(func(http.ResponseWriter, *http.Request, error) { fnCalled = true })(
+		httptest.NewRecorder(),
+		req.WithContext(ctx),
+		context.Canceled,
+	)
+
+	assert.True(t, fnCalled)
+	assert.Equal(t, 0, testutil.CollectAndCount(rec.registry, "centauri_response_total"))
 }
 
 func Test_Recorder_TracksResponses(t *testing.T) {

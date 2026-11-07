@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -89,9 +91,16 @@ func (r *Rewriter) RewriteResponse(response *http.Response) error {
 // either because it could not be contacted or because it could not be proxied. It satisfies the
 // signature of the ErrorHandler field of httputil.ReverseProxy. If the route maps the status code
 // to an error upstream then a response is served from it; otherwise fn is called to serve a
-// fallback response.
+// fallback response. If the client cancelled the request, fn is called without trying an error
+// upstream.
 func (r *Rewriter) RewriteError(fn func(http.ResponseWriter, *http.Request, error)) func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, req *http.Request, err error) {
+		if ClientCancelled(req) {
+			slog.Debug("Client cancelled request before upstream responded", "host", req.Host, "error", err)
+			fn(writer, req, err)
+			return
+		}
+
 		slog.Warn("Failed to connect to upstream", "host", req.Host, "error", err)
 
 		if r.serveUpstreamErrorPage(writer, req, http.StatusBadGateway) {
@@ -101,6 +110,12 @@ func (r *Rewriter) RewriteError(fn func(http.ResponseWriter, *http.Request, erro
 		r.rewriteHeaders(writer.Header(), req)
 		fn(writer, req, err)
 	}
+}
+
+// ClientCancelled reports whether the given request failed because the client went away (for
+// example, by closing the connection) rather than because of a problem with the upstream.
+func ClientCancelled(req *http.Request) bool {
+	return errors.Is(req.Context().Err(), context.Canceled)
 }
 
 // rewriteHeaders adjusts the headers according to the rules in the request's route.

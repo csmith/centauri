@@ -2,12 +2,14 @@ package frontend
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -184,6 +186,68 @@ func Test_Context_CreateProxy_fallsBackToDefaultPageWhenErrorUpstreamUnreachable
 	body, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "The server was unable to complete your request")
+}
+
+func Test_Context_CreateProxy_ignoresRequestsCancelledByClient(t *testing.T) {
+	arrived := make(chan struct{})
+	upstream := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				close(arrived)
+				<-r.Context().Done()
+			},
+		),
+	)
+	defer upstream.Close()
+
+	var errorFetches atomic.Int32
+	errorUpstream := httptest.NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				errorFetches.Add(1)
+			},
+		),
+	)
+	defer errorUpstream.Close()
+
+	ctx := newTestContext(
+		t,
+		&proxy.Route{
+			Domains:   []string{"example.com"},
+			Upstreams: []proxy.Upstream{{Host: upstream.Listener.Addr().String()}},
+			ErrorMappings: []proxy.ErrorMapping{
+				{Status: http.StatusBadGateway, Upstream: errorUpstream.Listener.Addr().String()},
+			},
+		},
+	)
+
+	proxyServer := httptest.NewServer(ctx.createProxy())
+
+	requestContext, cancel := context.WithCancel(t.Context())
+	request, err := http.NewRequestWithContext(requestContext, http.MethodGet, proxyServer.URL, nil)
+	require.NoError(t, err)
+	request.Host = "example.com"
+
+	done := make(chan error)
+	go func() {
+		response, err := proxyServer.Client().Do(request)
+		if err == nil {
+			_ = response.Body.Close()
+		}
+		done <- err
+	}()
+
+	<-arrived
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+
+	// Close waits for the proxy to finish handling the request.
+	proxyServer.Close()
+
+	scrape := httptest.NewRecorder()
+	ctx.Recorder.Handler().ServeHTTP(scrape, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/metrics", nil))
+	assert.NotContains(t, scrape.Body.String(), "centauri_response_total{")
+	assert.Zero(t, errorFetches.Load())
 }
 
 func Test_Context_CreateProxy_redirectsSecondaryDomainsToPrimary(t *testing.T) {
