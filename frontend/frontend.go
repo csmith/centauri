@@ -22,7 +22,6 @@ const (
 	readHeaderTimeout = time.Second * 5
 	readTimeout       = time.Duration(0)
 	writeTimeout      = time.Duration(0)
-	idleTimeout       = time.Duration(0)
 )
 
 // Frontend represents something Centauri can listen for requests on.
@@ -38,10 +37,11 @@ type Frontend interface {
 
 // Context contains the components shared by all frontends when serving requests.
 type Context struct {
-	Manager  *proxy.Manager
-	Rewriter *proxy.Rewriter
-	Recorder *metrics.Recorder
-	ErrChan  chan<- error
+	Manager     *proxy.Manager
+	Rewriter    *proxy.Rewriter
+	Recorder    *metrics.Recorder
+	ErrChan     chan<- error
+	IdleTimeout time.Duration
 }
 
 // createProxy creates a reverse proxy backed by the context's rewriter.
@@ -100,8 +100,9 @@ type Server struct {
 	errChan chan<- error
 }
 
-// NewServer creates a new server with the provided handler and error channel.
-func NewServer(handler http.Handler, errChan chan<- error) *Server {
+// NewServer creates a new server with the provided handler and error channel. Idle keep-alive connections
+// are closed after idleTimeout, or kept open indefinitely if it is zero.
+func NewServer(handler http.Handler, errChan chan<- error, idleTimeout time.Duration) *Server {
 	return &Server{
 		srv: &http.Server{
 			Handler:           handler,

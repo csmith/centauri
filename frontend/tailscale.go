@@ -73,7 +73,7 @@ func (t *tailscaleFrontend) startHttpServer(ctx *Context, handler http.Handler) 
 		return err
 	}
 
-	t.plainServer = NewServer(handler, ctx.ErrChan)
+	t.plainServer = NewServer(handler, ctx.ErrChan, ctx.IdleTimeout)
 	go t.plainServer.Start(listener)
 	return nil
 }
@@ -84,7 +84,7 @@ func (t *tailscaleFrontend) startHttpsServer(ctx *Context) error {
 		return err
 	}
 
-	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan)
+	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan, ctx.IdleTimeout)
 	go t.tlsServer.Start(tls.NewListener(tlsListener, ctx.createTLSConfig()))
 	return nil
 }

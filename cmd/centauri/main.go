@@ -34,6 +34,7 @@ var (
 	selectedFrontend     = flag.String("frontend", "tcp", "Frontend to listen on")
 	selectedConfigSource = flag.String("config-source", "file", "Config source to use")
 	trustedDownstreams   = flag.String("trusted-downstreams", "", "Comma-separated list of CIDR ranges to trust X-Forwarded-For headers from")
+	idleTimeout          = flag.Duration("idle-timeout", 90*time.Second, "Idle connection timeout. Set to 0 to disable.")
 	metricsPort          = flag.Int("metrics-port", 0, "Port to expose metrics endpoint on. Disabled by default.")
 	debugCpuProfile      = flag.String("debug-cpu-profile", "", "File to write cpu profiling information to. Disabled by default.")
 	validate             = flag.Bool("validate", false, "Validate config file and exit")
@@ -160,10 +161,11 @@ func run(args []string, signalChan <-chan os.Signal) error {
 	recorder := metrics.NewRecorder(proxyManager.RouteForDomain)
 
 	if err := f.Serve(&frontend.Context{
-		Manager:  proxyManager,
-		Rewriter: rewriter,
-		Recorder: recorder,
-		ErrChan:  errChan,
+		Manager:     proxyManager,
+		Rewriter:    rewriter,
+		Recorder:    recorder,
+		ErrChan:     errChan,
+		IdleTimeout: *idleTimeout,
 	}); err != nil {
 		return fmt.Errorf("failed to start frontend: %v", err)
 	}
@@ -315,7 +317,7 @@ func certProvider(ctx context.Context, onLegoConnected func()) (proxy.Certificat
 func serveMetrics(recorder *metrics.Recorder, shutdownChan <-chan struct{}, errChan chan<- error) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", recorder.Handler())
-	s := frontend.NewServer(mux, errChan)
+	s := frontend.NewServer(mux, errChan, *idleTimeout)
 
 	go func() {
 		slog.Info("Starting metrics server", "port", *metricsPort)

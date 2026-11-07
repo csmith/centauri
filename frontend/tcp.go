@@ -36,10 +36,10 @@ func (t *tcpFrontend) Serve(ctx *Context) error {
 		return err
 	}
 
-	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan)
+	t.tlsServer = NewServer(ctx.createProxy(), ctx.ErrChan, ctx.IdleTimeout)
 	go t.tlsServer.Start(tlsListener)
 
-	t.plainServer = NewServer(ctx.createRedirector(), ctx.ErrChan)
+	t.plainServer = NewServer(ctx.createRedirector(), ctx.ErrChan, ctx.IdleTimeout)
 	go t.plainServer.Start(plainListener)
 	return nil
 }

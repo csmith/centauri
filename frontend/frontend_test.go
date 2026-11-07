@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"bufio"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -247,9 +248,15 @@ func Test_Context_CreateTLSConfig(t *testing.T) {
 
 func Test_Server_servesRequestsAndStopsGracefully(t *testing.T) {
 	errChan := make(chan error, 1)
-	server := NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "Hello")
-	}), errChan)
+	server := NewServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, "Hello")
+			},
+		),
+		errChan,
+		0,
+	)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -270,9 +277,43 @@ func Test_Server_servesRequestsAndStopsGracefully(t *testing.T) {
 	}
 }
 
+func Test_Server_closesIdleConnections(t *testing.T) {
+	errChan := make(chan error, 1)
+	server := NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		errChan,
+		100*time.Millisecond,
+	)
+
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go server.Start(listener)
+	defer server.Stop(t.Context())
+
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", listener.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+	require.NoError(t, err)
+
+	reader := bufio.NewReader(conn)
+	response, err := http.ReadResponse(reader, nil)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, err = reader.ReadByte()
+	assert.ErrorIs(t, err, io.EOF)
+}
+
 func Test_Server_reportsServeErrors(t *testing.T) {
 	errChan := make(chan error, 1)
-	server := NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}), errChan)
+	server := NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		errChan,
+		0,
+	)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

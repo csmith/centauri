@@ -219,6 +219,15 @@ all `X-Forwarded-*` headers will be replaced with values based on the current co
 
 Example: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` to trust RFC 1918 private networks.
 
+### `IDLE_TIMEOUT`
+
+- **Default**: `90s`
+
+The maximum length of time to keep an idle keep-alive connection open
+between requests. This applies to all of Centauri's HTTP servers, and does
+not limit how long an individual request can take. Set to `0` to keep idle
+connections open indefinitely.
+
 ### `VALIDATE`
 
 - **Default**: `false`

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -846,6 +847,42 @@ func Test_Run_RedirectsHttpToHttps(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 }
 
+func Test_Run_ClosesIdleConnections(t *testing.T) {
+	c := startCentauri(
+		t,
+		"CONFIG",
+		writeConfig(
+			t,
+			"simple-proxy.conf",
+			"UPSTREAM",
+			startStaticServer(t),
+		),
+		"PROVIDER",
+		"selfsigned",
+		"IDLE_TIMEOUT",
+		"100ms",
+	)
+
+	time.Sleep(2 * time.Second)
+
+	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", c.httpPort))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+	require.NoError(t, err)
+
+	reader := bufio.NewReader(conn)
+	res, err := http.ReadResponse(reader, nil)
+	require.NoError(t, err)
+	require.NoError(t, res.Body.Close())
+	assert.Equal(t, http.StatusPermanentRedirect, res.StatusCode)
+
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(2*time.Second)))
+	_, err = reader.ReadByte()
+	assert.ErrorIs(t, err, io.EOF)
+}
+
 func runTest(signalChan <-chan os.Signal, cfg ...string) error {
 	flag.CommandLine.VisitAll(func(f *flag.Flag) {
 		if !strings.HasPrefix(f.Name, "test") {
@@ -989,7 +1026,7 @@ func serve(t *testing.T, listener net.Listener, handler http.Handler) {
 	go func() {
 		panic(<-errChan)
 	}()
-	srv := frontend.NewServer(handler, errChan)
+	srv := frontend.NewServer(handler, errChan, 0)
 	go srv.Start(listener)
 	t.Cleanup(func() {
 		srv.Stop(context.Background())
