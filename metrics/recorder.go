@@ -13,19 +13,17 @@ import (
 
 // Recorder provides methods to track metrics for requests
 type Recorder struct {
-	routeForDomain  func(domain string) *proxy.Route
 	registry        *prometheus.Registry
 	helloCounter    *prometheus.CounterVec
 	responseCounter *prometheus.CounterVec
 	blockedDials    prometheus.Counter
 }
 
-// NewRecorder creates a new Recorder that will use the given function to map
-// request hostnames to routes.
-func NewRecorder(routeForDomain func(domain string) *proxy.Route) *Recorder {
+// NewRecorder creates a new Recorder. Responses are attributed to the route in the
+// proxy.Decision attached to their request.
+func NewRecorder() *Recorder {
 	r := &Recorder{
-		routeForDomain: routeForDomain,
-		registry:       prometheus.NewRegistry(),
+		registry: prometheus.NewRegistry(),
 
 		helloCounter: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "centauri_tls_hello_total",
@@ -85,7 +83,7 @@ func (r *Recorder) Handler() http.Handler {
 // recording a response with an implied 502 status code.
 func (r *Recorder) TrackBadGateway(fn func(http.ResponseWriter, *http.Request, error)) func(http.ResponseWriter, *http.Request, error) {
 	return func(writer http.ResponseWriter, req *http.Request, err error) {
-		if route := r.routeForDomain(req.Header.Get("X-Forwarded-Host")); route != nil {
+		if route := proxy.DecisionFromContext(req.Context()).Route(); route != nil {
 			r.responseCounter.With(prometheus.Labels{
 				"route":  route.Domains[0],
 				"status": "502",
@@ -100,7 +98,7 @@ func (r *Recorder) TrackBadGateway(fn func(http.ResponseWriter, *http.Request, e
 // recording the response and its HTTP status code.
 func (r *Recorder) TrackResponse(fn func(*http.Response) error) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		if route := r.routeForDomain(resp.Request.Header.Get("X-Forwarded-Host")); route != nil {
+		if route := proxy.DecisionFromContext(resp.Request.Context()).Route(); route != nil {
 			r.responseCounter.With(prometheus.Labels{
 				"route":  route.Domains[0],
 				"status": fmt.Sprintf("%d", resp.StatusCode),

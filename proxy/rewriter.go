@@ -3,7 +3,6 @@ package proxy
 import (
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -28,18 +27,16 @@ func ParseCIDRList(downstreams string) ([]net.IPNet, error) {
 	return res, nil
 }
 
-// Rewriter facilitates rewriting HTTP requests and responses according to the routes provided by a Manager.
+// Rewriter facilitates rewriting HTTP requests and responses according to the Decision a Router
+// attached to the request.
 type Rewriter struct {
-	provider    RouteProvider
 	decorators  []Decorator
 	errorClient *http.Client
 }
 
-// NewRewriter creates a new Rewriter backed by the given route manager. Connections to error
-// upstreams are made using dialContext.
-func NewRewriter(manager *Manager, trustedDownstreams []net.IPNet, dialContext DialContextFunc) *Rewriter {
+// NewRewriter creates a new Rewriter. Connections to error upstreams are made using dialContext.
+func NewRewriter(trustedDownstreams []net.IPNet, dialContext DialContextFunc) *Rewriter {
 	return &Rewriter{
-		provider: manager,
 		decorators: []Decorator{
 			NewXForwardedForDecorator(trustedDownstreams),
 			NewBannedHeaderDecorator(),
@@ -54,11 +51,14 @@ func (r *Rewriter) AddDecorator(d Decorator) {
 	r.decorators = append(r.decorators, d)
 }
 
-// RewriteRequest modifies the given request according to the routes provided by the Manager.
-// It satisfies the signature of the Rewrite field of httputil.ReverseProxy.
+// RewriteRequest points the given request at the upstream chosen by its Decision. If the request
+// has no Decision, or it isn't to be proxied, the request is left without a destination so it
+// can't be proxied anywhere. It satisfies the signature of the Rewrite field of
+// httputil.ReverseProxy.
 func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
-	route := r.provider.RouteForDomain(hostForRequest(p.In))
-	if route == nil || len(route.Upstreams) == 0 {
+	decision := DecisionFromContext(p.In.Context())
+	if decision.Outcome() != OutcomeProxy {
+		slog.Error("Refusing to proxy request without a routing decision", "host", p.In.Host)
 		// Make sure we're not going to proxy to an absolute url
 		p.Out.URL.Scheme = ""
 		p.Out.URL.Host = ""
@@ -69,12 +69,11 @@ func (r *Rewriter) RewriteRequest(p *httputil.ProxyRequest) {
 		r.decorators[i].Decorate(p.In, p.Out)
 	}
 
-	p.Out = p.Out.WithContext(withRoute(p.Out.Context(), route))
 	p.Out.URL.Scheme = "http"
-	p.Out.URL.Host = r.selectUpstream(route)
+	p.Out.URL.Host = decision.Upstream().Host
 }
 
-// RewriteResponse modifies the given response according to the routes provided by the Manager.
+// RewriteResponse modifies the given response according to the request's route.
 // It satisfies the signature of the ModifyResponse field of httputil.ReverseProxy.
 // If the response has an error status code that the route maps to an error upstream, the
 // response is replaced with one fetched from that upstream.
@@ -104,9 +103,9 @@ func (r *Rewriter) RewriteError(fn func(http.ResponseWriter, *http.Request, erro
 	}
 }
 
-// rewriteHeaders adjusts the headers according to the rules in the route.
+// rewriteHeaders adjusts the headers according to the rules in the request's route.
 func (r *Rewriter) rewriteHeaders(headers http.Header, request *http.Request) {
-	route := r.provider.RouteForDomain(hostForRequest(request))
+	route := DecisionFromContext(request.Context()).Route()
 	if route == nil {
 		return
 	}
@@ -125,10 +124,4 @@ func (r *Rewriter) rewriteHeaders(headers http.Header, request *http.Request) {
 			}
 		}
 	}
-}
-
-// selectUpstream selects an upstream host from the given route. The current implementation simply selects an upstream
-// at random.
-func (r *Rewriter) selectUpstream(route *Route) string {
-	return route.Upstreams[rand.IntN(len(route.Upstreams))].Host
 }

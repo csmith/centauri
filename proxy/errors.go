@@ -95,7 +95,7 @@ func (r *Rewriter) serveUpstreamErrorPage(writer http.ResponseWriter, request *h
 // itself is used - its status code is ignored by the caller. It returns nil if there is no mapping,
 // no client is configured, or the upstream could not be contacted.
 func (r *Rewriter) fetchErrorPage(status int, original *http.Request) *http.Response {
-	route := r.provider.RouteForDomain(hostForRequest(original))
+	route := DecisionFromContext(original.Context()).Route()
 	if route == nil || r.errorClient == nil {
 		return nil
 	}
@@ -118,12 +118,7 @@ func (r *Rewriter) fetchErrorPage(status int, original *http.Request) *http.Resp
 		target.RawQuery = mapping.RawQuery
 	}
 
-	request, err := http.NewRequestWithContext(
-		withRoute(original.Context(), route),
-		http.MethodGet,
-		target.String(),
-		nil,
-	)
+	request, err := http.NewRequestWithContext(original.Context(), http.MethodGet, target.String(), nil)
 	if err != nil {
 		slog.Warn("Failed to create error page request", "upstream", mapping.Upstream, "error", err)
 		return nil

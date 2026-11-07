@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -10,6 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func routedContext(ctx context.Context, route *Route) context.Context {
+	return withDecision(ctx, &Decision{outcome: OutcomeProxy, route: route, upstream: route.Upstreams[0]})
+}
+
 func Test_AllowlistDialer_connectsToUpstreamOfRouteInContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer server.Close()
@@ -18,7 +23,7 @@ func Test_AllowlistDialer_connectsToUpstreamOfRouteInContext(t *testing.T) {
 	dialer := &AllowlistDialer{OnBlock: func() { blocked = true }}
 
 	conn, err := dialer.DialContext(
-		withRoute(t.Context(), &Route{Upstreams: []Upstream{{Host: server.Listener.Addr().String()}}}),
+		routedContext(t.Context(), &Route{Upstreams: []Upstream{{Host: server.Listener.Addr().String()}}}),
 		"tcp",
 		server.Listener.Addr().String(),
 	)
@@ -43,7 +48,7 @@ func Test_AllowlistDialer_refusesAddressesNotInRoute(t *testing.T) {
 	client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext}}
 
 	request, err := http.NewRequestWithContext(
-		withRoute(t.Context(), &Route{Upstreams: []Upstream{{Host: "upstream:8080"}}}),
+		routedContext(t.Context(), &Route{Upstreams: []Upstream{{Host: "upstream:8080"}}}),
 		http.MethodGet,
 		server.URL,
 		nil,
@@ -77,9 +82,13 @@ func Test_AllowlistDialer_allowsRoutedRequestAfterUpstreamRemovedByReload(t *tes
 		),
 	)
 
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil)
-	proxyRequest := &httputil.ProxyRequest{In: request, Out: request.Clone(t.Context())}
-	NewRewriter(manager, nil, nil).RewriteRequest(proxyRequest)
+	request := routeRequest(
+		t,
+		manager,
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil),
+	)
+	proxyRequest := &httputil.ProxyRequest{In: request, Out: request.Clone(request.Context())}
+	NewRewriter(nil, nil).RewriteRequest(proxyRequest)
 
 	require.NoError(
 		t,

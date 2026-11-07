@@ -20,7 +20,9 @@ The indentation is optional, but it helps to keep things organised!
 route example.com example.net www.example.com
 ```
 
-Defines a route with a list of domain names that will be accepted from clients
+Defines a route with a list of domain names that will be accepted from clients.
+Domains are matched against the request's `Host` header ignoring case, any port
+and any trailing dot, so `Example.COM.:443` matches `example.com`.
 
 Routes must have at least one domain name (even if they're the [fallback](#fallback) route).
 

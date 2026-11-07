@@ -59,7 +59,7 @@ func Test_Manager_SetRoutes_doesNotServeRouteIfNoCertificateFound(t *testing.T) 
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Nil(t, manager.RouteForDomain("example.com"))
+		assert.Nil(t, manager.routeForDomain("example.com"))
 	})
 }
 
@@ -80,7 +80,7 @@ func Test_Manager_SetRoutes_servesRouteIfOldCertificateFound(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "example.com", certManager.subject)
 		assert.Equal(t, []string{}, certManager.altNames)
-		assert.Equal(t, route, manager.RouteForDomain("example.com"))
+		assert.Equal(t, route, manager.routeForDomain("example.com"))
 		assert.Equal(t, dummyCert, route.Certificate())
 	})
 }
@@ -97,17 +97,17 @@ func Test_Manager_SetRoutes_returnsErrorIfDomainIsInvalid(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func Test_Manager_RouteForDomain_returnsNullIfNoRouteFound(t *testing.T) {
+func Test_Manager_routeForDomain_returnsNullIfNoRouteFound(t *testing.T) {
 	certManager := &fakeCertManager{
 		err: fmt.Errorf("ruh roh"),
 	}
 
 	manager := NewManager(certManager)
-	res := manager.RouteForDomain("example.com")
+	res := manager.routeForDomain("example.com")
 	assert.Nil(t, res)
 }
 
-func Test_Manager_RouteForDomain_returnsFallbackIfSpecified(t *testing.T) {
+func Test_Manager_routeForDomain_returnsFallbackIfSpecified(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			certificate: dummyCert,
@@ -120,7 +120,7 @@ func Test_Manager_RouteForDomain_returnsFallbackIfSpecified(t *testing.T) {
 		_ = manager.SetRoutes(t.Context(), []*Route{route}, route)
 		synctest.Wait()
 
-		res := manager.RouteForDomain("example.net")
+		res := manager.routeForDomain("example.net")
 		assert.Equal(t, route, res)
 	})
 }
@@ -139,7 +139,7 @@ func Test_Manager_SetRoutes_obtainsCertificateForFallbackNotInRoutes(t *testing.
 			_ = manager.SetRoutes(t.Context(), nil, fallback)
 			synctest.Wait()
 
-			assert.Equal(t, fallback, manager.RouteForDomain("example.net"))
+			assert.Equal(t, fallback, manager.routeForDomain("example.net"))
 		},
 	)
 }
@@ -157,15 +157,15 @@ func Test_Manager_SetRoutes_concurrentWithLookupsOfFallback(t *testing.T) {
 	for {
 		select {
 		case <-done:
-			assert.NotNil(t, manager.RouteForDomain("example.net"))
+			assert.NotNil(t, manager.routeForDomain("example.net"))
 			return
 		default:
-			manager.RouteForDomain("example.net")
+			manager.routeForDomain("example.net")
 		}
 	}
 }
 
-func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
+func Test_Manager_routeForDomain_returnsCertificateForDomain(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			certificate: dummyCert,
@@ -178,13 +178,13 @@ func Test_Manager_RouteForDomain_returnsCertificateForDomain(t *testing.T) {
 		_ = manager.SetRoutes(t.Context(), []*Route{route}, nil)
 		synctest.Wait()
 
-		assert.Equal(t, route, manager.RouteForDomain("example.com"))
-		assert.Equal(t, route, manager.RouteForDomain("test.example.com"))
-		assert.Equal(t, route, manager.RouteForDomain("test.deep.example.com"))
+		assert.Equal(t, route, manager.routeForDomain("example.com"))
+		assert.Equal(t, route, manager.routeForDomain("test.example.com"))
+		assert.Equal(t, route, manager.routeForDomain("test.deep.example.com"))
 	})
 }
 
-func Test_Manager_RouteForDomain_matchesCaseInsensitively(t *testing.T) {
+func Test_Manager_routeForDomain_matchesCaseInsensitively(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		certManager := &fakeCertManager{
 			certificate: dummyCert,
@@ -197,8 +197,8 @@ func Test_Manager_RouteForDomain_matchesCaseInsensitively(t *testing.T) {
 		_ = manager.SetRoutes(t.Context(), []*Route{route}, nil)
 		synctest.Wait()
 
-		assert.Equal(t, route, manager.RouteForDomain("example.com"))
-		assert.Equal(t, route, manager.RouteForDomain("EXAMPLE.COM"))
+		assert.Equal(t, route, manager.routeForDomain("example.com"))
+		assert.Equal(t, route, manager.routeForDomain("EXAMPLE.COM"))
 	})
 }
 
@@ -289,9 +289,9 @@ func Test_Manager_SetRoutes_setsCertificateOnRoutes(t *testing.T) {
 		synctest.Wait()
 		manager.CheckCertificates(t.Context())
 
-		assert.Equal(t, dummyCert, manager.RouteForDomain("example.com").Certificate())
-		assert.Equal(t, dummyCert, manager.RouteForDomain("test.example.com").Certificate())
-		assert.Equal(t, dummyCert, manager.RouteForDomain("test.deep.example.com").Certificate())
+		assert.Equal(t, dummyCert, manager.routeForDomain("example.com").Certificate())
+		assert.Equal(t, dummyCert, manager.routeForDomain("test.example.com").Certificate())
+		assert.Equal(t, dummyCert, manager.routeForDomain("test.deep.example.com").Certificate())
 	})
 }
 
@@ -307,9 +307,9 @@ func Test_Manager_SetRoutes_ignoresCertificateIfProviderNotConfigured(t *testing
 		)
 		synctest.Wait()
 
-		assert.Nil(t, manager.RouteForDomain("example.com").Certificate())
-		assert.Nil(t, manager.RouteForDomain("test.example.com").Certificate())
-		assert.Nil(t, manager.RouteForDomain("test.deep.example.com").Certificate())
+		assert.Nil(t, manager.routeForDomain("example.com").Certificate())
+		assert.Nil(t, manager.routeForDomain("test.example.com").Certificate())
+		assert.Nil(t, manager.routeForDomain("test.deep.example.com").Certificate())
 	})
 }
 
@@ -331,9 +331,9 @@ func Test_Manager_SetRoutes_removesPreviousRoutes(t *testing.T) {
 		_ = manager.SetRoutes(t.Context(), []*Route{}, nil)
 		synctest.Wait()
 
-		assert.Nil(t, manager.RouteForDomain("example.com"))
-		assert.Nil(t, manager.RouteForDomain("test.example.com"))
-		assert.Nil(t, manager.RouteForDomain("test.deep.example.com"))
+		assert.Nil(t, manager.routeForDomain("example.com"))
+		assert.Nil(t, manager.routeForDomain("test.example.com"))
+		assert.Nil(t, manager.routeForDomain("test.deep.example.com"))
 	})
 }
 
@@ -355,7 +355,7 @@ func Test_Manager_CheckCertificates_doesNotServeUncertifiedRouteIfGetCertificate
 		certManager.err = fmt.Errorf("ruh roh")
 		certManager.existingErr = fmt.Errorf("ruh roh")
 		manager.CheckCertificates(t.Context())
-		assert.Nil(t, manager.RouteForDomain("example.com"))
+		assert.Nil(t, manager.routeForDomain("example.com"))
 	})
 }
 
@@ -376,7 +376,7 @@ func Test_Manager_CheckCertificates_servesRouteIfGetCertificateFails_andPrevious
 
 		certManager.err = fmt.Errorf("ruh roh")
 		manager.CheckCertificates(t.Context())
-		assert.Equal(t, route, manager.RouteForDomain("example.com"))
+		assert.Equal(t, route, manager.routeForDomain("example.com"))
 	})
 }
 
@@ -460,10 +460,10 @@ func Test_Manager_CheckCertificates_updatesAllCertificates(t *testing.T) {
 		certManager.certificate = newCert
 		manager.CheckCertificates(t.Context())
 
-		assert.Equal(t, newCert, manager.RouteForDomain("example.com").Certificate())
-		assert.Equal(t, newCert, manager.RouteForDomain("test.example.com").Certificate())
-		assert.Equal(t, newCert, manager.RouteForDomain("test.deep.example.com").Certificate())
-		assert.Equal(t, newCert, manager.RouteForDomain("test.example.net").Certificate())
+		assert.Equal(t, newCert, manager.routeForDomain("example.com").Certificate())
+		assert.Equal(t, newCert, manager.routeForDomain("test.example.com").Certificate())
+		assert.Equal(t, newCert, manager.routeForDomain("test.deep.example.com").Certificate())
+		assert.Equal(t, newCert, manager.routeForDomain("test.example.net").Certificate())
 	})
 }
 
@@ -481,8 +481,8 @@ func Test_Manager_CheckCertificates_servesRoutesIfNoProvider(t *testing.T) {
 		synctest.Wait()
 
 		manager.CheckCertificates(t.Context())
-		assert.NotNil(t, manager.RouteForDomain("example.com"))
-		assert.NotNil(t, manager.RouteForDomain("test.example.net"))
+		assert.NotNil(t, manager.routeForDomain("example.com"))
+		assert.NotNil(t, manager.routeForDomain("test.example.net"))
 	})
 }
 

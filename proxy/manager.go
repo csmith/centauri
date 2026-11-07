@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -76,18 +75,6 @@ func (m *Manager) loadCertificate(route *Route) {
 	route.setCertificate(cert)
 }
 
-// RouteForDomain returns the previously-registered route for the given domain. If no routes match the domain,
-// nil is returned.
-func (m *Manager) RouteForDomain(domain string) *Route {
-	route := m.routes.Get(domain)
-
-	if route == nil || (m.provider != nil && route.Certificate() == nil) {
-		return nil
-	}
-
-	return route
-}
-
 // CertificateForClient returns a certificate (if one exists) for the domain specified in the provided
 // client hello. If no certificate is available, nil is returned. The error return value is unused, but
 // is kept to maintain compatibility with the tls.Config.GetCertificate func signature.
@@ -96,7 +83,7 @@ func (m *Manager) CertificateForClient(hello *tls.ClientHelloInfo) (*tls.Certifi
 		return nil, fmt.Errorf("this manager does not support obtaining certificates")
 	}
 
-	route := m.routes.Get(hello.ServerName)
+	route := m.routes.Get(normaliseHost(hello.ServerName))
 	if route == nil {
 		return nil, nil
 	}
@@ -131,6 +118,18 @@ func (m *Manager) MonitorCertificates(ctx context.Context, interval time.Duratio
 			m.CheckCertificates(ctx)
 		}
 	}
+}
+
+// routeForDomain returns the route that can currently serve the given domain, or nil if there is none or it
+// doesn't have a certificate yet.
+func (m *Manager) routeForDomain(domain string) *Route {
+	route := m.routes.Get(domain)
+
+	if route == nil || (m.provider != nil && route.Certificate() == nil) {
+		return nil
+	}
+
+	return route
 }
 
 // updateCert updates the certificate for the given route.
@@ -173,7 +172,7 @@ func (r *routeMap) Update(routes []*Route, fallback *Route) error {
 				return fmt.Errorf("invalid domain name: %s", route.Domains[j])
 			}
 
-			snapshot.domains[strings.ToLower(route.Domains[j])] = route
+			snapshot.domains[normaliseDomain(route.Domains[j])] = route
 		}
 	}
 
@@ -188,7 +187,7 @@ func (r *routeMap) Get(domain string) *Route {
 	if snapshot == nil {
 		return nil
 	}
-	if route := snapshot.domains[strings.ToLower(domain)]; route != nil {
+	if route := snapshot.domains[normaliseDomain(domain)]; route != nil {
 		return route
 	}
 	return snapshot.fallback

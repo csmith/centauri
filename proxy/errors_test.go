@@ -11,32 +11,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestRewriter creates a Rewriter that always resolves to the given route, with a working
-// error client.
-func newTestRewriter(route *Route) *Rewriter {
-	return &Rewriter{
-		provider:    &fakeProvider{route: route},
-		errorClient: newErrorClient(nil),
-	}
+// newTestRewriter creates a Rewriter with a working error client.
+func newTestRewriter() *Rewriter {
+	return &Rewriter{errorClient: newErrorClient(nil)}
 }
 
-// newUpstreamResponse creates a response as it might be received from an upstream, for a request
-// made to the given path.
-func newUpstreamResponse(t *testing.T, method string, statusCode int, body string) (*http.Response, *http.Request) {
+// newRoutedRequest creates a request as it might be sent to an upstream, after being routed using
+// the given route.
+func newRoutedRequest(t *testing.T, route *Route, method string) *http.Request {
 	t.Helper()
 
 	request, err := http.NewRequestWithContext(t.Context(), method, "http://upstream:8080/some/path?original=yes", nil)
 	require.NoError(t, err)
+	request = routedTo(request, route)
 	request.Host = "example.com"
 	request.Header.Set("X-Forwarded-Host", "example.com")
+	return request
+}
+
+// newUpstreamResponse creates a response as it might be received from an upstream, for a request
+// that was routed using the given route. Its body is "original body".
+func newUpstreamResponse(t *testing.T, route *Route, method string, statusCode int) *http.Response {
+	t.Helper()
 
 	return &http.Response{
 		Status:     "status",
 		StatusCode: statusCode,
-		Body:       io.NopCloser(bytes.NewBufferString(body)),
+		Body:       io.NopCloser(bytes.NewBufferString("original body")),
 		Header:     make(http.Header),
-		Request:    request,
-	}, request
+		Request:    newRoutedRequest(t, route, method),
+	}
 }
 
 func Test_Rewriter_RewriteResponse_ReplacesErrorResponsesFromUpstream(t *testing.T) {
@@ -51,8 +55,9 @@ func Test_Rewriter_RewriteResponse_ReplacesErrorResponsesFromUpstream(t *testing
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 404, Upstream: errorUpstream.Listener.Addr().String()}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 404, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 404)
+	defer response.Body.Close()
 	response.Header.Set("X-Original", "value")
 
 	require.NoError(t, rewriter.RewriteResponse(response))
@@ -80,8 +85,9 @@ func Test_Rewriter_RewriteResponse_StripsHopByHopHeadersFromReplacement(t *testi
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 502)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -100,8 +106,9 @@ func Test_Rewriter_RewriteResponse_AppliesHeaderRulesToReplacement(t *testing.T)
 		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
 		Headers:       []Header{{Name: "X-Via", Value: "Centauri", Operation: HeaderOpAdd}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 502)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -120,8 +127,9 @@ func Test_Rewriter_RewriteResponse_RequestsOriginalPathAndQueryByDefault(t *test
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 404, Upstream: errorUpstream.Listener.Addr().String()}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodPost, 404, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodPost, 404)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -148,8 +156,9 @@ func Test_Rewriter_RewriteResponse_RequestsConfiguredPathAndQuery(t *testing.T) 
 			RawQuery: "code=404",
 		}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 404, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 404)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -167,8 +176,9 @@ func Test_Rewriter_RewriteResponse_DoesNothingForSuccessResponses(t *testing.T) 
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 200, Upstream: errorUpstream.Listener.Addr().String()}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 200, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 200)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -187,8 +197,9 @@ func Test_Rewriter_RewriteResponse_DoesNothingWithoutMapping(t *testing.T) {
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 404, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 404)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -206,8 +217,9 @@ func Test_Rewriter_RewriteResponse_FallsBackWhenErrorUpstreamUnreachable(t *test
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 404, Upstream: address}},
 	}
-	rewriter := newTestRewriter(route)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 404, "original body")
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 404)
+	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
 
@@ -229,7 +241,7 @@ func Test_Rewriter_RewriteError_ServesFromErrorUpstream(t *testing.T) {
 		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
 		Headers:       []Header{{Name: "X-Via", Value: "Centauri", Operation: HeaderOpAdd}},
 	}
-	rewriter := newTestRewriter(route)
+	rewriter := newTestRewriter()
 
 	fallbackCalled := false
 	handler := rewriter.RewriteError(func(w http.ResponseWriter, r *http.Request, err error) {
@@ -237,8 +249,7 @@ func Test_Rewriter_RewriteError_ServesFromErrorUpstream(t *testing.T) {
 	})
 
 	recorder := httptest.NewRecorder()
-	_, request := newUpstreamResponse(t, http.MethodGet, 502, "")
-	handler(recorder, request, assert.AnError)
+	handler(recorder, newRoutedRequest(t, route, http.MethodGet), assert.AnError)
 
 	assert.False(t, fallbackCalled)
 	assert.Equal(t, http.StatusBadGateway, recorder.Code)
@@ -252,7 +263,7 @@ func Test_Rewriter_RewriteError_FallsBackWithoutMapping(t *testing.T) {
 		Upstreams: []Upstream{{Host: "upstream:8080"}},
 		Headers:   []Header{{Name: "X-Via", Value: "Centauri", Operation: HeaderOpAdd}},
 	}
-	rewriter := newTestRewriter(route)
+	rewriter := newTestRewriter()
 
 	fallbackCalled := false
 	handler := rewriter.RewriteError(func(w http.ResponseWriter, r *http.Request, err error) {
@@ -261,8 +272,7 @@ func Test_Rewriter_RewriteError_FallsBackWithoutMapping(t *testing.T) {
 	})
 
 	recorder := httptest.NewRecorder()
-	_, request := newUpstreamResponse(t, http.MethodGet, 502, "")
-	handler(recorder, request, assert.AnError)
+	handler(recorder, newRoutedRequest(t, route, http.MethodGet), assert.AnError)
 
 	assert.True(t, fallbackCalled)
 	assert.Equal(t, http.StatusBadGateway, recorder.Code)
@@ -278,7 +288,7 @@ func Test_Rewriter_RewriteError_FallsBackWhenErrorUpstreamUnreachable(t *testing
 		Upstreams:     []Upstream{{Host: "upstream:8080"}},
 		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: address}},
 	}
-	rewriter := newTestRewriter(route)
+	rewriter := newTestRewriter()
 
 	fallbackCalled := false
 	handler := rewriter.RewriteError(func(w http.ResponseWriter, r *http.Request, err error) {
@@ -286,8 +296,7 @@ func Test_Rewriter_RewriteError_FallsBackWhenErrorUpstreamUnreachable(t *testing
 	})
 
 	recorder := httptest.NewRecorder()
-	_, request := newUpstreamResponse(t, http.MethodGet, 502, "")
-	handler(recorder, request, assert.AnError)
+	handler(recorder, newRoutedRequest(t, route, http.MethodGet), assert.AnError)
 
 	assert.True(t, fallbackCalled)
 }
@@ -306,13 +315,12 @@ func Test_Rewriter_RewriteResponse_FollowsRedirectsOnSameUpstream(t *testing.T) 
 	)
 	defer errorUpstream.Close()
 
-	rewriter := newTestRewriter(
-		&Route{
-			Upstreams:     []Upstream{{Host: "upstream:8080"}},
-			ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
-		},
-	)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	route := &Route{
+		Upstreams:     []Upstream{{Host: "upstream:8080"}},
+		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
+	}
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 502)
 	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))
@@ -343,13 +351,12 @@ func Test_Rewriter_RewriteResponse_DoesNotFollowRedirectsToOtherHosts(t *testing
 	)
 	defer errorUpstream.Close()
 
-	rewriter := newTestRewriter(
-		&Route{
-			Upstreams:     []Upstream{{Host: "upstream:8080"}},
-			ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
-		},
-	)
-	response, _ := newUpstreamResponse(t, http.MethodGet, 502, "original body")
+	route := &Route{
+		Upstreams:     []Upstream{{Host: "upstream:8080"}},
+		ErrorMappings: []ErrorMapping{{Status: 502, Upstream: errorUpstream.Listener.Addr().String()}},
+	}
+	rewriter := newTestRewriter()
+	response := newUpstreamResponse(t, route, http.MethodGet, 502)
 	defer response.Body.Close()
 
 	require.NoError(t, rewriter.RewriteResponse(response))

@@ -47,7 +47,7 @@ type Context struct {
 
 // createProxy creates a reverse proxy backed by the context's rewriter.
 func (fc *Context) createProxy() http.Handler {
-	return proxy.NewDomainRedirector(
+	return proxy.NewRouter(
 		fc.Manager,
 		&httputil.ReverseProxy{
 			Rewrite:        fc.Rewriter.RewriteRequest,

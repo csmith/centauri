@@ -14,9 +14,18 @@
   the config is loaded. Addresses with a scheme, path, username or invalid
   port (e.g. `http://app` or `app:99999`) are rejected with an error giving
   the line number, instead of failing when a request is proxied.
+- Each request is now routed once, as soon as it arrives. The route and
+  upstream chosen then are used for the whole request, including response
+  header rules and `on_error` mappings, even if the config is reloaded while
+  it is in flight.
+- Hosts with a trailing dot (e.g. `example.com.`) now match the same route as
+  those without.
 
 ### Fixed
 
+- Fixed the `route` label of `centauri_response_total` being taken from the
+  `X-Forwarded-Host` header, which a trusted downstream could set to any
+  route. Responses are now counted against the route that served them.
 - Fixed `redirect-to-primary` causing a redirect loop when the primary domain
   was written with capital letters in the config.
 - Fixed a data race on the fallback route when the config is reloaded.

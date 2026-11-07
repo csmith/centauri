@@ -586,9 +586,23 @@ func Test_Parse_NonASCIIUpstreamIsAllowedByDialler(t *testing.T) {
 	manager := proxy.NewManager(nil)
 	require.NoError(t, manager.SetRoutes(t.Context(), routes, nil))
 
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil)
-	proxyRequest := &httputil.ProxyRequest{In: request, Out: request.Clone(t.Context())}
-	proxy.NewRewriter(manager, nil, nil).RewriteRequest(proxyRequest)
+	var routed *http.Request
+	proxy.NewRouter(
+		manager,
+		http.HandlerFunc(
+			func(_ http.ResponseWriter, request *http.Request) {
+				routed = request
+			},
+		),
+		nil,
+	).ServeHTTP(
+		httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", nil),
+	)
+	require.NotNil(t, routed)
+
+	proxyRequest := &httputil.ProxyRequest{In: routed, Out: routed.Clone(routed.Context())}
+	proxy.NewRewriter(nil, nil).RewriteRequest(proxyRequest)
 
 	errNoDNS := errors.New("no dns in tests")
 	blocked := false

@@ -28,8 +28,8 @@ func newTestContext(t *testing.T, routes ...*proxy.Route) *Context {
 	dialer := &proxy.AllowlistDialer{}
 	return &Context{
 		Manager:     manager,
-		Rewriter:    proxy.NewRewriter(manager, nil, dialer.DialContext),
-		Recorder:    metrics.NewRecorder(manager.RouteForDomain),
+		Rewriter:    proxy.NewRewriter(nil, dialer.DialContext),
+		Recorder:    metrics.NewRecorder(),
 		DialContext: dialer.DialContext,
 		ErrChan:     make(chan error, 1),
 	}
