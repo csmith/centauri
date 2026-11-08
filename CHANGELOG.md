@@ -1,73 +1,49 @@
 # Changelog
 
-## Unreleased
+## 2.10.0 - 2026-11-08
 
-### Changes
+### Security hardening
 
-- Centauri now refuses to connect to anything other than the upstreams
-  (including `on_error` upstreams) in its config. Any attempt to do so is
-  logged as an error and counted in the new `centauri_upstream_blocked_total`
-  metric.
-- Centauri now removes more client-supplied headers before proxying: any
-  `X-Forwarded-*` or `Tailscale-*` header, any header with an underscore in
-  its name, and others used to identify the client or original URL, such as
-  `X-Client-IP`, `CF-Connecting-IP` and `X-Original-URL`. Requests that
-  haven't had their headers sanitised are refused, logged as an error and
-  counted in `centauri_upstream_blocked_total`.
-- `X-Forwarded-*` headers other than `-For`, `-Host` and `-Proto` (e.g.
-  `X-Forwarded-Port`) are now only passed on from trusted downstreams.
-  Previously they were passed on from any client.
+- Centauri now refuses to connect to anything except the upstreams in its
+  config, and counts blocked attempts in the new
+  `centauri_upstream_blocked_total` metric
+- Centauri now strips more client-supplied headers before proxying, including
+  all `X-Forwarded-*` and `Tailscale-*` headers, headers with underscores, and
+  other client or URL headers such as `CF-Connecting-IP` and `X-Original-URL`
+- `X-Forwarded-*` headers other than `-For`, `-Host` and `-Proto` are now only
+  passed on from trusted downstreams
 - Redirects from `on_error` upstreams are now only followed if they stay on
-  the same upstream. Previously Centauri would follow redirects to any host.
-- Upstream addresses (including `on_error` upstreams) are now validated when
-  the config is loaded. Addresses with a scheme, path, username or invalid
-  port (e.g. `http://app` or `app:99999`) are rejected with an error giving
-  the line number, instead of failing when a request is proxied.
-- Route domains are now validated when the config is parsed, so `-validate`
-  rejects invalid domains (e.g. `*.example.com`) with an error giving the line
-  number, instead of them only failing when the routes are applied. Extra
-  spaces between domains (in both `route` and `subject`) are now ignored, and
-  trailing dots are removed from route domains.
-- Each request is now routed once, as soon as it arrives. The route and
-  upstream chosen then are used for the whole request, including response
-  header rules and `on_error` mappings, even if the config is reloaded while
-  it is in flight.
-- Hosts with a trailing dot (e.g. `example.com.`) now match the same route as
-  those without.
-- The `TRUSTED_DOWNSTREAMS` documentation no longer suggests trusting all
-  private networks, and warns that Docker can make public clients appear to
-  come from a private address.
+  the same upstream
 
-### Fixed
+### Other changes
 
-- Fixed only the first `X-Forwarded-For` header from a trusted downstream
-  being passed on when it sent more than one.
-- Fixed `on_error` upstreams receiving the client's own `X-Forwarded-*`
-  headers when the client sent an invalid `Upgrade` header.
-- Fixed `on_error` responses passing on `Proxy-Connection` and headers named
-  in their `Connection` header to clients.
-- Fixed requests cancelled by the client while waiting for the upstream
-  being counted as `502` responses in `centauri_response_total` and logged
-  as upstream failures. They are now ignored by the metric, logged at debug
-  level, and no longer trigger a fetch from an `on_error` upstream.
-- Fixed the `route` label of `centauri_response_total` being taken from the
-  `X-Forwarded-Host` header, which a trusted downstream could set to any
-  route. Responses are now counted against the route that served them.
-- Fixed `redirect-to-primary` causing a redirect loop when the primary domain
-  was written with capital letters in the config.
-- Fixed a data race on the fallback route when the config is reloaded.
-- Fixed the network config source sometimes leaving its connection open
-  when stopped while reconnecting to the config server.
-- Fixed HTTP-to-HTTPS redirects decoding encoded characters in the path
-  (e.g. `/a%2Fb` was redirected to `/a/b`).
-- Fixed self-signed certificates always using the same serial number, which
-  made Firefox reject a renewed certificate after an exception had been
-  added for the old one.
-- Fixed Redis errors being treated as a missing certificate. Previously a
-  Redis outage could cause Centauri to request an unnecessary new
-  certificate and stop serving the route's existing one until the next
-  certificate check. Routes now keep their current certificate until Redis
-  is reachable again.
+- Validate upstream addresses and route domains when the config is loaded
+- Ignore extra spaces between domains, and trailing dots on route domains and
+  hosts
+- Route each request once, so a config reload doesn't affect requests in
+  flight
+- The `TRUSTED_DOWNSTREAMS` docs no longer suggest trusting all private
+  networks
+
+### Bug fixes
+
+- Fix only the first `X-Forwarded-For` header from trusted downstreams being
+  passed on
+- Fix client headers leaking to `on_error` upstreams, and hop-by-hop headers
+  leaking from `on_error` responses
+- Fix client cancellations being counted and logged as `502`s
+- Fix `centauri_response_total`'s `route` label being taken from
+  `X-Forwarded-Host`
+- Fix `redirect-to-primary` looping when the primary domain has capital
+  letters
+- Fix HTTP-to-HTTPS redirects decoding encoded characters in the path
+- Fix self-signed certificates reusing a serial number, which Firefox rejects
+  after renewal
+- Fix Redis errors being treated as missing certificates, which caused
+  unnecessary new certificate requests
+- Fix a data race on the fallback route when reloading config
+- Fix the network config source sometimes leaving its connection open when
+  stopped
 
 ## 2.9.3 - 2026-11-06
 
