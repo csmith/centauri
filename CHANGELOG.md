@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.10.1 - 2026-11-12
+
+- Update to Go 1.27.4
+
 ## 2.10.0 - 2026-11-08
 
 ### Security hardening
