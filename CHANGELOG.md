@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix comments without a space after the `#` being rejected
+- Fix `header` rules with extra spaces being silently ignored, and reject
+  invalid header names
+
 ## 2.10.1 - 2026-11-12
 
 - Update to Go 1.27.4

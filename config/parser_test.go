@@ -682,3 +682,52 @@ func Test_Parse_NonASCIIUpstreamIsAllowedByDialler(t *testing.T) {
 	require.NotErrorIs(t, err, proxy.ErrDialNotAllowed)
 	assert.False(t, blocked)
 }
+
+func Test_Parse_IgnoresCommentsWithoutSpace(t *testing.T) {
+	for _, comment := range []string{"#comment", "#\tcomment", "# comment", "\t#comment", "#"} {
+		t.Run(
+			comment,
+			func(t *testing.T) {
+				routes, _, err := Parse(strings.NewReader(comment + "\nroute example.com\n" + comment + "\n\tupstream app\n"))
+
+				require.NoError(t, err)
+				assert.Len(t, routes, 1)
+			},
+		)
+	}
+}
+
+func Test_Parse_HeaderIgnoresExtraWhitespace(t *testing.T) {
+	routes, _, err := Parse(
+		strings.NewReader(
+			"route example.com\n" +
+				"\tupstream app\n" +
+				"\theader replace  Server hidden  value\n" +
+				"\theader default\tStrict-Transport-Security \t max-age=15768000\n" +
+				"\theader delete   X-Cache  \n",
+		),
+	)
+
+	require.NoError(t, err)
+	assert.Equal(
+		t,
+		[]proxy.Header{
+			{Operation: proxy.HeaderOpReplace, Name: "Server", Value: "hidden  value"},
+			{Operation: proxy.HeaderOpDefault, Name: "Strict-Transport-Security", Value: "max-age=15768000"},
+			{Operation: proxy.HeaderOpDelete, Name: "X-Cache"},
+		},
+		routes[0].Headers,
+	)
+}
+
+func Test_Parse_ErrorsOnInvalidHeaderName(t *testing.T) {
+	_, _, err := Parse(strings.NewReader("route example.com\n\tupstream app\n\theader add X:Foo bar\n"))
+
+	assert.ErrorContains(t, err, `line 3: invalid header name: "X:Foo"`)
+}
+
+func Test_Parse_ErrorsOnHeaderDeleteWithValue(t *testing.T) {
+	_, _, err := Parse(strings.NewReader("route example.com\n\tupstream app\n\theader delete X-Foo bar\n"))
+
+	assert.ErrorContains(t, err, "line 3: invalid header delete line")
+}

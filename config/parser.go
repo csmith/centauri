@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/csmith/centauri/proxy"
+	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/idna"
 )
 
@@ -25,6 +26,9 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 	for scanner.Scan() {
 		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
 		directive, args, _ := strings.Cut(line, " ")
 
 		var lineErr error
@@ -113,8 +117,6 @@ func Parse(reader io.Reader) (routes []*proxy.Route, fallback *proxy.Route, err 
 				break
 			}
 			route.Subject = append(route.Subject, strings.Fields(args)...)
-		case "#":
-			// Ignore comments
 		default:
 			if len(line) > 0 {
 				lineErr = fmt.Errorf("invalid line: %s", line)
@@ -267,50 +269,50 @@ func normaliseHostname(host string) (string, error) {
 }
 
 func parseHeader(args string, route *proxy.Route) error {
-	parts := strings.SplitN(args, " ", 3)
+	operation, rest := cutField(args)
+	name, value := cutField(rest)
 
-	switch strings.ToLower(parts[0]) {
+	var op proxy.HeaderOp
+	needsValue := true
+	switch strings.ToLower(operation) {
 	case "delete":
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid header delete line: %s", args)
-		}
-
-		route.Headers = append(route.Headers, proxy.Header{
-			Operation: proxy.HeaderOpDelete,
-			Name:      parts[1],
-		})
+		op = proxy.HeaderOpDelete
+		needsValue = false
 	case "add":
-		if len(parts) != 3 {
-			return fmt.Errorf("invalid header add line: %s", args)
-		}
-
-		route.Headers = append(route.Headers, proxy.Header{
-			Operation: proxy.HeaderOpAdd,
-			Name:      parts[1],
-			Value:     parts[2],
-		})
+		op = proxy.HeaderOpAdd
 	case "replace":
-		if len(parts) != 3 {
-			return fmt.Errorf("invalid header replace line: %s", args)
-		}
-
-		route.Headers = append(route.Headers, proxy.Header{
-			Operation: proxy.HeaderOpReplace,
-			Name:      parts[1],
-			Value:     parts[2],
-		})
+		op = proxy.HeaderOpReplace
 	case "default":
-		if len(parts) != 3 {
-			return fmt.Errorf("invalid header default line: %s", args)
-		}
-
-		route.Headers = append(route.Headers, proxy.Header{
-			Operation: proxy.HeaderOpDefault,
-			Name:      parts[1],
-			Value:     parts[2],
-		})
+		op = proxy.HeaderOpDefault
 	default:
-		return fmt.Errorf("invalid header operation: %s", parts[0])
+		return fmt.Errorf("invalid header operation: %s", operation)
 	}
+
+	if name == "" || needsValue == (value == "") {
+		return fmt.Errorf("invalid header %s line: %s", strings.ToLower(operation), args)
+	}
+	if !httpguts.ValidHeaderFieldName(name) {
+		return fmt.Errorf("invalid header name: %q", name)
+	}
+
+	route.Headers = append(
+		route.Headers,
+		proxy.Header{
+			Operation: op,
+			Name:      name,
+			Value:     value,
+		},
+	)
 	return nil
+}
+
+// cutField splits s at the first run of whitespace, returning the first field and the rest of s
+// with surrounding whitespace removed.
+func cutField(s string) (field, rest string) {
+	s = strings.TrimSpace(s)
+	i := strings.IndexFunc(s, unicode.IsSpace)
+	if i == -1 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i:])
 }
