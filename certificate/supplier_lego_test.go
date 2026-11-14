@@ -427,11 +427,9 @@ func Test_Supplier_UpdateRenewalInfo_passesCertToCertifier(t *testing.T) {
 	c := &fakeCertifier{
 		renewalInfoRes: &legocert.RenewalInfo{
 			ExtendedRenewalInfo: &acme.ExtendedRenewalInfo{
-				RenewalInfo: acme.RenewalInfo{
-					SuggestedWindow: acme.Window{
-						Start: time.Now().Add(time.Hour),
-						End:   time.Now().Add(time.Hour * 2),
-					},
+				SuggestedWindow: acme.Window{
+					Start: time.Now().Add(time.Hour),
+					End:   time.Now().Add(time.Hour * 2),
 				},
 			},
 		},
@@ -455,14 +453,12 @@ func Test_Supplier_UpdateRenewalInfo_updatesARIDetails(t *testing.T) {
 	c := &fakeCertifier{
 		renewalInfoRes: &legocert.RenewalInfo{
 			ExtendedRenewalInfo: &acme.ExtendedRenewalInfo{
-				RenewalInfo: acme.RenewalInfo{
-					SuggestedWindow: acme.Window{
-						Start: windowStart,
-						End:   windowEnd,
-					},
-					ExplanationURL: "https://example.com/explanation",
+				SuggestedWindow: acme.Window{
+					Start: windowStart,
+					End:   windowEnd,
 				},
-				RetryAfter: time.Hour * 6,
+				ExplanationURL: "https://example.com/explanation",
+				RetryAfter:     time.Hour * 6,
 			},
 		},
 	}
