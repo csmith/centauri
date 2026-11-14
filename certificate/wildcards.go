@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -45,7 +46,8 @@ func NewWildcardResolver(upstream Provider, domains []string) *WildcardResolver 
 // GetCertificate returns a certificate from the upstream provider that will cover the
 // given subject and altNames, taking into account the configured wildcard domains.
 func (w *WildcardResolver) GetCertificate(ctx context.Context, preferredSupplier string, subject string, altNames []string) (*tls.Certificate, error) {
-	return w.upstream.GetCertificate(ctx, preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
+	subject = w.applyWildcard(subject)
+	return w.upstream.GetCertificate(ctx, preferredSupplier, subject, w.applyWildcards(subject, altNames))
 }
 
 // GetExistingCertificate returns an existing, saved certificate from the upstream provider that will cover the
@@ -55,14 +57,20 @@ func (w *WildcardResolver) GetExistingCertificate(
 	subject string,
 	altNames []string,
 ) (*tls.Certificate, error) {
-	return w.upstream.GetExistingCertificate(preferredSupplier, w.applyWildcard(subject), w.applyWildcards(altNames))
+	subject = w.applyWildcard(subject)
+	return w.upstream.GetExistingCertificate(preferredSupplier, subject, w.applyWildcards(subject, altNames))
 }
 
 // applyWildcards checks each entry in the given slice of domains, replacing it with a wildcard domain if necessary.
-func (w *WildcardResolver) applyWildcards(domains []string) []string {
+// Duplicates and any domain equal to the (already resolved) subject are dropped, so routes that cover the same names
+// resolve to the same certificate.
+func (w *WildcardResolver) applyWildcards(subject string, domains []string) []string {
 	var res []string
 	for i := range domains {
-		res = append(res, w.applyWildcard(domains[i]))
+		domain := w.applyWildcard(domains[i])
+		if domain != subject && !slices.Contains(res, domain) {
+			res = append(res, domain)
+		}
 	}
 	return res
 }

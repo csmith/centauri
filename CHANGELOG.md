@@ -5,6 +5,8 @@
 - Fix comments without a space after the `#` being rejected
 - Fix `header` rules with extra spaces being silently ignored, and reject
   invalid header names
+- Fix wildcard domains getting a separate certificate for each route that
+  covers the same names
 
 ## 2.10.1 - 2026-11-12
 

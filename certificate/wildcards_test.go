@@ -187,3 +187,41 @@ func Test_WildcardResolver_GetExistingCertificate_doesNotModifyOtherDomains(t *t
 	assert.Equal(t, "example.net", upstream.subject)
 	assert.Equal(t, []string{"example.org.example.net"}, upstream.altNames)
 }
+
+func Test_WildcardResolver_GetCertificate_removesDuplicateWildcards(t *testing.T) {
+	upstream := &fakeCertManager{}
+	_, _ = NewWildcardResolver(upstream, []string{"example.com"}).GetCertificate(
+		t.Context(),
+		"",
+		"example.com",
+		[]string{"www.example.com", "example.net", "blog.example.com", "shop.example.com"},
+	)
+
+	assert.Equal(t, "example.com", upstream.subject)
+	assert.Equal(t, []string{"*.example.com", "example.net"}, upstream.altNames)
+}
+
+func Test_WildcardResolver_GetCertificate_removesAltNamesMatchingSubject(t *testing.T) {
+	upstream := &fakeCertManager{}
+	_, _ = NewWildcardResolver(upstream, []string{"example.com"}).GetCertificate(
+		t.Context(),
+		"",
+		"www.example.com",
+		[]string{"blog.example.com", "shop.example.com"},
+	)
+
+	assert.Equal(t, "*.example.com", upstream.subject)
+	assert.Empty(t, upstream.altNames)
+}
+
+func Test_WildcardResolver_GetExistingCertificate_removesDuplicateWildcards(t *testing.T) {
+	upstream := &fakeCertManager{}
+	_, _ = NewWildcardResolver(upstream, []string{"example.com"}).GetExistingCertificate(
+		"",
+		"www.example.com",
+		[]string{"example.com", "blog.example.com", "example.com"},
+	)
+
+	assert.Equal(t, "*.example.com", upstream.subject)
+	assert.Equal(t, []string{"example.com"}, upstream.altNames)
+}
