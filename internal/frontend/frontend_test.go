@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/csmith/centauri/metrics"
-	"github.com/csmith/centauri/proxy"
+	"chameth.com/centauri/v2/internal/metrics"
+	"chameth.com/centauri/v2/internal/proxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

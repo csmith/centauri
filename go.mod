@@ -1,4 +1,4 @@
-module github.com/csmith/centauri
+module chameth.com/centauri/v2
 
 go 1.27.1
 

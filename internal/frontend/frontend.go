@@ -1,5 +1,3 @@
-// Package frontend provides the frontends Centauri can serve requests on, along with the shared
-// machinery for building the underlying HTTP handlers, TLS configuration and servers.
 package frontend
 
 import (
@@ -12,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/csmith/centauri/metrics"
+	"chameth.com/centauri/v2/internal/metrics"
 
-	"github.com/csmith/centauri/proxy"
+	"chameth.com/centauri/v2/internal/proxy"
 )
 
 const (

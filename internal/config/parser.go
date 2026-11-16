@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/csmith/centauri/proxy"
+	"chameth.com/centauri/v2/internal/proxy"
 	"golang.org/x/net/http/httpguts"
 	"golang.org/x/net/idna"
 )

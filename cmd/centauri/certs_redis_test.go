@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"chameth.com/centauri/v2/cmd/centauri/testdata"
+	"chameth.com/centauri/v2/internal/certificate"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/csmith/centauri/certificate"
-	"github.com/csmith/centauri/cmd/centauri/testdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -3,7 +3,7 @@ package config
 import (
 	"context"
 
-	"github.com/csmith/centauri/proxy"
+	"chameth.com/centauri/v2/internal/proxy"
 )
 
 // RouteUpdater is used by sources to install a new set of routes. It has the same signature as

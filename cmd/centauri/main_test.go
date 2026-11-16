@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/csmith/centauri/cmd/centauri/testdata"
-	"github.com/csmith/centauri/frontend"
+	"chameth.com/centauri/v2/cmd/centauri/testdata"
+	"chameth.com/centauri/v2/internal/frontend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

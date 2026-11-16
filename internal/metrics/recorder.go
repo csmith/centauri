@@ -3,12 +3,13 @@ package metrics
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/csmith/centauri/proxy"
+	"log/slog"
+	"net/http"
+
+	"chameth.com/centauri/v2/internal/proxy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"log/slog"
-	"net/http"
 )
 
 // Recorder provides methods to track metrics for requests
