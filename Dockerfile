@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go tool gocredits -skip-missing . > /notices/CREDITS; \
     mkdir -p /mounts/data;
 
-FROM ghcr.io/greboid/dockerbase/nonroot:1.20261021.0
+FROM ghcr.io/greboid/dockerbase/nonroot:1.20261022.0
 COPY --from=build /go/bin/centauri /centauri
 COPY --from=build /notices /notices
 COPY --from=build --chown=65532:65532 /mounts /
