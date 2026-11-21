@@ -67,7 +67,11 @@ func (s *SelfSignedSupplier) UpdateStaple(_ context.Context, _ *Details) error {
 	return nil
 }
 
-func (s *SelfSignedSupplier) UpdateRenewalInfo(_ context.Context, _ *Details) error { return nil }
+// UpdateRenewalInfo defers the next check until the certificate expires, as there's no renewal info to fetch.
+func (s *SelfSignedSupplier) UpdateRenewalInfo(_ context.Context, cert *Details) error {
+	cert.AriNextUpdate = cert.NotAfter
+	return nil
+}
 
 func (s *SelfSignedSupplier) MinCertificateValidity() time.Duration {
 	return time.Hour * 24 * 7

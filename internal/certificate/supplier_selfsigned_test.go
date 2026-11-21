@@ -37,3 +37,12 @@ func Test_SelfSignedSupplier_GetCertificate_usesDifferentSerials(t *testing.T) {
 
 	assert.NotEqual(t, firstCert.SerialNumber, secondCert.SerialNumber)
 }
+
+func Test_SelfSignedSupplier_UpdateRenewalInfo_defersUntilExpiry(t *testing.T) {
+	supplier := &SelfSignedSupplier{}
+	details, err := supplier.GetCertificate(t.Context(), "example.com", nil, false)
+	require.NoError(t, err)
+
+	require.NoError(t, supplier.UpdateRenewalInfo(t.Context(), details))
+	assert.Equal(t, details.NotAfter, details.AriNextUpdate)
+}
