@@ -141,6 +141,9 @@ This may only be specified on one route. Centauri's normal behaviour is
 to close connections for non-matching requests, as it won't be able to
 provide a valid certificate for that connection.
 
+Over plain HTTP (such as `TAILSCALE_MODE=http`), a fallback route accepts
+any hostname, which opens it to DNS rebinding attacks from web pages.
+
 ### `redirect-to-primary`
 
 ```

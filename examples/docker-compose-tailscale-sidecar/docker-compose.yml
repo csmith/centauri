@@ -3,7 +3,9 @@
 #
 # Simply add the `centauri` service below, along with the config and volume.
 # Update the `TAILSCALE_HOSTNAME` setting to the hostname you want the service
-# exposed on, and change the name and port of the container in the config.
+# exposed on, and change the route's domains to match it (replacing
+# `example-tailnet.ts.net` with your tailnet's domain). Change the name and
+# port of the container in the config.
 #
 # When you run the container for the first time, check the logs for a link
 # to authorise the Tailscale connection. Alternatively you can generate an auth
@@ -31,9 +33,8 @@ services:
 configs:
   centauri.conf:
     content: |
-      route default
+      route tshost tshost.example-tailnet.ts.net
           upstream mycontainer:80
-          fallback
 
 volumes:
   ts-data:

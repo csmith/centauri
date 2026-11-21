@@ -35,6 +35,4 @@ Centauri is configured to serve over Tailscale.
 ## [docker-compose-tailscale-sidecar](https://github.com/csmith/centauri/tree/master/examples/docker-compose-tailscale-sidecar)
 
 An example of using Centauri as a "sidecar" to expose a single service
-over Tailscale. Defines the Centauri config in the Compose file, and
-uses [fallback](routes.md#fallback) to avoid having to specify the
-FQDN.
+over Tailscale. Defines the Centauri config in the Compose file.
