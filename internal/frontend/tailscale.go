@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"chameth.com/x/tailscale"
 	"tailscale.com/client/local"
 	"tailscale.com/tsnet"
 )
@@ -30,15 +31,12 @@ func (t *tailscaleFrontend) Serve(ctx *Context) error {
 		return fmt.Errorf("unknown value for tailscale mode: %v (accepted: http, https)", t.options.Mode)
 	}
 
-	t.tailscale = &tsnet.Server{
-		Hostname: t.options.Hostname,
-		AuthKey:  t.options.AuthKey,
-		Logf:     func(format string, args ...any) {},
-		UserLogf: func(format string, args ...any) {
-			slog.Info(fmt.Sprintf(format, args...), "frontend", "tailscale")
-		},
-		Dir: t.options.Dir,
-	}
+	t.tailscale = tailscale.NewServer(
+		t.options.Hostname,
+		t.options.Dir,
+		t.options.AuthKey,
+		tailscale.WithLogger(slog.Default().With("frontend", "tailscale")),
+	)
 
 	lc, err := t.tailscale.LocalClient()
 	if err != nil {

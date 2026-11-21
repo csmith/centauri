@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Show tailscale's internal logs at debug level
 - Fix comments without a space after the `#` being rejected
 - Fix `header` rules with extra spaces being silently ignored, and reject
   invalid header names
