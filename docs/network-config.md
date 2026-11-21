@@ -19,6 +19,8 @@ Each configuration is transmitted as:
 - Initial configuration must be received within 10 seconds or Centauri will reconnect and retry once
 - After initial config is received, subsequent updates may take any amount of time
 - Centauri applies configuration updates immediately as they are received
-- If the connection is lost, Centauri will reconnect once and retry reading config
-- If reconnection fails or the second read fails, Centauri exits with an error
+- If the connection is lost, Centauri will reconnect and retry reading config
+- If that reconnection fails or its first read fails, Centauri exits with an error;
+  the retry is per disconnect, so a server that closes the connection after each
+  config will be reconnected to indefinitely
 - Invalid magic bytes or unsupported version cause disconnection and reconnection attempt
