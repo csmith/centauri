@@ -112,6 +112,17 @@ func Test_acmeUser_registerAndSave_updatesRegistrationResource(t *testing.T) {
 	assert.Equal(t, r.res.Location, user.GetRegistration().Location)
 }
 
+func Test_acmeUser_registerAndSave_leavesAccountUnsetIfSaveFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "user.json")
+	r := &fakeRegistrar{
+		res: &acme.ExtendedAccount{Location: "https://example.com/acme/reg/1"},
+	}
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	user := &acmeUser{key: privateKey}
+	require.Error(t, user.registerAndSave(t.Context(), r, path))
+	assert.Nil(t, user.account)
+}
+
 func Test_acmeUser_registerAndSave_writesDetailsToDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "user.json")
 	r := &fakeRegistrar{

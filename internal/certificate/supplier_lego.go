@@ -448,22 +448,26 @@ func (a *acmeUser) load(path string) error {
 // registerAndSave registers the user with the given ACME registration service, and on successful registration
 // serialises the user information to disk at the specified path.
 func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, path string) error {
-	var err error
+	var (
+		account *acme.ExtendedAccount
+		err     error
+	)
 	if a.eabHmac != "" && a.eabKid != "" {
 		slog.Info("Registering user", "email", a.email, "eab", "enabled", "kid", a.eabKid)
-		a.account, err = registrar.RegisterWithExternalAccountBinding(
+		account, err = registrar.RegisterWithExternalAccountBinding(
 			ctx,
 			registration.RegisterEABOptions{
 				TermsOfServiceAgreed: true,
 				Kid:                  a.eabKid,
 				HmacEncoded:          a.eabHmac,
-			})
+			},
+		)
 	} else {
 		if a.eabHmac != "" || a.eabKid != "" {
 			slog.Warn("Incomplete external account binding configuration. Proceeding without EAB.", "hmac_present", a.eabHmac != "", "kid_present", a.eabKid != "")
 		}
 		slog.Info("Registering user", "email", a.email, "eab", "disabled")
-		a.account, err = registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
+		account, err = registrar.Register(ctx, registration.RegisterOptions{TermsOfServiceAgreed: true})
 	}
 
 	if err != nil {
@@ -476,8 +480,8 @@ func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, pat
 			Body acme.Account "json:\"body\""
 			URI  string       "json:\"uri,omitempty\""
 		}{
-			Body: a.account.Account,
-			URI:  a.account.Location,
+			Body: account.Account,
+			URI:  account.Location,
 		},
 		Key: string(certcrypto.PEMEncode(a.key)),
 	})
@@ -485,7 +489,14 @@ func (a *acmeUser) registerAndSave(ctx context.Context, registrar registrar, pat
 		return fmt.Errorf("unable to serialize user data: %w", err)
 	}
 
-	return os.WriteFile(path, b, 0600)
+	// Only keep the account once it's saved, so a failed save is retried with a fresh registration
+	// instead of leaving an account that's lost on restart.
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		return fmt.Errorf("unable to save user data: %w", err)
+	}
+
+	a.account = account
+	return nil
 }
 
 // ParseResolvers parses a comma-separated list of DNS resolver addresses, as accepted by the acme-resolvers

@@ -7,6 +7,8 @@
   invalid header names
 - Fix wildcard domains getting a separate certificate for each route that
   covers the same names
+- Fix self-signed certificates being saved again on every certificate check
+- Fix a new ACME account not being saved if the first save failed
 
 ## 2.10.1 - 2026-11-12
 
