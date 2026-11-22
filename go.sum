@@ -1,7 +1,7 @@
 9fans.net/go v0.0.8-0.20250307142834-96bdba94b63f h1:1C7nZuxUMNz7eiQALRfiqNOm04+m3edWlRff/BYHf0Q=
 9fans.net/go v0.0.8-0.20250307142834-96bdba94b63f/go.mod h1:hHyrZRryGqVdqrknjq5OWDLGCTJ2NeEvtrpR96mjraM=
-chameth.com/x v0.0.2 h1:EO+uaBZvIx2Pjc7TJMj1COxum1q7NyMn4JlVzOQA8TE=
-chameth.com/x v0.0.2/go.mod h1:L205DjGmjy5l12zEnb0JNHPGMDS+YOfxKzD6tU8tigI=
+chameth.com/x v0.0.3 h1:HQGeTr+OUj5DKWhV4KxQnrqczPYDdZhxImyyD07j2+w=
+chameth.com/x v0.0.3/go.mod h1:9U/ovFFebX3thyTAj4G1yfFnKC7yxklxQDCtT8PQetM=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSRU=

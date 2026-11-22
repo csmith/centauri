@@ -3,7 +3,7 @@ module chameth.com/centauri/v2
 go 1.27.4
 
 require (
-	chameth.com/x v0.0.2
+	chameth.com/x v0.0.3
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/csmith/envflag/v2 v2.0.0
 	github.com/csmith/legotapas/v2 v2.0.0
