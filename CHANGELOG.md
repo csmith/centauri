@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.11.0 - 2026-11-24
 
 - Show tailscale's internal logs at debug level
 - Fix comments without a space after the `#` being rejected
