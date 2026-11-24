@@ -10,6 +10,7 @@
   covers the same names
 - Fix self-signed certificates being saved again on every certificate check
 - Fix a new ACME account not being saved if the first save failed
+- Update OpenTelemetry to 1.47.0 (GO-2026-6974)
 
 ## 2.10.1 - 2026-11-12
 
